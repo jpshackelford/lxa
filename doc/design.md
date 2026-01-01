@@ -4,7 +4,11 @@
 
 ### 1.1 Problem Statement
 
-<!-- Succinctly state the problem and impact of the problem. Avoid flowery or hyperbolic language. Be factual. -->
+Large Language Models perform well on isolated, tactical coding tasks—writing a function, generating a test, fixing a bug—but struggle with long-horizon work spanning hours or days. The core issue is the **Continuation Problem**: as a project's context exceeds the model's retention capacity, the agent loses the "thread" of architectural decisions, constraints, and domain rules established earlier in the session. The agent may remember language syntax but forget semantic constraints like "no floating-point arithmetic in game state calculations."
+
+Standard "chat-with-code" sessions have transient memory. When the context window fills or a session is interrupted, prior reasoning is lost. This makes autonomous execution of complex, multi-day projects—such as implementing a board game from a 20-page rulebook—unreliable without continuous human supervision.
+
+The impact is that agents cannot be trusted with extended autonomous work. Users must either micromanage each step or accept degraded output quality as tasks grow in scope.
 
 ### 1.2 Proposed Solution
 
