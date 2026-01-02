@@ -4,9 +4,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
-import pytest
-from openhands.sdk import LLM
-from pydantic import SecretStr
+import pytest from openhands.sdk import LLM from pydantic import SecretStr
 
 
 @pytest.fixture

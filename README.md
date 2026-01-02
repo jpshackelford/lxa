@@ -1,6 +1,7 @@
 # Long Horizon Agent
 
-An autonomous agent built with the [OpenHands SDK](https://github.com/All-Hands-AI/openhands) for long-horizon task execution.
+An autonomous agent built with the [OpenHands
+SDK](https://github.com/All-Hands-AI/openhands) for long-horizon task execution.
 
 ## Setup
 

@@ -4,24 +4,54 @@
 
 ### 1.1 Problem Statement
 
-Large Language Models perform well on isolated, tactical coding tasks—writing a function, generating a test, fixing a bug—but struggle with long-horizon work spanning hours or days. The core issue is the **Continuation Problem**: as a project's context exceeds the model's retention capacity, the agent loses the "thread" of architectural decisions, constraints, and domain rules established earlier in the session. The agent may remember language syntax but forget semantic constraints like "no floating-point arithmetic in game state calculations."
+Large Language Models perform well on isolated, tactical coding tasks—writing a
+function, generating a test, fixing a bug—but struggle with long-horizon work
+spanning hours or days. The core issue is the **Continuation Problem**: as a
+project's context exceeds the model's retention capacity, the agent loses the
+"thread" of architectural decisions, constraints, and domain rules established
+earlier in the session. The agent may remember language syntax but forget
+semantic constraints like "no floating-point arithmetic in game state
+calculations."
 
-Standard "chat-with-code" sessions have transient memory. When the context window fills or a session is interrupted, prior reasoning is lost. This makes autonomous execution of complex, multi-day projects—such as implementing a board game from a 20-page rulebook—unreliable without continuous human supervision.
+Standard "chat-with-code" sessions have transient memory. When the context
+window fills or a session is interrupted, prior reasoning is lost. This makes
+autonomous execution of complex, multi-day projects—such as implementing a board
+game from a 20-page rulebook—unreliable without continuous human supervision.
 
-The impact is that agents cannot be trusted with extended autonomous work. Users must either micromanage each step or accept degraded output quality as tasks grow in scope.
+The impact is that agents cannot be trusted with extended autonomous work. Users
+must either micromanage each step or accept degraded output quality as tasks
+grow in scope.
 
 ### 1.2 Proposed Solution
 
-We address the Continuation Problem by scoping each agent to a single, well-defined task and passing context intentionally via files rather than relying on event history.
+We address the Continuation Problem by scoping each agent to a single,
+well-defined task and passing context intentionally via files rather than
+relying on event history.
 
-**User Experience**: A developer writes a design document with an implementation plan (markdown checkboxes). They start the orchestrator agent, which works through the plan task-by-task, creating commits, pushing to a feature branch, and opening a draft PR. The developer monitors progress via PR commits and can review/merge when milestones complete. Between milestones, the developer signals the agent to continue.
+**User Experience**: A developer writes a design document with an implementation
+plan (markdown checkboxes). They start the orchestrator agent, which works
+through the plan task-by-task, creating commits, pushing to a feature branch,
+and opening a draft PR. The developer monitors progress via PR commits and can
+review/merge when milestones complete. Between milestones, the developer signals
+the agent to continue.
 
 **Technical Approach**:
-- **Orchestrator Agent**: A thin, long-lived agent that reads the implementation plan and delegates individual tasks to sub-agents. Its context stays minimal and never fills.
-- **Task Agents**: Short-lived sub-agents scoped to one checklist item. Each reads the design document and a shared journal for context, executes the task (tests, code, lint, commit), writes a journal entry summarizing what it did and learned, then terminates.
-- **Filesystem-as-Memory**: The design document (`doc/design.md`) and journal (`doc/journal.md`) serve as persistent, intentional context that survives agent boundaries. No vector databases or external services required.
 
-**Trade-offs**: This approach requires more agent spawning overhead than a single long-running agent, but gains predictable context management and clear task boundaries. The journal file grows during a milestone but can be discarded after merge.
+- **Orchestrator Agent**: A thin, long-lived agent that reads the implementation
+  plan and delegates individual tasks to sub-agents. Its context stays minimal
+  and never fills.
+- **Task Agents**: Short-lived sub-agents scoped to one checklist item. Each
+  reads the design document and a shared journal for context, executes the task
+  (tests, code, lint, commit), writes a journal entry summarizing what it did
+  and learned, then terminates.
+- **Filesystem-as-Memory**: The design document (`doc/design.md`) and journal
+  (`doc/journal.md`) serve as persistent, intentional context that survives
+  agent boundaries. No vector databases or external services required.
+
+**Trade-offs**: This approach requires more agent spawning overhead than a
+single long-running agent, but gains predictable context management and clear
+task boundaries. The journal file grows during a milestone but can be discarded
+after merge.
 
 ## 2. Developer Experience
 
@@ -35,9 +65,10 @@ We address the Continuation Problem by scoping each agent to a single, well-defi
     Human            Agent-driven          Human-triggered
 ```
 
-### 2.2 Design Phase (Human)
+### 2.2 Design Phase
 
 Developer creates `doc/design.md` with:
+
 - Problem statement and proposed solution
 - Technical design
 - Implementation plan with milestones and task checklists
@@ -52,6 +83,7 @@ python -m long_horizon_agent doc/design.md
 ```
 
 The orchestrator:
+
 1. Reads the implementation plan, finds the current milestone
 2. Creates a feature branch (e.g., `milestone-1-foundation`)
 3. For each unchecked task, spawns a task agent
@@ -69,15 +101,18 @@ After PR merge, developer can invoke:
 python -m long_horizon_agent reconcile doc/design.md
 ```
 
-This updates the technical design sections to reference actual files and method signatures rather than maintaining duplicate descriptions.
+This updates the technical design sections to reference actual files and method
+signatures rather than maintaining duplicate descriptions.
 
 ## 3. Background: OpenHands SDK
 
-This project builds on the [OpenHands Software Agent SDK](https://github.com/All-Hands-AI/openhands). Key concepts:
+This project builds on the [OpenHands Software Agent
+SDK](https://github.com/All-Hands-AI/openhands). Key concepts:
 
 ### 3.1 Tools
 
 Tools expose capabilities to the LLM. Each tool has:
+
 - **Action**: Pydantic model defining input parameters (what LLM sends)
 - **Observation**: Pydantic model defining output (what LLM receives)
 - **Executor**: Callable that performs the work
@@ -134,11 +169,14 @@ We use this within task agents to track micro-workflow steps.
 The orchestrator is a thin agent responsible for milestone-level coordination.
 
 **Tools**:
-- `ImplementationChecklistTool`: Parse design doc, find current milestone/task, mark tasks complete
+
+- `ImplementationChecklistTool`: Parse design doc, find current milestone/task,
+  mark tasks complete
 - `DelegateTool`: Spawn and delegate to task agents
 - `TerminalTool`: Git operations (branch, push), CI checks
 
 **Workflow**:
+
 ```plaintext
 1. Read design doc → find first unchecked task in current milestone
 2. Verify clean environment (no uncommitted changes, on correct branch)
@@ -152,7 +190,8 @@ The orchestrator is a thin agent responsible for milestone-level coordination.
 10. Wait for human signal to continue
 ```
 
-**System Prompt Focus**: 
+**System Prompt Focus**:
+
 - Never write code directly
 - Delegate all implementation to task agents
 - Manage git workflow and PR lifecycle
@@ -162,48 +201,109 @@ The orchestrator is a thin agent responsible for milestone-level coordination.
 Task agents are short-lived, scoped to completing one checklist item.
 
 **Tools**:
+
 - `FileEditorTool`: Read/write code files
 - `TerminalTool`: Run tests, lints, typechecks, git commit
-- `TaskTrackerTool`: Track micro-workflow steps
+- `TaskTrackerTool`: Plan and track task execution
 
-**Context Loading**:
-On startup, task agent reads:
-1. `doc/design.md` - Problem, solution, current task context
-2. `doc/journal.md` - Prior tasks' learnings and patterns
+#### 4.2.1 Context Loading
 
-**Micro-workflow**:
+On startup, the task agent reads context files to understand its task:
+
+1. `doc/design.md` - Problem, solution, technical design for the component being built
+2. `doc/journal.md` - Prior tasks' learnings, patterns, and gotchas
+3. Relevant existing source files - To understand patterns and integration points
+
+The agent determines which files to read based on the task assignment and design
+document references.
+
+#### 4.2.2 Task Planning
+
+After loading context, the task agent uses `TaskTrackerTool` to create its own
+task plan. The agent has freedom to structure the implementation tasks as
+appropriate for the specific work, but the plan **must include** these quality
+steps:
+
+**Required quality steps** (enforced via system prompt):
+
+- Run tests and verify they pass
+- Run lints (`make lint`), fix any issues
+- Run typecheck (`make typecheck`), fix any issues
+- Commit with a meaningful message
+- Write journal entry
+
+**Example task plan** (agent-generated):
+
 ```plaintext
-1. Set up TaskTrackerTool with steps:
-   - [ ] Read relevant existing code
-   - [ ] Write test file
-   - [ ] Run tests (expect fail)
-   - [ ] Write implementation
-   - [ ] Run tests (expect pass)
-   - [ ] Run lints, fix issues
-   - [ ] Run typecheck, fix issues
-   - [ ] Commit with meaningful message
-   - [ ] Write journal entry
-2. Execute each step, marking complete
-3. Return completion status to orchestrator
+Task: Implement ImplementationChecklistTool
+
+1. [ ] Read existing tool patterns in src/tools/
+2. [ ] Read design doc section 4.4 for tool specification
+3. [ ] Write test cases for checkbox parsing
+4. [ ] Write test cases for milestone detection
+5. [ ] Implement ChecklistParser class
+6. [ ] Implement ImplementationChecklistTool with status/next/complete commands
+7. [ ] Run tests, verify passing
+8. [ ] Run lints, fix issues
+9. [ ] Run typecheck, fix issues
+10. [ ] Commit: "Add ImplementationChecklistTool with status/next/complete commands"
+11. [ ] Write journal entry
 ```
 
-**Journal Entry**:
-Before returning, task agent appends to `doc/journal.md`:
+The agent executes each step, marking tasks complete in TaskTrackerTool as it
+progresses. This provides visibility into progress and ensures quality steps
+aren't skipped.
+
+#### 4.2.3 System Prompt
+
+The task agent's system prompt emphasizes:
+
+```plaintext
+You are a Task Agent responsible for completing a single implementation task.
+
+WORKFLOW:
+1. Read the design document and journal to understand context
+2. Read any existing code relevant to your task
+3. Use TaskTrackerTool to plan your work - create specific tasks for your implementation
+4. Your task plan MUST include these quality steps at the end:
+   - Run tests and verify passing
+   - Run lints (make lint), fix any issues
+   - Run typecheck (make typecheck), fix any issues
+   - Commit with a meaningful message describing what you implemented
+   - Write a journal entry summarizing files read/modified and lessons learned
+5. Execute your plan, marking each task complete as you finish it
+6. Do not skip quality steps - they are required for task completion
+
+JOURNAL ENTRY FORMAT:
+When writing your journal entry, include:
+- Files Read: What you read and what you learned from each
+- Files Modified: What you created or changed
+- Lessons Learned: Patterns, gotchas, or knowledge useful for future tasks
+```
+
+#### 4.2.4 Journal Entry
+
+Before returning, the task agent appends to `doc/journal.md`:
 
 ```markdown
 ## Task: src/tools/checklist.py (2024-01-15 14:30)
 
 ### Files Read
-- doc/design.md - Understood ImplementationChecklistTool requirements
-- src/tools/__init__.py - Saw existing tool patterns
+
+- doc/design.md (section 4.4) - ImplementationChecklistTool spec: status/next/complete commands
+- src/tools/__init__.py - Existing tool export pattern
+- tests/conftest.py - Test fixtures available (temp_workspace, mock_llm)
 
 ### Files Modified
-- src/tools/checklist.py - Created ImplementationChecklistTool
-- tests/tools/test_checklist.py - Added 5 tests
+
+- src/tools/checklist.py - Created ImplementationChecklistTool with ChecklistParser
+- tests/tools/test_checklist.py - 8 tests covering parsing and commands
 
 ### Lessons Learned
+
 - Checkbox regex needs to handle optional spaces: `r'- \[([ x])\]'`
 - Pydantic v2: use `model_validate()` not `parse_obj()`
+- Milestone headers can be `###` or `####` depending on nesting
 ```
 
 ### 4.3 Context Flow
@@ -244,13 +344,14 @@ Parses the design document to extract implementation plan state.
 
 **Commands**:
 
-| Command | Description |
-|---------|-------------|
-| `status` | Show current milestone, completed/remaining tasks |
-| `next` | Get the next unchecked task with its file paths |
+| Command    | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `status`   | Show current milestone, completed/remaining tasks       |
+| `next`     | Get the next unchecked task with its file paths         |
 | `complete` | Mark a task as complete (update checkbox in design doc) |
 
 **Example Observation** (status):
+
 ```json
 {
   "milestone": "5.1 Foundational Types and Classes (M1)",
@@ -270,12 +371,14 @@ Parses the design document to extract implementation plan state.
 Post-merge skill that updates the design document to reference implemented code.
 
 **Behavior**:
+
 1. Parse technical design sections
 2. For each described component, find corresponding implementation
 3. Replace detailed descriptions with file/method references
 4. Preserve: problem statement, solution rationale, user experience
 
 **Before**:
+
 ```markdown
 ### 4.4 ImplementationChecklistTool
 
@@ -285,6 +388,7 @@ The tool uses regex to find markdown checkboxes...
 ```
 
 **After**:
+
 ```markdown
 ### 4.4 ImplementationChecklistTool
 
@@ -296,6 +400,7 @@ Parses the design document to extract implementation plan state.
 ## 5. Implementation Plan
 
 All milestones require:
+
 - Passing lints (`make lint`)
 - Passing type checks (`make typecheck`)
 - Passing tests (`make test`)
@@ -306,16 +411,22 @@ All milestones require:
 
 **Demo**: Run tool against this design doc, see current milestone and next task.
 
-#### 5.1.1 Checklist Parser
+#### 5.1.1 Checklist
 
-- [ ] src/tools/checklist.py - `ImplementationChecklistTool` with `status`, `next`, `complete` commands
-- [ ] tests/tools/test_checklist.py - Tests for parsing milestones, tasks, checkboxes
+Parser
+
+- [ ] src/tools/checklist.py - `ImplementationChecklistTool` with `status`,
+      `next`, `complete` commands
+- [ ] tests/tools/test_checklist.py - Tests for parsing milestones, tasks,
+      checkboxes
 
 ### 5.2 Task Agent (M2)
 
-**Goal**: Sub-agent that completes a single implementation task with quality gates.
+**Goal**: Sub-agent that completes a single implementation task with quality
+gates.
 
-**Demo**: Spawn task agent with a simple task, observe it write tests, implement, lint, commit, write journal entry.
+**Demo**: Spawn task agent with a simple task, observe it write tests,
+implement, lint, commit, write journal entry.
 
 #### 5.2.1 Task Agent Definition
 
@@ -329,13 +440,16 @@ All milestones require:
 
 ### 5.3 Orchestrator Agent (M3)
 
-**Goal**: Main agent that coordinates milestone execution.
+**Goal**: Main agent that coordinates milestone
+execution.
 
-**Demo**: Start orchestrator on a design doc, observe it delegate tasks and manage checklist.
+**Demo**: Start orchestrator on a design doc, observe it delegate tasks and
+manage checklist.
 
 #### 5.3.1 Orchestrator Definition
 
-- [ ] src/agents/orchestrator.py - Orchestrator agent factory with tools and system prompt
+- [ ] src/agents/orchestrator.py - Orchestrator agent factory with tools and
+      system prompt
 - [ ] tests/agents/test_orchestrator.py - Tests for orchestrator workflow
 
 #### 5.3.2 Git/PR Management
@@ -347,18 +461,21 @@ All milestones require:
 
 **Goal**: Command-line interface for starting execution and reconciliation.
 
-**Demo**: Run `python -m long_horizon_agent doc/design.md` and observe orchestrator start.
+**Demo**: Run `python -m long_horizon_agent doc/design.md` and observe
+orchestrator start.
 
 #### 5.4.1 Main Module
 
-- [ ] src/__main__.py - CLI entry point with argument parsing
+- [ ] src/**main**.py - CLI entry point with argument parsing
 - [ ] tests/test_cli.py - Tests for CLI argument handling
 
 ### 5.5 Reconciliation Skill (M5)
 
-**Goal**: Post-merge skill that updates design doc to reference implemented code.
+**Goal**: Post-merge skill that updates design doc to
+reference implemented code.
 
-**Demo**: Run reconcile command, observe technical design sections updated with file references.
+**Demo**: Run reconcile command, observe technical design sections updated with
+file references.
 
 #### 5.5.1 Reconciliation Logic
 
