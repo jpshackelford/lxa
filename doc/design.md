@@ -286,11 +286,11 @@ When writing your journal entry, include:
 Before returning, the task agent appends to `doc/journal.md`:
 
 ```markdown
-## Task: src/tools/checklist.py (2024-01-15 14:30)
+## Implement ImplementationChecklistTool (2024-01-15 14:30)
 
 ### Files Read
 
-- doc/design.md (section 4.4) - ImplementationChecklistTool spec: status/next/complete commands
+- doc/design.md (section 4.4) - Tool spec: status/next/complete commands
 - src/tools/__init__.py - Existing tool export pattern
 - tests/conftest.py - Test fixtures available (temp_workspace, mock_llm)
 
