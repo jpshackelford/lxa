@@ -14,9 +14,8 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
 
-from src.agents.orchestrator import GitPlatform, run_preflight_checks
+from src.agents.orchestrator import run_preflight_checks
 
 console = Console()
 
