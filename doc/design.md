@@ -167,34 +167,47 @@ We use this within task agents to track micro-workflow steps.
 ### 4.1 Orchestrator Agent (Milestone-level)
 
 The orchestrator is a thin agent responsible for milestone-level coordination.
+It operates autonomously—pushing commits and managing PRs without waiting for
+chat-based human permission. Human interaction happens via the PR (review,
+comments, merge).
 
 **Tools**:
 
 - `ImplementationChecklistTool`: Parse design doc, find current milestone/task,
   mark tasks complete
 - `DelegateTool`: Spawn and delegate to task agents
-- `TerminalTool`: Git operations (branch, push), CI checks
+- `TerminalTool`: Git operations (branch, push), CI checks, platform CLIs
+
+**Pre-flight Checks** (fail fast before any work):
+
+1. Verify we're in a git repository
+2. Verify remote is configured (origin)
+3. Detect platform from remote URL (GitHub, GitLab, Bitbucket)
+4. Verify working tree is clean
 
 **Workflow**:
 
 ```plaintext
-1. Read design doc → find first unchecked task in current milestone
-2. Verify clean environment (no uncommitted changes, on correct branch)
-3. Spawn task agent with task description
-4. Wait for task agent completion
-5. Mark task complete in design doc
-6. If first task in milestone: create draft PR
-7. Check CI status
-8. Repeat until milestone complete
-9. Comment on PR "Ready for review"
-10. Wait for human signal to continue
+1. Run pre-flight checks (fail fast if any fail)
+2. Read design doc → find first unchecked task in current milestone
+3. Create feature branch if not already on one
+4. Spawn task agent with task description
+5. Wait for task agent completion
+6. Mark task complete in design doc, commit the update
+7. Push to remote
+8. If first task in milestone: create draft PR
+9. Check CI status
+10. Repeat until milestone complete
+11. Comment on PR "Ready for review"
+12. Stop and wait for human to merge PR before next milestone
 ```
 
 **System Prompt Focus**:
 
-- Never write code directly
-- Delegate all implementation to task agents
-- Manage git workflow and PR lifecycle
+- Never write code directly—delegate all implementation to task agents
+- Push commits and manage PRs autonomously (no waiting for permission)
+- Human interaction is via PR, not chat prompts
+- Fail fast on pre-flight check failures
 
 ### 4.2 Task Agent (Task-level)
 
@@ -539,22 +552,36 @@ implement, lint, commit, write journal entry.
 
 ### 5.3 Orchestrator Agent (M3)
 
-**Goal**: Main agent that coordinates milestone
-execution.
+**Goal**: Main agent that coordinates milestone execution autonomously.
 
-**Demo**: Start orchestrator on a design doc, observe it delegate tasks and
-manage checklist.
+**Demo**: Start orchestrator on a design doc, observe it delegate tasks, push
+commits, and manage PR lifecycle.
 
-#### 5.3.1 Orchestrator Definition
+#### 5.3.1 Key Behaviors
 
-- [ ] src/agents/orchestrator.py - Orchestrator agent factory with tools and
-      system prompt
-- [ ] tests/agents/test_orchestrator.py - Tests for orchestrator workflow
+**Autonomous Git Operations**: The orchestrator pushes commits and creates PRs
+without waiting for human permission. Human interaction happens via the PR
+(review, comments, merge), not via chat prompts. This overrides the default
+OpenHands caution about pushing.
 
-#### 5.3.2 Git/PR Management
+**Pre-flight Checks**: Before starting work, the orchestrator must:
+1. Verify we're in a git repository
+2. Verify a remote is configured (origin)
+3. Detect the platform (GitHub, GitLab, Bitbucket) from the remote URL
+4. Fail fast with clear error if any check fails
 
-- [ ] src/tools/git_workflow.py - Tool for branch creation, PR management, CI checks
-- [ ] tests/tools/test_git_workflow.py - Tests for git operations
+**Platform Detection**: Parse remote URL to determine CLI/API:
+- `github.com` → use `gh` CLI
+- `gitlab.com` → use `glab` CLI or API
+- `bitbucket.org` → use API
+
+#### 5.3.2 Checklist
+
+- [ ] src/agents/orchestrator.py - Orchestrator agent factory with tools
+      (DelegateTool, ImplementationChecklistTool, TerminalTool) and system
+      prompt with git workflow instructions
+- [ ] tests/agents/test_orchestrator.py - Tests for orchestrator creation and
+      pre-flight checks
 
 ### 5.4 CLI Entry Point (M4)
 
