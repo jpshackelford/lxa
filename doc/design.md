@@ -371,12 +371,15 @@ When the agent calls the tool, the action is displayed in the conversation:
 
 #### 4.4.2 Observation Visualization
 
-The tool returns structured observations with Rich text visualization.
+The tool returns structured observations with Rich text visualization. Each
+observation includes the design document path so humans can see which file is
+guiding the agent.
 
 **status observation:**
 ```plaintext
-📊 Milestone 1 of 5: ImplementationChecklistTool (M1)
+📊 Implementation Progress (doc/design.md)
 
+Milestone 1 of 5: ImplementationChecklistTool (M1)
 Progress: ██████░░░░ 2/5 tasks (40%)
 
 ✅ 1. src/tools/checklist.py - ChecklistParser class
@@ -388,7 +391,7 @@ Progress: ██████░░░░ 2/5 tasks (40%)
 
 **next observation:**
 ```plaintext
-⏭️  Next Task
+⏭️  Next Task (doc/design.md)
 
 Milestone: 5.1 ImplementationChecklistTool (M1)
 Task: src/tools/checklist.py - next command
@@ -403,10 +406,10 @@ Context from design doc (section 4.4):
 
 **complete observation:**
 ```plaintext
-✅ Task Completed
+✅ Task Completed (doc/design.md)
 
 Marked complete: src/tools/checklist.py - next command
-Updated: doc/design.md (line 312)
+Checkbox updated at line 312
 
 Progress: ██████████░░░░ 3/5 tasks (60%)
 ```
@@ -418,6 +421,7 @@ The observation includes structured data for programmatic use:
 ```json
 {
   "command": "status",
+  "design_doc": "doc/design.md",
   "milestone": {
     "index": 1,
     "total": 5,
