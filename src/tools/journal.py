@@ -100,7 +100,9 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
         if action.command == "append":
             return self._append_entry(action.entry)
         else:
-            return JournalObservation(
+            return JournalObservation.from_text(
+                text=f"Unknown command: {action.command}",
+                is_error=True,
                 command=action.command,
                 journal_path=str(self.journal_path),
                 success=False,
@@ -151,7 +153,8 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
         with self.journal_path.open("a") as f:
             f.write(entry_text)
 
-        return JournalObservation(
+        return JournalObservation.from_text(
+            text=f"Journal entry added: {entry.task_name}\nTimestamp: {timestamp}",
             command="append",
             journal_path=str(self.journal_path),
             success=True,
