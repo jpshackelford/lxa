@@ -1,53 +1,74 @@
-# ImplementationChecklistTool Examples
+# Long Horizon Agent Examples
 
-This directory contains examples for testing and understanding the `ImplementationChecklistTool`.
+This directory contains examples for testing and understanding the components
+of the long-horizon agent system.
 
-## Files
+## Directory Structure
 
-- `sample_design.md` - A simple design document with implementation checklists
-- `demo_checklist_tool.py` - Orchestrated demo showing all tool commands
-- `demo_agent_with_checklist.py` - Real agent demo showing natural tool usage
-
-## Running the Demos
-
-### Orchestrated Demo (no API key needed)
-
-Shows all tool commands in a scripted sequence:
-
-```bash
-uv run python doc/examples/demo_checklist_tool.py
+```
+examples/
+├── README.md              # This file
+├── m1_checklist_tool/     # Milestone 1: ImplementationChecklistTool
+│   ├── sample_design.md
+│   ├── demo_checklist_tool.py
+│   └── demo_agent_with_checklist.py
+└── m2_task_agent/         # Milestone 2: Task Agent & JournalTool
+    ├── demo_journal_tool.py
+    └── demo_task_agent.py
 ```
 
-This will:
+---
 
-1. Copy `sample_design.md` to a temp directory
-2. Show parser output for all milestones
-3. Demo the `status` command
-4. Demo the `next` command
-5. Demo the `complete` command (modifies the temp copy)
-6. Show updated status
-7. Clean up temp directory (original file unchanged)
+## M1: ImplementationChecklistTool
 
-### Agent Demo (requires API key)
+Examples for the checklist tool that parses design documents and tracks progress.
 
-Shows a real agent using the tool naturally in a conversation:
+### Files
+
+- `m1_checklist_tool/sample_design.md` - A simple design document with checklists
+- `m1_checklist_tool/demo_checklist_tool.py` - Orchestrated demo (no API key)
+- `m1_checklist_tool/demo_agent_with_checklist.py` - Real agent demo (needs API key)
+
+### Running the Demos
+
+**Orchestrated Demo (no API key needed):**
 
 ```bash
-# Set one of these environment variables:
-export ANTHROPIC_API_KEY=your-key
-# or
-export OPENAI_API_KEY=your-key
-
-uv run python doc/examples/demo_agent_with_checklist.py
+uv run python doc/examples/m1_checklist_tool/demo_checklist_tool.py
 ```
 
-This creates a real agent with:
-- `TerminalTool` - for running commands
-- `FileEditorTool` - for viewing/editing files
-- `ImplementationChecklistTool` - our custom tool
+**Agent Demo (requires API key):**
 
-Then prompts it to work through the sample design doc, showing how the
-agent naturally discovers and uses the checklist tool based on its description.
+```bash
+export ANTHROPIC_API_KEY=your-key  # or OPENAI_API_KEY
+uv run python doc/examples/m1_checklist_tool/demo_agent_with_checklist.py
+```
+
+---
+
+## M2: Task Agent & JournalTool
+
+Examples for the Task Agent and JournalTool that provide persistent memory.
+
+### Files
+
+- `m2_task_agent/demo_journal_tool.py` - Orchestrated JournalTool demo
+- `m2_task_agent/demo_task_agent.py` - Task Agent demo (needs API key)
+
+### Running the Demos
+
+**JournalTool Demo (no API key needed):**
+
+```bash
+uv run python doc/examples/m2_task_agent/demo_journal_tool.py
+```
+
+**Task Agent Demo (requires API key):**
+
+```bash
+export ANTHROPIC_API_KEY=your-key  # or OPENAI_API_KEY
+uv run python doc/examples/m2_task_agent/demo_task_agent.py
+```
 
 ## LLM Prompts for Testing
 
