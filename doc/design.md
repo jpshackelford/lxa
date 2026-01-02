@@ -290,14 +290,14 @@ Before returning, the task agent appends to `doc/journal.md`:
 
 ### Files Read
 
-- doc/design.md (section 4.4) - Tool spec: status/next/complete commands
-- src/tools/__init__.py - Existing tool export pattern
-- tests/conftest.py - Test fixtures available (temp_workspace, mock_llm)
+- `doc/design.md` (section 4.4) - Tool spec: status/next/complete commands
+- `src/tools/__init__.py` - Existing tool export pattern
+- `tests/conftest.py` - Test fixtures available (temp_workspace, mock_llm)
 
 ### Files Modified
 
-- src/tools/checklist.py - Created ImplementationChecklistTool with ChecklistParser
-- tests/tools/test_checklist.py - 8 tests covering parsing and commands
+- `src/tools/checklist.py` - Created ImplementationChecklistTool with ChecklistParser
+- `tests/tools/test_checklist.py` - 8 tests covering parsing and commands
 
 ### Lessons Learned
 
@@ -355,16 +355,19 @@ Parses the design document to extract implementation plan state.
 When the agent calls the tool, the action is displayed in the conversation:
 
 **status command:**
+
 ```plaintext
 📊 Check Implementation Progress
 ```
 
 **next command:**
+
 ```plaintext
 ⏭️  Get Next Task
 ```
 
 **complete command:**
+
 ```plaintext
 ✅ Mark Task Complete: "Implement ImplementationChecklistTool"
 ```
@@ -376,6 +379,7 @@ observation includes the design document path so humans can see which file is
 guiding the agent.
 
 **status observation:**
+
 ```plaintext
 📊 Implementation Progress (doc/design.md)
 
@@ -390,6 +394,7 @@ Progress: ██████░░░░ 2/5 tasks (40%)
 ```
 
 **next observation:**
+
 ```plaintext
 ⏭️  Next Task (doc/design.md)
 
@@ -405,6 +410,7 @@ Context from design doc (section 4.4):
 ```
 
 **complete observation:**
+
 ```plaintext
 ✅ Task Completed (doc/design.md)
 
@@ -429,11 +435,26 @@ The observation includes structured data for programmatic use:
     "goal": "Tool that parses a design document and extracts implementation plan state."
   },
   "tasks": [
-    {"description": "src/tools/checklist.py - ChecklistParser class", "complete": true},
-    {"description": "src/tools/checklist.py - status command", "complete": true},
-    {"description": "src/tools/checklist.py - next command", "complete": false},
-    {"description": "src/tools/checklist.py - complete command", "complete": false},
-    {"description": "tests/tools/test_checklist.py - Unit tests", "complete": false}
+    {
+      "description": "src/tools/checklist.py - ChecklistParser class",
+      "complete": true
+    },
+    {
+      "description": "src/tools/checklist.py - status command",
+      "complete": true
+    },
+    {
+      "description": "src/tools/checklist.py - next command",
+      "complete": false
+    },
+    {
+      "description": "src/tools/checklist.py - complete command",
+      "complete": false
+    },
+    {
+      "description": "tests/tools/test_checklist.py - Unit tests",
+      "complete": false
+    }
   ],
   "tasks_complete": 2,
   "tasks_remaining": 3,
