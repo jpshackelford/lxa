@@ -1,5 +1,19 @@
 """Agent definitions for the long-horizon agent system."""
 
+from src.agents.orchestrator import (
+    GitPlatform,
+    PreflightError,
+    PreflightResult,
+    create_orchestrator_agent,
+    run_preflight_checks,
+)
 from src.agents.task_agent import create_task_agent
 
-__all__ = ["create_task_agent"]
+__all__ = [
+    "GitPlatform",
+    "PreflightError",
+    "PreflightResult",
+    "create_orchestrator_agent",
+    "create_task_agent",
+    "run_preflight_checks",
+]
