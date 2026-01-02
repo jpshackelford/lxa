@@ -529,13 +529,13 @@ implement, lint, commit, write journal entry.
 
 #### 5.2.1 Task Agent Definition
 
-- [ ] src/agents/task_agent.py - Task agent factory with tools and system prompt
-- [ ] tests/agents/test_task_agent.py - Tests for agent creation
+- [x] src/agents/task_agent.py - Task agent factory with tools and system prompt
+- [x] tests/agents/test_task_agent.py - Tests for agent creation
 
 #### 5.2.2 Journal Writing
 
-- [ ] src/tools/journal.py - `JournalTool` with `append_entry` command
-- [ ] tests/tools/test_journal.py - Tests for journal entry format and appending
+- [x] src/tools/journal.py - `JournalTool` with `append_entry` command
+- [x] tests/tools/test_journal.py - Tests for journal entry format and appending
 
 ### 5.3 Orchestrator Agent (M3)
 
