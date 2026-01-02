@@ -350,17 +350,91 @@ Parses the design document to extract implementation plan state.
 | `next`     | Get the next unchecked task with its file paths         |
 | `complete` | Mark a task as complete (update checkbox in design doc) |
 
-**Example Observation** (status):
+#### 4.4.1 Action Visualization
+
+When the agent calls the tool, the action is displayed in the conversation:
+
+**status command:**
+```plaintext
+📊 Check Implementation Progress
+```
+
+**next command:**
+```plaintext
+⏭️  Get Next Task
+```
+
+**complete command:**
+```plaintext
+✅ Mark Task Complete: "Implement ImplementationChecklistTool"
+```
+
+#### 4.4.2 Observation Visualization
+
+The tool returns structured observations with Rich text visualization.
+
+**status observation:**
+```plaintext
+📊 Milestone 1 of 5: ImplementationChecklistTool (M1)
+
+Progress: ██████░░░░ 2/5 tasks (40%)
+
+✅ 1. src/tools/checklist.py - ChecklistParser class
+✅ 2. src/tools/checklist.py - status command
+⏳ 3. src/tools/checklist.py - next command
+⏳ 4. src/tools/checklist.py - complete command
+⏳ 5. tests/tools/test_checklist.py - Unit tests
+```
+
+**next observation:**
+```plaintext
+⏭️  Next Task
+
+Milestone: 5.1 ImplementationChecklistTool (M1)
+Task: src/tools/checklist.py - next command
+
+Files:
+  • src/tools/checklist.py
+  • tests/tools/test_checklist.py
+
+Context from design doc (section 4.4):
+  "Get the next unchecked task with its file paths"
+```
+
+**complete observation:**
+```plaintext
+✅ Task Completed
+
+Marked complete: src/tools/checklist.py - next command
+Updated: doc/design.md (line 312)
+
+Progress: ██████████░░░░ 3/5 tasks (60%)
+```
+
+#### 4.4.3 Observation Schema
+
+The observation includes structured data for programmatic use:
 
 ```json
 {
-  "milestone": "5.1 Foundational Types and Classes (M1)",
-  "milestone_index": 1,
-  "total_milestones": 3,
+  "command": "status",
+  "milestone": {
+    "index": 1,
+    "total": 5,
+    "title": "5.1 ImplementationChecklistTool (M1)",
+    "goal": "Tool that parses a design document and extracts implementation plan state."
+  },
+  "tasks": [
+    {"description": "src/tools/checklist.py - ChecklistParser class", "complete": true},
+    {"description": "src/tools/checklist.py - status command", "complete": true},
+    {"description": "src/tools/checklist.py - next command", "complete": false},
+    {"description": "src/tools/checklist.py - complete command", "complete": false},
+    {"description": "tests/tools/test_checklist.py - Unit tests", "complete": false}
+  ],
   "tasks_complete": 2,
   "tasks_remaining": 3,
   "next_task": {
-    "description": "ImplementationChecklistTool",
+    "description": "src/tools/checklist.py - next command",
     "files": ["src/tools/checklist.py", "tests/tools/test_checklist.py"]
   }
 }
