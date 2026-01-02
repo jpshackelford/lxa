@@ -143,7 +143,7 @@ def main():
         console.print()
 
         # Create conversation and run
-        from openhands.sdk.conversation import LocalConversation
+        from openhands.sdk import Conversation
 
         task_prompt = """\
 Read the design document at doc/design.md and implement the first unchecked task.
@@ -165,15 +165,14 @@ When done, write a journal entry summarizing what you did.
         console.print("-" * 60)
         console.print()
 
-        conversation = LocalConversation(
+        conversation = Conversation(
             agent=agent,
-            working_dir=str(workspace),
+            workspace=workspace,
         )
 
-        # Run the conversation
-        for event in conversation.stream(task_prompt):
-            # Events are streamed as they happen
-            pass
+        # Send message and run
+        conversation.send_message(task_prompt)
+        conversation.run()
 
         console.print()
         console.print("-" * 60)
