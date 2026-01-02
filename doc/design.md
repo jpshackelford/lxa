@@ -514,9 +514,9 @@ All milestones require:
 
 Parser
 
-- [ ] src/tools/checklist.py - `ImplementationChecklistTool` with `status`,
+- [x] src/tools/checklist.py - `ImplementationChecklistTool` with `status`,
       `next`, `complete` commands
-- [ ] tests/tools/test_checklist.py - Tests for parsing milestones, tasks,
+- [x] tests/tools/test_checklist.py - Tests for parsing milestones, tasks,
       checkboxes
 
 ### 5.2 Task Agent (M2)
