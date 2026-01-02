@@ -209,6 +209,37 @@ class TestJournalExecutor:
         assert not obs.success
         assert "Unknown command" in obs.message
 
+    def test_observation_has_content_for_llm(self, tmp_path: Path):
+        """Observations must have non-empty content for SDK prompt caching."""
+        journal_path = tmp_path / "journal.md"
+        executor = JournalExecutor(journal_path)
+
+        entry = JournalEntry(task_name="Test Task")
+        action = JournalAction(command="append", entry=entry)
+
+        obs = executor(action)
+
+        # The SDK expects content to be populated for prompt caching
+        assert len(obs.content) > 0, "Observation must have content for LLM"
+        assert obs.text, "Observation.text must return non-empty string"
+        assert "Test Task" in obs.text
+
+    def test_error_observation_has_content_for_llm(self, tmp_path: Path):
+        """Error observations must also have content for SDK prompt caching."""
+        journal_path = tmp_path / "journal.md"
+        executor = JournalExecutor(journal_path)
+
+        action = JournalAction.model_construct(
+            command="invalid",  # type: ignore[arg-type]
+            entry=JournalEntry(task_name="Test"),
+        )
+
+        obs = executor(action)
+
+        # Even error observations need content for LLM
+        assert len(obs.content) > 0, "Error observation must have content for LLM"
+        assert obs.text, "Error observation.text must return non-empty string"
+
     def test_multiple_entries_append_in_order(self, tmp_path: Path):
         journal_path = tmp_path / "journal.md"
         executor = JournalExecutor(journal_path)
