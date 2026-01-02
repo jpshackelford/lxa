@@ -5,11 +5,14 @@ This directory contains examples for testing and understanding the `Implementati
 ## Files
 
 - `sample_design.md` - A simple design document with implementation checklists
-- `demo_checklist_tool.py` - Python script demonstrating tool usage
+- `demo_checklist_tool.py` - Orchestrated demo showing all tool commands
+- `demo_agent_with_checklist.py` - Real agent demo showing natural tool usage
 
-## Running the Demo
+## Running the Demos
 
-From the project root:
+### Orchestrated Demo (no API key needed)
+
+Shows all tool commands in a scripted sequence:
 
 ```bash
 uv run python doc/examples/demo_checklist_tool.py
@@ -24,6 +27,27 @@ This will:
 5. Demo the `complete` command (modifies the temp copy)
 6. Show updated status
 7. Clean up temp directory (original file unchanged)
+
+### Agent Demo (requires API key)
+
+Shows a real agent using the tool naturally in a conversation:
+
+```bash
+# Set one of these environment variables:
+export ANTHROPIC_API_KEY=your-key
+# or
+export OPENAI_API_KEY=your-key
+
+uv run python doc/examples/demo_agent_with_checklist.py
+```
+
+This creates a real agent with:
+- `TerminalTool` - for running commands
+- `FileEditorTool` - for viewing/editing files
+- `ImplementationChecklistTool` - our custom tool
+
+Then prompts it to work through the sample design doc, showing how the
+agent naturally discovers and uses the checklist tool based on its description.
 
 ## LLM Prompts for Testing
 
