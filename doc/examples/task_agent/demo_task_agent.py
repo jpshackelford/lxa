@@ -10,49 +10,21 @@ Run with:
     uv run python doc/examples/m2_task_agent/demo_task_agent.py
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path
 
-from dotenv import load_dotenv
-from openhands.sdk import LLM
-from pydantic import SecretStr
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-# Load environment variables
-load_dotenv()
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from doc.examples.common import get_llm  # noqa: E402
 
 console = Console()
-
-
-def get_llm() -> LLM:
-    """Create LLM from environment variables.
-
-    Supports:
-    - Direct API keys: ANTHROPIC_API_KEY, OPENAI_API_KEY
-    - LiteLLM proxy: LLM_API_KEY + LLM_BASE_URL + LLM_MODEL
-    """
-    model = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-20250514")
-    base_url = os.getenv("LLM_BASE_URL")
-
-    api_key = (
-        os.getenv("LLM_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("OPENHANDS_API_KEY")
-    )
-
-    if not api_key:
-        console.print("[red]Error: No API key found.[/]")
-        console.print(
-            "[red]Set one of: LLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY[/]"
-        )
-        sys.exit(1)
-
-    return LLM(model=model, api_key=SecretStr(api_key), base_url=base_url)
 
 
 def create_sample_workspace(tmpdir: Path) -> Path:
