@@ -11,46 +11,48 @@ Run with:
 """
 
 import os
-import shutil
+import sys
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
+from openhands.sdk import LLM
 from pydantic import SecretStr
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+# Load environment variables
+load_dotenv()
+
 console = Console()
 
 
-def get_llm():
-    """Get LLM configuration from environment."""
-    from openhands.sdk import LLM
+def get_llm() -> LLM:
+    """Create LLM from environment variables.
 
-    # Check for LiteLLM proxy first
-    if os.environ.get("LLM_BASE_URL"):
-        return LLM(
-            model=os.environ.get("LLM_MODEL", "litellm/claude-sonnet-4-20250514"),
-            api_key=SecretStr(os.environ.get("LLM_API_KEY", "dummy")),
-            base_url=os.environ.get("LLM_BASE_URL"),
+    Supports:
+    - Direct API keys: ANTHROPIC_API_KEY, OPENAI_API_KEY
+    - LiteLLM proxy: LLM_API_KEY + LLM_BASE_URL + LLM_MODEL
+    """
+    model = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-20250514")
+    base_url = os.getenv("LLM_BASE_URL")
+
+    api_key = (
+        os.getenv("LLM_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("OPENHANDS_API_KEY")
+    )
+
+    if not api_key:
+        console.print("[red]Error: No API key found.[/]")
+        console.print(
+            "[red]Set one of: LLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY[/]"
         )
+        sys.exit(1)
 
-    # Check for direct API keys
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return LLM(
-            model="anthropic/claude-sonnet-4-20250514",
-            api_key=SecretStr(os.environ["ANTHROPIC_API_KEY"]),
-        )
-
-    if os.environ.get("OPENAI_API_KEY"):
-        return LLM(
-            model="openai/gpt-4o",
-            api_key=SecretStr(os.environ["OPENAI_API_KEY"]),
-        )
-
-    console.print("[red]Error: No API key found.[/]")
-    console.print("Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, or LLM_BASE_URL")
-    raise SystemExit(1)
+    return LLM(model=model, api_key=SecretStr(api_key), base_url=base_url)
 
 
 def create_sample_workspace(tmpdir: Path) -> Path:
