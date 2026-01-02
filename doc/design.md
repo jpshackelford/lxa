@@ -577,10 +577,10 @@ OpenHands caution about pushing.
 
 #### 5.3.2 Checklist
 
-- [ ] src/agents/orchestrator.py - Orchestrator agent factory with tools
+- [x] src/agents/orchestrator.py - Orchestrator agent factory with tools
       (DelegateTool, ImplementationChecklistTool, TerminalTool) and system
       prompt with git workflow instructions
-- [ ] tests/agents/test_orchestrator.py - Tests for orchestrator creation and
+- [x] tests/agents/test_orchestrator.py - Tests for orchestrator creation and
       pre-flight checks
 
 ### 5.4 CLI Entry Point (M4)
