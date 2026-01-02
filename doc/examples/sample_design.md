@@ -15,6 +15,7 @@ Implement a Calculator class with methods for add, subtract, multiply, and divid
 ### 2.1 Calculator Class
 
 A class with static methods for basic arithmetic:
+
 - `add(a, b)` - Returns sum
 - `subtract(a, b)` - Returns difference
 - `multiply(a, b)` - Returns product

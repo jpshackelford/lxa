@@ -12,51 +12,56 @@ This directory contains examples for testing and understanding the `Implementati
 From the project root:
 
 ```bash
-cd /Users/jpshack/code/jpshackelford/long-horizon-agent
 uv run python doc/examples/demo_checklist_tool.py
 ```
 
 This will:
-1. Reset the sample design doc (uncheck all boxes)
+
+1. Copy `sample_design.md` to a temp directory
 2. Show parser output for all milestones
 3. Demo the `status` command
 4. Demo the `next` command
-5. Demo the `complete` command (modifies the file!)
+5. Demo the `complete` command (modifies the temp copy)
 6. Show updated status
+7. Clean up temp directory (original file unchanged)
 
 ## LLM Prompts for Testing
 
 When using an agent with this tool, try these prompts:
 
 ### Status Command
-```
+
+```plaintext
 Use the implementation checklist tool to show the current implementation progress for doc/examples/sample_design.md
 ```
 
-```
+```plaintext
 Check the status of the implementation plan
 ```
 
 ### Next Command
-```
+
+```plaintext
 What is the next task I need to work on according to the implementation checklist?
 ```
 
-```
+```plaintext
 Use the checklist tool to get the next uncompleted task
 ```
 
 ### Complete Command
-```
+
+```plaintext
 Mark the first calculator task as complete in the checklist
 ```
 
-```
+```plaintext
 Use the implementation checklist tool to mark "src/calculator.py - Calculator class with add, subtract methods" as complete
 ```
 
 ### Workflow Example
-```
+
+```plaintext
 1. First show me the implementation status
 2. Then get the next task
 3. [pretend to do the work]

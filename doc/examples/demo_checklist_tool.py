@@ -2,13 +2,14 @@
 """Demo script for the ImplementationChecklistTool.
 
 This script demonstrates how the ChecklistParser and ChecklistExecutor work
-by running commands against the sample_design.md file.
+by running commands against a copy of the sample_design.md file in a temp directory.
 
 Usage:
-    cd doc/examples
-    python demo_checklist_tool.py
+    uv run python doc/examples/demo_checklist_tool.py
 """
 
+import shutil
+import tempfile
 from pathlib import Path
 
 from rich.console import Console
@@ -18,7 +19,10 @@ from src.tools.checklist import ChecklistAction, ChecklistExecutor, ChecklistPar
 # Setup
 console = Console()
 example_dir = Path(__file__).parent
-design_doc = example_dir / "sample_design.md"
+source_design_doc = example_dir / "sample_design.md"
+
+# Will be set in main() to point to temp copy
+design_doc: Path
 
 
 def print_header(title: str) -> None:
@@ -41,7 +45,10 @@ def demo_parser() -> None:
     for m in milestones:
         console.print(f"\n[yellow]Milestone {m.index}:[/] {m.title}")
         console.print(f"  Goal: {m.goal}")
-        console.print(f"  Tasks: {len(m.tasks)} ({m.tasks_complete} complete, {m.tasks_remaining} remaining)")
+        console.print(
+            f"  Tasks: {len(m.tasks)} ({m.tasks_complete} complete, "
+            f"{m.tasks_remaining} remaining)"
+        )
         for task in m.tasks:
             status = "✅" if task.complete else "⏳"
             console.print(f"    {status} Line {task.line_number}: {task.description}")
@@ -82,7 +89,7 @@ def demo_next_command() -> None:
 
 
 def demo_complete_command() -> None:
-    """Demonstrate the complete command (will modify the file!)."""
+    """Demonstrate the complete command (modifies the temp copy)."""
     print_header("Demo: complete command")
 
     executor = ChecklistExecutor(design_doc)
@@ -92,7 +99,9 @@ def demo_complete_command() -> None:
     next_obs = executor(next_action)
 
     if next_obs.next_task_description:
-        console.print(f"[yellow]About to mark complete:[/] {next_obs.next_task_description}")
+        console.print(
+            f"[yellow]About to mark complete:[/] {next_obs.next_task_description}"
+        )
         console.print()
 
         # Mark it complete
@@ -111,50 +120,44 @@ def demo_complete_command() -> None:
         console.print(obs.visualize)
 
         console.print()
-        console.print("[bold green]✓ The sample_design.md file has been modified![/]")
-        console.print("[dim]Check the file to see the checkbox changed from [ ] to [x][/]")
+        console.print("[bold green]✓ The temp design doc has been modified![/]")
+        console.print(f"[dim]File: {design_doc}[/]")
     else:
         console.print("[yellow]No incomplete tasks to mark complete.[/]")
 
 
-def reset_sample_design() -> None:
-    """Reset the sample design doc to original state (all unchecked)."""
-    print_header("Resetting sample_design.md")
-
-    content = design_doc.read_text()
-    # Replace all [x] with [ ]
-    content = content.replace("[x]", "[ ]")
-    content = content.replace("[X]", "[ ]")
-    design_doc.write_text(content)
-
-    console.print("[green]✓ All checkboxes reset to unchecked.[/]")
-
-
 def main() -> None:
-    """Run all demos."""
-    console.print("[bold magenta]ImplementationChecklistTool Demo[/]")
-    console.print(f"Using design doc: {design_doc}")
+    """Run all demos using a temp copy of the design doc."""
+    global design_doc
 
-    # Reset first to ensure clean state
-    reset_sample_design()
+    # Create temp directory and copy design doc
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        design_doc = tmp_path / "sample_design.md"
+        shutil.copy(source_design_doc, design_doc)
 
-    # Run demos
-    demo_parser()
-    demo_status_command()
-    demo_next_command()
-    demo_complete_command()
+        console.print("[bold magenta]ImplementationChecklistTool Demo[/]")
+        console.print(f"[dim]Source: {source_design_doc}[/]")
+        console.print(f"[dim]Working copy: {design_doc}[/]")
 
-    # Show status again after completion
-    print_header("Status after completing a task")
-    executor = ChecklistExecutor(design_doc)
-    action = ChecklistAction(command="status")
-    obs = executor(action)
-    console.print(obs.visualize)
+        # Run demos
+        demo_parser()
+        demo_status_command()
+        demo_next_command()
+        demo_complete_command()
 
-    console.print()
-    console.print("[bold green]Demo complete![/]")
-    console.print("[dim]Run 'python demo_checklist_tool.py' again to see the demo with one task already complete.[/]")
-    console.print("[dim]Or run reset_sample_design() to start fresh.[/]")
+        # Show status again after completion
+        print_header("Status after completing a task")
+        executor = ChecklistExecutor(design_doc)
+        action = ChecklistAction(command="status")
+        obs = executor(action)
+        console.print(obs.visualize)
+
+        console.print()
+        console.print("[bold green]Demo complete![/]")
+        console.print(
+            "[dim]Temp directory cleaned up - original sample_design.md unchanged.[/]"
+        )
 
 
 if __name__ == "__main__":
