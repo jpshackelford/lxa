@@ -4,12 +4,9 @@ Demos for the Orchestrator Agent that coordinates milestone execution.
 
 ## Files
 
-- `demo_preflight_checks.py` - Pre-flight checks demo (no API key)
-- `demo_orchestrator.py` - Full orchestrator demo (requires API key)
+- `demo_preflight_checks.py` - Pre-flight checks demo (no API key needed)
 
-## Running the Demos
-
-**Pre-flight Checks Demo (no API key needed):**
+## Running the Demo
 
 ```bash
 uv run python doc/examples/orchestrator/demo_preflight_checks.py
@@ -20,13 +17,6 @@ Shows how the orchestrator validates the environment before starting:
 - Verifies origin remote is configured
 - Detects platform (GitHub, GitLab, Bitbucket)
 - Checks for clean working tree
-
-**Orchestrator Demo (requires API key):**
-
-```bash
-export ANTHROPIC_API_KEY=your-key  # or OPENAI_API_KEY
-uv run python doc/examples/orchestrator/demo_orchestrator.py
-```
 
 ## Pre-flight Check Results
 
