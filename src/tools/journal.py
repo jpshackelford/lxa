@@ -4,7 +4,7 @@ The journal (doc/journal.md) serves as persistent memory across task agent
 boundaries. Each task agent appends an entry summarizing:
 - Files read and what was learned from each
 - Files modified/created
-- Lessons learned, patterns, and gotchas for future tasks
+- Lessons learned: gotchas and pitfalls encountered (NOT accomplishments)
 """
 
 from __future__ import annotations
@@ -36,7 +36,10 @@ class JournalEntry(BaseModel):
     )
     lessons_learned: list[str] = Field(
         default_factory=list,
-        description="Patterns, gotchas, or knowledge useful for future tasks",
+        description=(
+            "Gotchas, pitfalls, or non-obvious issues encountered that another "
+            "developer would likely hit. NOT accomplishments or what went well."
+        ),
     )
 
 
@@ -170,8 +173,18 @@ learned that will help future tasks. The journal serves as persistent memory
 across task boundaries.
 
 Commands:
-- append: Add a new journal entry with task name, files read, files modified,
-  and lessons learned
+- append: Add a new journal entry
+
+The lessons_learned field is for GOTCHAS and PITFALLS only - issues you hit
+that another developer would likely encounter. Do NOT include:
+- Accomplishments ("TDD worked well")
+- General best practices ("type hints improve code")
+- Things that went smoothly
+
+Good examples:
+- "Pydantic v2 uses model_validate() not parse_obj() - caused import error"
+- "Must call from_text() on Observation subclasses or SDK prompt caching crashes"
+- "pytest not in test dependencies - had to add to pyproject.toml"
 """
 
 
