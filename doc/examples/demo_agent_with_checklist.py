@@ -37,30 +37,32 @@ source_design_doc = example_dir / "sample_design.md"
 
 
 def get_llm() -> LLM:
-    """Create LLM from environment variables."""
-    # Check for model/key pairs in order of preference
-    if api_key := os.getenv("ANTHROPIC_API_KEY"):
-        return LLM(
-            model="anthropic/claude-sonnet-4-20250514",
-            api_key=SecretStr(api_key),
-        )
-    elif api_key := os.getenv("OPENAI_API_KEY"):
-        return LLM(
-            model="openai/gpt-4o",
-            api_key=SecretStr(api_key),
-        )
-    elif api_key := os.getenv("LLM_API_KEY"):
-        # Generic LLM_API_KEY - use with LLM_MODEL or default to claude
-        model = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-20250514")
-        return LLM(
-            model=model,
-            api_key=SecretStr(api_key),
-        )
-    else:
+    """Create LLM from environment variables.
+
+    Supports:
+    - Direct API keys: ANTHROPIC_API_KEY, OPENAI_API_KEY
+    - LiteLLM proxy: LLM_API_KEY + LLM_BASE_URL + LLM_MODEL
+    """
+    # LLM configuration - supports LiteLLM proxy setup
+    model = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-20250514")
+    base_url = os.getenv("LLM_BASE_URL")  # e.g., https://llm-proxy.example.com/
+
+    # API key lookup: check multiple common env var names
+    api_key = (
+        os.getenv("LLM_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("OPENHANDS_API_KEY")
+    )
+
+    if not api_key:
+        console.print("[red]Error: No API key found.[/]")
         console.print(
-            "[red]Error: Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or LLM_API_KEY[/]"
+            "[red]Set one of: LLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY[/]"
         )
         sys.exit(1)
+
+    return LLM(model=model, api_key=SecretStr(api_key), base_url=base_url)
 
 
 def setup_workspace(tmp_path: Path) -> Path:
