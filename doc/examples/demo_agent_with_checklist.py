@@ -162,12 +162,8 @@ This will help us verify the checklist tool is working correctly."""
         console.print()
 
         # Show final state of design doc
-        console.print("[cyan]Final design doc tasks:[/]")
-        content = design_doc.read_text()
-        for line in content.splitlines():
-            if line.strip().startswith("- ["):
-                # Use Text() to avoid Rich interpreting [x] as markup
-                console.print(Text(f"  {line.strip()}"))
+        console.print("[cyan]Final design doc:[/]")
+        console.print(Text(design_doc.read_text()))
 
         console.print()
         console.print("[bold green]Demo complete![/]")
