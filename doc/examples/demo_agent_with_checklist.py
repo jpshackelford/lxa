@@ -25,6 +25,7 @@ from openhands.tools.file_editor import FileEditorTool
 from openhands.tools.terminal import TerminalTool
 from pydantic import SecretStr
 from rich.console import Console
+from rich.text import Text
 
 from src.tools.checklist import ImplementationChecklistTool
 
@@ -119,7 +120,8 @@ def run_demo() -> None:
         content = design_doc.read_text()
         for line in content.splitlines():
             if line.strip().startswith("- ["):
-                console.print(f"  {line.strip()}")
+                # Use Text() to avoid Rich interpreting [x] as markup
+                console.print(Text(f"  {line.strip()}"))
         console.print()
 
         # Create LLM and agent
@@ -164,7 +166,8 @@ This will help us verify the checklist tool is working correctly."""
         content = design_doc.read_text()
         for line in content.splitlines():
             if line.strip().startswith("- ["):
-                console.print(f"  {line.strip()}")
+                # Use Text() to avoid Rich interpreting [x] as markup
+                console.print(Text(f"  {line.strip()}"))
 
         console.print()
         console.print("[bold green]Demo complete![/]")
