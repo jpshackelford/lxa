@@ -58,7 +58,8 @@ indent-style = "space"
 # Basedpyright configuration
 [tool.basedpyright]
 pythonVersion = "3.12"
-include = ["src"]
+include = ["src", "doc/examples"]
+extraPaths = ["."]  # Allow imports from project root (e.g., doc.examples.common)
 typeCheckingMode = "standard"
 
 # Suppress warnings for SDK upstream typing issues
