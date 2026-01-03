@@ -72,9 +72,16 @@ LXA (Language eXtension Agent) is a system for building AI agents with specializ
 
 ### CI/CD Status ✅ ALL PASSING
 - **Linting**: All ruff checks pass (182 issues fixed)
+- **Formatting**: All ruff format checks pass (6 files reformatted)
 - **Type Checking**: All basedpyright checks pass (2 type errors fixed)
 - **Full Test Suite**: All 174 tests across entire project pass
 - **Code Quality**: Clean, properly formatted code with no lint violations
+
+### Recent CI Fixes
+- Fixed 182 linting issues in test files using `ruff --fix`
+- Fixed CI formatting failures by applying `ruff format` to 6 markdown tool files
+- Root cause: CI runs both `ruff check` AND `ruff format --check` - formatting was the issue
+- All CI checks now pass: linting, formatting, type checking, and tests
 
 ## Code Quality Standards
 - All code passes `ruff` linting
