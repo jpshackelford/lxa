@@ -1,6 +1,6 @@
 # Examples
 
-Demos for testing and understanding the long-horizon agent components.
+Demos for testing and understanding LXA (Long Execution Agent) components.
 
 | Example                           | Description                                                  | API Key  |
 | --------------------------------- | ------------------------------------------------------------ | -------- |

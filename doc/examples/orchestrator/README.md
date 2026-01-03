@@ -79,7 +79,7 @@ To get an API key:
 
 ### Step 4: Run the Demo
 
-From the `long-horizon-agent` project directory:
+From the `lxa` project directory:
 
 ```bash
 # Pass the path to your test repo
