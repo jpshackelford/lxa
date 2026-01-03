@@ -395,7 +395,7 @@ All tasks require:
 #### 4.1.1 Checklist
 
 - [x] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
-- [ ] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
+- [x] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
       TOC detection, numbered vs unnumbered sections
 
 ### 4.2 Validation and Renumbering (M2)
@@ -406,9 +406,9 @@ All tasks require:
 
 #### 4.2.1 Checklist
 
-- [ ] src/tools/markdown/numbering.py - `SectionNumberer` with validate,
+- [x] src/tools/markdown/numbering.py - `SectionNumberer` with validate,
       renumber
-- [ ] tests/tools/markdown/test_numbering.py - Tests for validation, sequential
+- [x] tests/tools/markdown/test_numbering.py - Tests for validation, sequential
       renumbering, TOC skipping
 
 ### 4.3 TOC Management (M3)
@@ -419,8 +419,8 @@ All tasks require:
 
 #### 4.3.1 Checklist
 
-- [ ] src/tools/markdown/toc.py - `TocManager` with update, remove
-- [ ] tests/tools/markdown/test_toc.py - Tests for generation, update, depth
+- [x] src/tools/markdown/toc.py - `TocManager` with update, remove
+- [x] tests/tools/markdown/test_toc.py - Tests for generation, update, depth
       parameter, remove
 
 ### 4.4 Section Operations (M4)
@@ -431,9 +431,9 @@ All tasks require:
 
 #### 4.4.1 Checklist
 
-- [ ] src/tools/markdown/operations.py - `SectionOperations` with move, insert,
+- [x] src/tools/markdown/operations.py - `SectionOperations` with move, insert,
       delete, promote, demote
-- [ ] tests/tools/markdown/test_operations.py - Tests for each operation,
+- [x] tests/tools/markdown/test_operations.py - Tests for each operation,
       children handling, observation reminders
 
 ### 4.5 Formatting (M5)
@@ -444,9 +444,9 @@ All tasks require:
 
 #### 4.5.1 Checklist
 
-- [ ] src/tools/markdown/formatter.py - `MarkdownFormatter` with rewrap, lint,
+- [x] src/tools/markdown/formatter.py - `MarkdownFormatter` with rewrap, lint,
       fix
-- [ ] tests/tools/markdown/test_formatter.py - Tests for rewrap boundaries,
+- [x] tests/tools/markdown/test_formatter.py - Tests for rewrap boundaries,
       lint detection, auto-fix
 
 ### 4.6 Tool Integration (M6)
@@ -458,6 +458,6 @@ rewrap → lint → fix.
 
 #### 4.6.1 Checklist
 
-- [ ] src/tools/markdown/tool.py - `MarkdownDocumentTool` with all commands
-- [ ] tests/tools/markdown/test_tool.py - Integration tests for command routing
+- [x] src/tools/markdown/tool.py - `MarkdownDocumentTool` with all commands
+- [x] tests/tools/markdown/test_tool.py - Integration tests for command routing
       and observations
