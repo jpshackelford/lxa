@@ -135,18 +135,29 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
 
-    initial_message = """\
+    initial_message = f"""\
 Start milestone execution for this project.
 
+Design document: {design_doc_relative}
+Journal file: {design_doc_relative.parent / 'journal.md'}
+
+Workflow:
 1. Check the implementation status using the checklist tool
 2. Create a feature branch for this milestone if not already on one
 3. Delegate the first unchecked task to a task agent
+   - Include design doc and journal paths in the delegation
+   - Instruct task agent to write a journal entry after completing the task
 4. After task completion, mark it complete, commit, and push
 5. Create a draft PR if this is the first task
-6. Continue until the milestone is complete
-7. Comment "Ready for review" on the PR and stop
+6. WAIT for CI to complete - do NOT proceed until CI is GREEN
+7. If CI fails, fix the issue before proceeding (see CI FAILURE HANDLING)
+8. Continue until the milestone is complete
+9. Comment "Ready for review" on the PR and stop
 
-Remember: Push commits and create PRs autonomously. Do not wait for permission.
+Critical rules:
+- Push commits and create PRs autonomously (do not wait for permission)
+- NEVER proceed to the next task until CI passes
+- If CI fails after local checks passed, fix the discrepancy in local checks
 """
 
     conversation.send_message(initial_message)

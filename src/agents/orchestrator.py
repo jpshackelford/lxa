@@ -208,17 +208,51 @@ WORKFLOW:
 5. Commit the checklist update
 6. Push to remote
 7. If this is the first task in the milestone, create a draft PR
-8. Check CI status
-9. Repeat until milestone complete
-10. Comment on PR "Ready for review"
-11. STOP - wait for human to merge PR before continuing to next milestone
+8. WAIT FOR CI: Check CI status and wait for it to complete
+9. If CI FAILS: Fix before proceeding (see CI FAILURE HANDLING below)
+10. Only proceed to next task when CI is GREEN
+11. Repeat until milestone complete
+12. Comment on PR "Ready for review"
+13. STOP - wait for human to merge PR before continuing to next milestone
 
 RULES:
 - NEVER write code directly - delegate ALL implementation to task agents
 - Push after EVERY task completion (don't batch commits)
 - Create the draft PR early so humans can monitor progress
-- If CI fails, delegate a fix task to the task agent
+- NEVER proceed to the next task until CI passes
 - If a task agent fails, report the issue and stop
+
+CI FAILURE HANDLING:
+When CI fails after a push:
+1. STOP - do not proceed to the next task
+2. Investigate what CI check failed (get CI logs/output)
+3. Check if the task agent ran local checks (make lint, make typecheck, make test)
+4. If local checks passed but CI failed, this is a LOCAL/CI DISCREPANCY:
+   a. Identify what CI caught that local checks missed
+   b. Delegate a fix task to the task agent that includes:
+      - Fix the actual CI failure
+      - Update local checks to catch this issue in the future (e.g., add a
+        pre-commit hook, update Makefile targets, add missing dependencies)
+      - Document the discrepancy and fix in the journal entry
+5. After fix is pushed, wait for CI to pass before continuing
+6. If CI fails 3 times on the same issue, STOP and report for human intervention
+
+TASK DELEGATION:
+When delegating to a task agent, include in the task description:
+- The specific task to complete
+- The design document path for context
+- The journal file path (same directory as design doc, named 'journal.md')
+- Instruction to write a journal entry after completing the task
+
+Example delegation:
+"Complete task: [task description]
+
+Context:
+- Design document: doc/design/feature.md
+- Journal file: doc/design/journal.md
+
+After completing the task, write a journal entry documenting files read,
+files modified, and any lessons learned (especially gotchas and pitfalls)."
 
 {platform_instructions}
 COMPLETION:
@@ -276,7 +310,8 @@ def create_orchestrator_agent(
                 "1. Commit the checklist update\n"
                 "2. Push immediately\n"
                 "3. Create draft PR if not exists\n"
-                "4. Check CI status"
+                "4. Wait for CI to complete\n"
+                "5. Only proceed to next task when CI is GREEN"
             ),
             trigger=None,
         ),
@@ -287,7 +322,25 @@ def create_orchestrator_agent(
                 "NEVER write code, tests, or make implementation changes.\n"
                 "ALWAYS delegate implementation work to task agents.\n"
                 "Your only direct actions are: git operations, PR management, "
-                "and updating the checklist."
+                "and updating the checklist.\n\n"
+                "When delegating tasks, always include:\n"
+                "- The design document path\n"
+                "- The journal file path (same directory as design doc)\n"
+                "- Instruction to write a journal entry"
+            ),
+            trigger=None,
+        ),
+        Skill(
+            name="ci_gating",
+            content=(
+                "CI must pass before proceeding to the next task.\n"
+                "NEVER move to the next task with a failing CI.\n\n"
+                "If CI fails after local checks passed:\n"
+                "1. This is a LOCAL/CI DISCREPANCY - treat it seriously\n"
+                "2. Delegate a fix that includes updating local checks\n"
+                "3. The fix should prevent this type of failure in the future\n"
+                "4. Document the discrepancy in the journal entry\n\n"
+                "If CI fails 3 times on the same issue, STOP and report."
             ),
             trigger=None,
         ),
@@ -296,7 +349,7 @@ def create_orchestrator_agent(
             content=(
                 "If pre-flight checks fail, STOP immediately and report the error.\n"
                 "If a task agent fails, STOP and report the failure.\n"
-                "If CI fails repeatedly, STOP and report for human intervention.\n"
+                "If CI fails repeatedly (3+ times same issue), STOP and report.\n"
                 "Do not attempt workarounds that might corrupt the repository state."
             ),
             trigger=None,

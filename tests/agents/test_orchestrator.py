@@ -181,6 +181,7 @@ class TestCreateOrchestratorAgent:
         skill_names = [s.name for s in agent.agent_context.skills]
         assert "autonomous_git_workflow" in skill_names
         assert "delegation_only" in skill_names
+        assert "ci_gating" in skill_names
         assert "fail_fast" in skill_names
 
     def test_system_prompt_includes_autonomous_behavior(self):
@@ -219,3 +220,33 @@ class TestCreateOrchestratorAgent:
         # The placeholder should be replaced with actual instructions
         assert "{platform_instructions}" not in prompt
         assert "gh" in prompt  # GitHub CLI
+
+    def test_system_prompt_requires_ci_pass_before_proceeding(self):
+        """System prompt should require CI to pass before moving to next task."""
+        assert "WAIT FOR CI" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "CI is GREEN" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "NEVER proceed to the next task until CI passes" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_system_prompt_has_ci_failure_handling(self):
+        """System prompt should include CI failure handling workflow."""
+        assert "CI FAILURE HANDLING" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "LOCAL/CI DISCREPANCY" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Update local checks" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_system_prompt_includes_task_delegation_with_journal(self):
+        """System prompt should instruct including journal path in delegation."""
+        assert "TASK DELEGATION" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "journal file path" in ORCHESTRATOR_SYSTEM_PROMPT.lower()
+        assert "design document path" in ORCHESTRATOR_SYSTEM_PROMPT.lower()
+
+    def test_ci_gating_skill_content(self, mock_llm: LLM):
+        """CI gating skill should emphasize never proceeding with failing CI."""
+        agent = create_orchestrator_agent(mock_llm)
+
+        assert agent.agent_context is not None
+        ci_skill = next(
+            (s for s in agent.agent_context.skills if s.name == "ci_gating"), None
+        )
+        assert ci_skill is not None
+        assert "NEVER move to the next task" in ci_skill.content
+        assert "LOCAL/CI DISCREPANCY" in ci_skill.content
