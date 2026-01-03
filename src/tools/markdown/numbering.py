@@ -9,6 +9,7 @@ from .parser import Section
 @dataclass
 class NumberingIssue:
     """Represents a section numbering issue."""
+
     section_title: str
     expected: str
     actual: str | None
@@ -31,6 +32,7 @@ class NumberingIssue:
 @dataclass
 class ValidationResult:
     """Result of section numbering validation."""
+
     valid: bool
     issues: list[NumberingIssue]
     recommendations: list[str]
@@ -42,7 +44,9 @@ class SectionNumberer:
     def __init__(self):
         self.toc_section: Section | None = None
 
-    def validate(self, sections: list[Section], toc_section: Section | None = None) -> ValidationResult:
+    def validate(
+        self, sections: list[Section], toc_section: Section | None = None
+    ) -> ValidationResult:
         """
         Validate section numbering consistency.
 
@@ -65,21 +69,21 @@ class SectionNumberer:
         for section, expected in zip(all_sections, expected_numbers, strict=True):
             if section.number != expected:
                 issue_type = "missing_number" if section.number is None else "wrong_number"
-                issues.append(NumberingIssue(
-                    section_title=section.title,
-                    expected=expected,
-                    actual=section.number,
-                    line_number=section.start_line + 1,  # Convert to 1-based
-                    issue_type=issue_type
-                ))
+                issues.append(
+                    NumberingIssue(
+                        section_title=section.title,
+                        expected=expected,
+                        actual=section.number,
+                        line_number=section.start_line + 1,  # Convert to 1-based
+                        issue_type=issue_type,
+                    )
+                )
 
         # Generate recommendations
         recommendations = self._generate_recommendations(issues)
 
         return ValidationResult(
-            valid=len(issues) == 0,
-            issues=issues,
-            recommendations=recommendations
+            valid=len(issues) == 0, issues=issues, recommendations=recommendations
         )
 
     def normalize(self, sections: list[Section]) -> list[Section]:
@@ -104,7 +108,9 @@ class SectionNumberer:
 
         return sections
 
-    def renumber(self, sections: list[Section], toc_section: Section | None = None) -> dict[str, Any]:
+    def renumber(
+        self, sections: list[Section], toc_section: Section | None = None
+    ) -> dict[str, Any]:
         """
         Renumber all sections sequentially, skipping TOC.
 
@@ -132,7 +138,7 @@ class SectionNumberer:
             "sections_renumbered": sections_after,
             "toc_skipped": toc_section is not None,
             "sections_before": sections_before,
-            "sections_after": sections_after
+            "sections_after": sections_after,
         }
 
     def _get_numbered_sections(self, sections: list[Section]) -> list[Section]:
@@ -182,7 +188,7 @@ class SectionNumberer:
                 if lvl <= level:
                     number_parts.append(str(counters[lvl]))
 
-            expected_numbers.append('.'.join(number_parts))
+            expected_numbers.append(".".join(number_parts))
 
         return expected_numbers
 
@@ -195,18 +201,14 @@ class SectionNumberer:
 
         # Check for numbering issues
         has_numbering_issues = any(
-            issue.issue_type in ['missing_number', 'wrong_number']
-            for issue in issues
+            issue.issue_type in ["missing_number", "wrong_number"] for issue in issues
         )
 
         if has_numbering_issues:
             recommendations.append("Run 'renumber' to fix section numbering.")
 
         # Check for format issues
-        has_format_issues = any(
-            issue.issue_type == 'invalid_format'
-            for issue in issues
-        )
+        has_format_issues = any(issue.issue_type == "invalid_format" for issue in issues)
 
         if has_format_issues:
             recommendations.append("Fix section number formatting manually.")
@@ -227,9 +229,9 @@ class SectionNumberer:
         if not number:
             return ""
 
-        parts = number.split('.')
+        parts = number.split(".")
         if target_level <= len(parts):
-            return '.'.join(parts[:target_level])
+            return ".".join(parts[:target_level])
 
         return number
 
@@ -246,12 +248,12 @@ class SectionNumberer:
         if not number:
             return "1"
 
-        parts = number.split('.')
+        parts = number.split(".")
         if parts:
             try:
                 last_part = int(parts[-1])
                 parts[-1] = str(last_part + 1)
-                return '.'.join(parts)
+                return ".".join(parts)
             except ValueError:
                 # If last part is not a number, append .1
                 return f"{number}.1"
@@ -271,9 +273,9 @@ class SectionNumberer:
         if not number:
             return ""
 
-        parts = number.split('.')
+        parts = number.split(".")
         if len(parts) > 1:
-            return '.'.join(parts[:-1])
+            return ".".join(parts[:-1])
 
         return ""
 
@@ -290,7 +292,7 @@ class SectionNumberer:
         if not number:
             return False
 
-        parts = number.split('.')
+        parts = number.split(".")
         if not parts:
             return False
 

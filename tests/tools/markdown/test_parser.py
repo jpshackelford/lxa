@@ -8,13 +8,7 @@ class TestSection:
 
     def test_section_creation(self):
         """Test basic section creation."""
-        section = Section(
-            level=2,
-            number="1.1",
-            title="Introduction",
-            start_line=5,
-            end_line=10
-        )
+        section = Section(level=2, number="1.1", title="Introduction", start_line=5, end_line=10)
 
         assert section.level == 2
         assert section.number == "1.1"
@@ -25,25 +19,13 @@ class TestSection:
 
     def test_full_title_with_number(self):
         """Test full_title property with numbered section."""
-        section = Section(
-            level=2,
-            number="1.1",
-            title="Introduction",
-            start_line=0,
-            end_line=5
-        )
+        section = Section(level=2, number="1.1", title="Introduction", start_line=0, end_line=5)
 
         assert section.full_title == "1.1 Introduction"
 
     def test_full_title_without_number(self):
         """Test full_title property with unnumbered section."""
-        section = Section(
-            level=1,
-            number=None,
-            title="Document Title",
-            start_line=0,
-            end_line=5
-        )
+        section = Section(level=1, number=None, title="Document Title", start_line=0, end_line=5)
 
         assert section.full_title == "Document Title"
 
@@ -416,10 +398,10 @@ More content
         second_section = parser.find_section("2")
 
         assert first_section.start_line == 2  # "## 1. First"
-        assert first_section.end_line == 7   # Before "## 2. Second"
+        assert first_section.end_line == 7  # Before "## 2. Second"
 
         assert second_section.start_line == 7  # "## 2. Second"
-        assert second_section.end_line == 10   # End of document
+        assert second_section.end_line == 10  # End of document
 
     def test_get_all_sections_flattened(self):
         """Test getting all sections in document order."""

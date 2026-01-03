@@ -71,7 +71,9 @@ class MarkdownObservation(Observation):
     result: str = Field(description="Result of the operation: 'success', 'error', or 'warning'.")
 
     # Validation-specific fields
-    numbering_valid: bool | None = Field(default=None, description="Whether section numbering is valid.")
+    numbering_valid: bool | None = Field(
+        default=None, description="Whether section numbering is valid."
+    )
     numbering_issues: list[dict[str, str]] | None = Field(
         default=None, description="List of numbering issues found."
     )
@@ -80,12 +82,16 @@ class MarkdownObservation(Observation):
     )
 
     # Renumbering-specific fields
-    sections_renumbered: int | None = Field(default=None, description="Number of sections renumbered.")
+    sections_renumbered: int | None = Field(
+        default=None, description="Number of sections renumbered."
+    )
     toc_skipped: bool | None = Field(default=None, description="Whether TOC section was skipped.")
 
     # Parse-specific fields
     document_title: str | None = Field(default=None, description="Document title (h1 heading).")
-    toc_section_found: bool | None = Field(default=None, description="Whether a TOC section was found.")
+    toc_section_found: bool | None = Field(
+        default=None, description="Whether a TOC section was found."
+    )
     total_sections: int | None = Field(default=None, description="Total number of sections found.")
     section_structure: list[dict[str, str | int]] | None = Field(
         default=None, description="Hierarchical structure of sections."
@@ -174,7 +180,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     is_error=True,
                     command=action.command,
                     file=action.file,
-                    result="error"
+                    result="error",
                 )
 
             # Read file content
@@ -186,7 +192,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     is_error=True,
                     command=action.command,
                     file=action.file,
-                    result="error"
+                    result="error",
                 )
 
             if action.command == "validate":
@@ -203,7 +209,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     is_error=True,
                     command="validate",  # Use valid command for observation
                     file=action.file,
-                    result="error"
+                    result="error",
                 )
 
         except Exception as e:
@@ -212,7 +218,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 is_error=True,
                 command=action.command,
                 file=action.file,
-                result="error"
+                result="error",
             )
 
     def _validate_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
@@ -223,13 +229,15 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         # Convert issues to dict format for observation
         issues_dict = []
         for issue in validation.issues:
-            issues_dict.append({
-                "section_title": issue.section_title,
-                "issue_type": issue.issue_type,
-                "expected": issue.expected or "",
-                "actual": issue.actual or "",
-                "message": issue.message
-            })
+            issues_dict.append(
+                {
+                    "section_title": issue.section_title,
+                    "issue_type": issue.issue_type,
+                    "expected": issue.expected or "",
+                    "actual": issue.actual or "",
+                    "message": issue.message,
+                }
+            )
 
         return MarkdownObservation(
             command=action.command,
@@ -237,10 +245,12 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             result="success" if validation.valid else "warning",
             numbering_valid=validation.valid,
             numbering_issues=issues_dict if issues_dict else None,
-            recommendations=validation.recommendations if validation.recommendations else None
+            recommendations=validation.recommendations if validation.recommendations else None,
         )
 
-    def _renumber_document(self, action: MarkdownAction, content: str, file_path: Path) -> MarkdownObservation:
+    def _renumber_document(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
         """Renumber document sections."""
         sections = self.parser.parse_content(content)
         renumber_result = self.numberer.renumber(sections, self.parser.toc_section)
@@ -257,7 +267,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 file=action.file,
                 result="success",
                 sections_renumbered=renumber_result["sections_renumbered"],
-                toc_skipped=renumber_result["toc_skipped"]
+                toc_skipped=renumber_result["toc_skipped"],
             )
         else:
             return MarkdownObservation.from_text(
@@ -265,7 +275,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 is_error=True,
                 command=action.command,
                 file=action.file,
-                result="error"
+                result="error",
             )
 
     def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
@@ -284,18 +294,20 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             document_title=self.parser.document_title,
             toc_section_found=self.parser.toc_section is not None,
             total_sections=len(self.parser.get_all_sections()),
-            section_structure=section_structure
+            section_structure=section_structure,
         )
 
     def _add_section_to_structure(self, section, structure_list: list):
         """Recursively add section and children to structure list."""
-        structure_list.append({
-            "title": section.title,
-            "number": section.number or "",
-            "level": section.level,
-            "start_line": section.start_line,
-            "end_line": section.end_line
-        })
+        structure_list.append(
+            {
+                "title": section.title,
+                "number": section.number or "",
+                "level": section.level,
+                "start_line": section.start_line,
+                "end_line": section.end_line,
+            }
+        )
 
         for child in section.children:
             self._add_section_to_structure(child, structure_list)
@@ -335,9 +347,7 @@ class MarkdownDocumentTool(ToolDefinition[MarkdownAction, MarkdownObservation]):
     """Tool for structural editing and formatting of markdown documents."""
 
     @classmethod
-    def create(
-        cls, conv_state: ConversationState
-    ) -> Sequence[MarkdownDocumentTool]:
+    def create(cls, conv_state: ConversationState) -> Sequence[MarkdownDocumentTool]:
         """Create the markdown document tool.
 
         Args:

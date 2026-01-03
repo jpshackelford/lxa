@@ -17,6 +17,7 @@ class TestMarkdownExecutor:
     def teardown_method(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_validate_correct_document(self):
@@ -201,7 +202,7 @@ This is the methods section.
     def test_invalid_utf8_file(self):
         """Test handling of non-UTF8 file."""
         test_file = self.temp_dir / "binary.md"
-        test_file.write_bytes(b'\x80\x81\x82')  # Invalid UTF-8
+        test_file.write_bytes(b"\x80\x81\x82")  # Invalid UTF-8
 
         action = MarkdownAction(command="validate", file="binary.md")
         observation = self.executor.execute(action)
@@ -353,10 +354,7 @@ class TestMarkdownObservation:
     def test_observation_creation(self):
         """Test creating markdown observations."""
         obs = MarkdownObservation(
-            command="validate",
-            file="test.md",
-            result="success",
-            numbering_valid=True
+            command="validate", file="test.md", result="success", numbering_valid=True
         )
         assert obs.command == "validate"
         assert obs.file == "test.md"
@@ -366,10 +364,7 @@ class TestMarkdownObservation:
     def test_observation_visualization_success(self):
         """Test observation visualization for success."""
         obs = MarkdownObservation(
-            command="validate",
-            file="test.md",
-            result="success",
-            numbering_valid=True
+            command="validate", file="test.md", result="success", numbering_valid=True
         )
         text = obs.visualize
         assert "Document structure is valid" in str(text)
@@ -381,7 +376,7 @@ class TestMarkdownObservation:
             file="test.md",
             result="warning",
             numbering_valid=False,
-            numbering_issues=[{"section_title": "Test", "issue_type": "wrong_number"}]
+            numbering_issues=[{"section_title": "Test", "issue_type": "wrong_number"}],
         )
         text = obs.visualize
         assert "Document structure has issues" in str(text)
@@ -394,7 +389,7 @@ class TestMarkdownObservation:
             file="test.md",
             result="success",
             sections_renumbered=5,
-            toc_skipped=True
+            toc_skipped=True,
         )
         text = obs.visualize
         assert "Renumbered 5 sections" in str(text)
@@ -407,7 +402,7 @@ class TestMarkdownObservation:
             file="test.md",
             result="success",
             total_sections=3,
-            document_title="Test Document"
+            document_title="Test Document",
         )
         text = obs.visualize
         assert "Parsed 3 sections" in str(text)
@@ -416,11 +411,7 @@ class TestMarkdownObservation:
     def test_observation_visualization_error(self):
         """Test observation visualization for errors."""
         obs = MarkdownObservation.from_text(
-            text="File not found",
-            is_error=True,
-            command="validate",
-            file="test.md",
-            result="error"
+            text="File not found", is_error=True, command="validate", file="test.md", result="error"
         )
         text = obs.visualize
         # Should show error indicator

@@ -26,9 +26,11 @@ class Section:
     def find_section(self, identifier: str) -> "Section | None":
         """Find a section by number or title (case-insensitive)."""
         # Check if this section matches
-        if (self.number == identifier or
-            self.title.lower() == identifier.lower() or
-            self.full_title.lower() == identifier.lower()):
+        if (
+            self.number == identifier
+            or self.title.lower() == identifier.lower()
+            or self.full_title.lower() == identifier.lower()
+        ):
             return self
 
         # Search children recursively
@@ -51,10 +53,12 @@ class MarkdownParser:
     """Parser for markdown documents that builds a section tree."""
 
     # Regex patterns for parsing
-    HEADING_PATTERN = re.compile(r'^(#{1,6})\s+(.+)$')
-    NUMBERED_SECTION_PATTERN = re.compile(r'^(\d+(?:\.\d+)*)\.\s+(.+)$')
-    NUMBERED_TITLE_PATTERN = re.compile(r'^(\d+(?:\.\d+)*)\s+(.+)$')  # For titles like "2.1 Subsection"
-    TOC_TITLE_PATTERN = re.compile(r'^table\s+of\s+contents$', re.IGNORECASE)
+    HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$")
+    NUMBERED_SECTION_PATTERN = re.compile(r"^(\d+(?:\.\d+)*)\.\s+(.+)$")
+    NUMBERED_TITLE_PATTERN = re.compile(
+        r"^(\d+(?:\.\d+)*)\s+(.+)$"
+    )  # For titles like "2.1 Subsection"
+    TOC_TITLE_PATTERN = re.compile(r"^table\s+of\s+contents$", re.IGNORECASE)
 
     def __init__(self):
         self.lines: list[str] = []
@@ -68,7 +72,7 @@ class MarkdownParser:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        with path.open('r', encoding='utf-8') as f:
+        with path.open("r", encoding="utf-8") as f:
             content = f.read()
 
         return self.parse_content(content)
@@ -120,15 +124,19 @@ class MarkdownParser:
 
         return headings
 
-    def _build_section_tree(self, headings: list[tuple[int, int, str, str | None, str]]) -> list[Section]:
+    def _build_section_tree(
+        self, headings: list[tuple[int, int, str, str | None, str]]
+    ) -> list[Section]:
         """Build a hierarchical section tree from headings."""
         if not headings:
             return []
 
         # Filter out h1 headings (document title) but keep them for end line calculation
-        h2_plus_headings = [(i, line_num, level, full_text, number, title)
-                           for i, (line_num, level, full_text, number, title) in enumerate(headings)
-                           if level >= 2]
+        h2_plus_headings = [
+            (i, line_num, level, full_text, number, title)
+            for i, (line_num, level, full_text, number, title) in enumerate(headings)
+            if level >= 2
+        ]
 
         if not h2_plus_headings:
             return []
@@ -145,16 +153,11 @@ class MarkdownParser:
 
             # Create section
             section = Section(
-                level=level,
-                number=number,
-                title=title,
-                start_line=line_num,
-                end_line=end_line
+                level=level, number=number, title=title, start_line=line_num, end_line=end_line
             )
 
             # Check if this is the TOC section
-            if (level == 2 and number is None and
-                self.TOC_TITLE_PATTERN.match(title)):
+            if level == 2 and number is None and self.TOC_TITLE_PATTERN.match(title):
                 self.toc_section = section
 
             # Find the correct parent by popping stack until we find a valid parent
@@ -209,7 +212,7 @@ class MarkdownParser:
             return ""
 
         end_line = min(section.end_line, len(self.lines))
-        content = '\n'.join(self.lines[section.start_line:end_line])
+        content = "\n".join(self.lines[section.start_line : end_line])
 
         # Remove trailing newlines to match expected format
-        return content.rstrip('\n')
+        return content.rstrip("\n")

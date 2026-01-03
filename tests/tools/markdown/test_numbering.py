@@ -1,6 +1,5 @@
 """Tests for section numbering functionality."""
 
-
 from src.tools.markdown.numbering import NumberingIssue, SectionNumberer, ValidationResult
 from src.tools.markdown.parser import Section
 
@@ -86,7 +85,9 @@ class TestSectionNumberer:
 
     def test_validate_with_toc_section(self):
         """Test validation skipping TOC section."""
-        toc_section = Section(level=2, number=None, title="Table of Contents", start_line=1, end_line=3)
+        toc_section = Section(
+            level=2, number=None, title="Table of Contents", start_line=1, end_line=3
+        )
 
         sections = [
             Section(level=2, number="1", title="Introduction", start_line=3, end_line=8),
@@ -136,7 +137,9 @@ class TestSectionNumberer:
     def test_normalize_deep_nesting(self):
         """Test normalization with deep nesting."""
         # Create 4-level deep structure
-        subsubsection = Section(level=4, number="1.1.1.5", title="Deep section", start_line=3, end_line=4)
+        subsubsection = Section(
+            level=4, number="1.1.1.5", title="Deep section", start_line=3, end_line=4
+        )
         subsection = Section(level=3, number="1.1.5", title="Subsection", start_line=2, end_line=4)
         subsection.children = [subsubsection]
 
@@ -165,11 +168,13 @@ class TestSectionNumberer:
         assert result["sections_renumbered"] == 3
         assert result["toc_skipped"] is False
         assert result["sections_before"] == 2  # Only 2 had numbers initially
-        assert result["sections_after"] == 3   # All 3 have numbers after
+        assert result["sections_after"] == 3  # All 3 have numbers after
 
     def test_renumber_with_toc(self):
         """Test renumbering with TOC section."""
-        toc_section = Section(level=2, number=None, title="Table of Contents", start_line=1, end_line=3)
+        toc_section = Section(
+            level=2, number=None, title="Table of Contents", start_line=1, end_line=3
+        )
 
         sections = [
             Section(level=2, number="1", title="Introduction", start_line=3, end_line=8),
@@ -261,7 +266,7 @@ class TestNumberingIssue:
             expected="1",
             actual="2",
             line_number=5,
-            issue_type="wrong_number"
+            issue_type="wrong_number",
         )
 
         assert issue.section_title == "Introduction"
@@ -278,13 +283,11 @@ class TestValidationResult:
         """Test creating ValidationResult instances."""
         issues = [
             NumberingIssue("Section 1", "1", "2", 5, "wrong_number"),
-            NumberingIssue("Section 2", "2", None, 10, "missing_number")
+            NumberingIssue("Section 2", "2", None, 10, "missing_number"),
         ]
 
         result = ValidationResult(
-            valid=False,
-            issues=issues,
-            recommendations=["Run renumber command"]
+            valid=False, issues=issues, recommendations=["Run renumber command"]
         )
 
         assert result.valid is False
