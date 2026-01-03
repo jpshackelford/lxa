@@ -16,6 +16,11 @@ import os
 import sys
 from pathlib import Path
 
+# Set default log level to WARNING before importing SDK (reduces verbose output)
+# Users can override with LOG_LEVEL=INFO or LOG_LEVEL=DEBUG
+if "LOG_LEVEL" not in os.environ:
+    os.environ["LOG_LEVEL"] = "WARNING"
+
 from dotenv import load_dotenv
 from openhands.sdk import Conversation
 from openhands.tools.delegate import DelegationVisualizer
