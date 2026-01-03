@@ -589,13 +589,12 @@ OpenHands caution about pushing.
 
 **Goal**: Command-line interface for starting execution and reconciliation.
 
-**Demo**: Run `python -m long_horizon_agent doc/design.md` and observe
-orchestrator start.
+**Demo**: Run `python -m src run doc/design.md` and observe orchestrator start.
 
 #### 5.4.1 Main Module
 
-- [ ] src/**main**.py - CLI entry point with argument parsing
-- [ ] tests/test_cli.py - Tests for CLI argument handling
+- [x] src/__main__.py - CLI entry point with argument parsing
+- [x] tests/test_cli.py - Tests for CLI argument handling
 
 ### 5.5 Reconciliation Skill (M5)
 

@@ -18,6 +18,9 @@ dev = [
     "basedpyright>=1.36.0",
 ]
 
+[project.scripts]
+long-horizon-agent = "src.__main__:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
