@@ -6,3 +6,7 @@ MD013:
   code_blocks: false      # Don't check line length in code blocks
   tables: false           # Don't check line length in tables
   headings: false         # Don't check line length in headings
+
+# MD034 - Bare URL used
+# Disabled because bare URLs are common and readable in documentation
+MD034: false
