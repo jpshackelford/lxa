@@ -394,7 +394,7 @@ All tasks require:
 
 #### 4.1.1 Checklist
 
-- [ ] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
+- [x] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
 - [ ] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
       TOC detection, numbered vs unnumbered sections
 
