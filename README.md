@@ -1,4 +1,4 @@
-# Long Horizon Agent
+# Long Execution Agent
 
 An autonomous agent built with the [OpenHands
 SDK](https://github.com/All-Hands-AI/openhands) for long-horizon task execution.
