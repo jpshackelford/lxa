@@ -12,11 +12,13 @@ Or via the installed command:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 from openhands.sdk import Conversation
+from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
@@ -31,6 +33,10 @@ from src.skills.reconcile import reconcile_design_doc
 load_dotenv()
 
 console = Console()
+
+# Persistence directory for conversation history (same as OpenHands CLI)
+PERSISTENCE_DIR = os.path.expanduser("~/.openhands")
+CONVERSATIONS_DIR = os.path.join(PERSISTENCE_DIR, "conversations")
 
 
 def get_llm():
@@ -112,11 +118,17 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print("[bold cyan]Starting orchestrator...[/]")
     console.print()
 
-    # Create conversation and run
+    # Create conversation with visualizer for real-time sub-agent output
+    # and persistence to ~/.openhands/conversations for history
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
+        visualizer=DelegationVisualizer(name="Orchestrator"),
+        persistence_dir=CONVERSATIONS_DIR,
     )
+
+    console.print(f"[dim]Conversation ID: {conversation.id}[/]")
+    console.print()
 
     initial_message = """\
 Start milestone execution for this project.
