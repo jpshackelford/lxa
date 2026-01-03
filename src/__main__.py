@@ -52,9 +52,7 @@ def get_llm():
 
     if not api_key:
         console.print("[red]Error: No API key found.[/]")
-        console.print(
-            "[dim]Set one of: LLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY[/]"
-        )
+        console.print("[dim]Set one of: LLM_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY[/]")
         sys.exit(1)
 
     return LLM(model=model, api_key=SecretStr(api_key), base_url=base_url)
@@ -260,11 +258,7 @@ Examples:
     args = parser.parse_args(argv)
 
     design_doc = args.design_doc.resolve()
-    workspace = (
-        args.workspace.resolve()
-        if args.workspace
-        else find_git_root(design_doc.parent)
-    )
+    workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
 
     if args.command == "reconcile":
         return run_reconcile(design_doc, workspace, dry_run=args.dry_run)

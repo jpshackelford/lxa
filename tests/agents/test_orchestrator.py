@@ -201,9 +201,7 @@ class TestCreateOrchestratorAgent:
         agent = create_orchestrator_agent(mock_llm, design_doc_path="docs/plan.md")
 
         # Find the checklist tool
-        checklist_tool = next(
-            t for t in agent.tools if t.name == "implementation_checklist"
-        )
+        checklist_tool = next(t for t in agent.tools if t.name == "implementation_checklist")
         assert checklist_tool.params.get("design_doc_path") == "docs/plan.md"
 
     def test_uses_provided_llm(self, mock_llm: LLM):

@@ -114,8 +114,7 @@ def run_preflight_checks(workspace: Path | str) -> PreflightResult:
                 platform=GitPlatform.UNKNOWN,
                 remote_url="",
                 error=(
-                    "No 'origin' remote configured.\n"
-                    "Add a remote with: git remote add origin <url>"
+                    "No 'origin' remote configured.\nAdd a remote with: git remote add origin <url>"
                 ),
             )
         remote_url = result.stdout.strip()
@@ -263,9 +262,7 @@ def create_orchestrator_agent(
     ]
 
     platform_instructions = get_platform_cli_instructions(platform)
-    system_prompt = ORCHESTRATOR_SYSTEM_PROMPT.format(
-        platform_instructions=platform_instructions
-    )
+    system_prompt = ORCHESTRATOR_SYSTEM_PROMPT.format(platform_instructions=platform_instructions)
 
     skills = [
         Skill(

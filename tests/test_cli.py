@@ -118,9 +118,7 @@ class TestMainWorkspaceOption:
         design_doc.write_text("# Design Doc")
 
         # Should use workspace for git checks
-        result = main(
-            ["implement", str(design_doc), "--workspace", str(workspace)]
-        )
+        result = main(["implement", str(design_doc), "--workspace", str(workspace)])
         # Will fail at later stage but should pass git root check
         # (fails on remote check since no origin configured)
         assert result == 1

@@ -166,9 +166,7 @@ When done, write a journal entry summarizing what you did.
         test_file = workspace / "tests" / "test_calculator.py"
         if test_file.exists():
             console.print("[green]✓[/] tests/test_calculator.py created:")
-            console.print(
-                Panel(Text(test_file.read_text()), title="tests/test_calculator.py")
-            )
+            console.print(Panel(Text(test_file.read_text()), title="tests/test_calculator.py"))
         else:
             console.print("[yellow]![/] tests/test_calculator.py not created")
 

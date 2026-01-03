@@ -170,9 +170,7 @@ class TestMatchSectionToImplementation:
             end_line=5,
             content="",
         )
-        definitions = {
-            "mytool": [ImplementationRef("src/tools.py", class_name="MyTool")]
-        }
+        definitions = {"mytool": [ImplementationRef("src/tools.py", class_name="MyTool")]}
         ref = match_section_to_implementation(section, definitions)
         assert ref is not None
         assert ref.class_name == "MyTool"

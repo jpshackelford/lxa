@@ -57,7 +57,7 @@ class JournalAction(Action):
         text = Text()
         text.append("📝 ", style="green")
         text.append("Append Journal Entry", style="green")
-        text.append(f": \"{self.entry.task_name}\"")
+        text.append(f': "{self.entry.task_name}"')
         return text
 
 
@@ -68,9 +68,7 @@ class JournalObservation(Observation):
     journal_path: str = Field(description="Path to the journal file")
     success: bool = Field(description="Whether the operation succeeded")
     message: str = Field(description="Status message")
-    entry_timestamp: str | None = Field(
-        default=None, description="Timestamp of the appended entry"
-    )
+    entry_timestamp: str | None = Field(default=None, description="Timestamp of the appended entry")
 
     @property
     def visualize(self) -> Text:

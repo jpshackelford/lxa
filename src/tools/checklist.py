@@ -62,9 +62,7 @@ class ChecklistParser:
     """Parses implementation plan from a design document."""
 
     # Matches milestone headers like "### 5.1 ImplementationChecklistTool (M1)"
-    MILESTONE_PATTERN = re.compile(
-        r"^###\s+(\d+\.\d+)\s+(.+?)\s*\(M(\d+)\)\s*$", re.MULTILINE
-    )
+    MILESTONE_PATTERN = re.compile(r"^###\s+(\d+\.\d+)\s+(.+?)\s*\(M(\d+)\)\s*$", re.MULTILINE)
     # Matches goal lines like "**Goal**: Tool that parses..."
     GOAL_PATTERN = re.compile(r"^\*\*Goal\*\*:\s*(.+)$", re.MULTILINE)
     # Matches checklist items like "- [ ] src/tools/checklist.py - description"
@@ -234,15 +232,11 @@ class ChecklistObservation(Observation):
     next_task_description: str | None = Field(
         default=None, description="Description of the next incomplete task."
     )
-    next_task_line: int | None = Field(
-        default=None, description="Line number of the next task."
-    )
+    next_task_line: int | None = Field(default=None, description="Line number of the next task.")
     completed_task: str | None = Field(
         default=None, description="Task that was just marked complete."
     )
-    updated_line: int | None = Field(
-        default=None, description="Line number that was updated."
-    )
+    updated_line: int | None = Field(default=None, description="Line number that was updated.")
 
     @property
     def visualize(self) -> Text:
@@ -465,18 +459,18 @@ class ImplementationChecklistTool(ToolDefinition[ChecklistAction, ChecklistObser
 
     @classmethod
     def create(
-        cls, conv_state: ConversationState, design_doc: str = "doc/design.md"
+        cls, conv_state: ConversationState, design_doc_path: str = "doc/design.md"
     ) -> Sequence[ImplementationChecklistTool]:
         """Create the implementation checklist tool.
 
         Args:
             conv_state: Conversation state with workspace info.
-            design_doc: Path to the design document relative to workspace.
+            design_doc_path: Path to the design document relative to workspace.
         """
         workspace_dir = Path(conv_state.workspace.working_dir)
-        design_doc_path = workspace_dir / design_doc
+        full_design_doc_path = workspace_dir / design_doc_path
 
-        executor = ChecklistExecutor(design_doc_path)
+        executor = ChecklistExecutor(full_design_doc_path)
 
         return [
             cls(

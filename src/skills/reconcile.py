@@ -147,9 +147,9 @@ def parse_technical_sections(content: str) -> list[TechnicalSection]:
 
             # Check if this is a technical section
             title_lower = title.lower()
-            is_technical = (
-                number and number.startswith("4.")
-            ) or any(kw in title_lower for kw in technical_keywords)
+            is_technical = (number and number.startswith("4.")) or any(
+                kw in title_lower for kw in technical_keywords
+            )
 
             if is_technical:
                 current_section = TechnicalSection(
@@ -252,9 +252,7 @@ def add_implementation_reference(
     ref_line = f"\nSee {ref}\n"
 
     # Check if reference already exists
-    section_content = "\n".join(
-        lines[section.start_line : section.start_line + 5]
-    )
+    section_content = "\n".join(lines[section.start_line : section.start_line + 5])
     if f"See `{ref.file_path}" in section_content:
         return content
 

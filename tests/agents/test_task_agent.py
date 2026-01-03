@@ -74,9 +74,7 @@ class TestTaskAgentSkills:
         agent = create_task_agent(mock_llm)
         assert agent.agent_context is not None
 
-        tdd_skill = next(
-            s for s in agent.agent_context.skills if s.name == "tdd_protocol"
-        )
+        tdd_skill = next(s for s in agent.agent_context.skills if s.name == "tdd_protocol")
         assert "TEST FIRST" in tdd_skill.content
         assert "pytest" in tdd_skill.content.lower()
 
@@ -85,9 +83,7 @@ class TestTaskAgentSkills:
         agent = create_task_agent(mock_llm)
         assert agent.agent_context is not None
 
-        quality_skill = next(
-            s for s in agent.agent_context.skills if s.name == "quality_gates"
-        )
+        quality_skill = next(s for s in agent.agent_context.skills if s.name == "quality_gates")
         assert "make test" in quality_skill.content
         assert "make lint" in quality_skill.content
         assert "make typecheck" in quality_skill.content
@@ -98,8 +94,6 @@ class TestTaskAgentSkills:
         agent = create_task_agent(mock_llm)
         assert agent.agent_context is not None
 
-        focus_skill = next(
-            s for s in agent.agent_context.skills if s.name == "atomic_focus"
-        )
+        focus_skill = next(s for s in agent.agent_context.skills if s.name == "atomic_focus")
         assert "ONE task" in focus_skill.content
         assert "blocking" in focus_skill.content.lower()
