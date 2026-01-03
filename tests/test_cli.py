@@ -41,10 +41,10 @@ class TestMainHelp:
             main(["--help"])
         assert exc_info.value.code == 0
 
-    def test_run_help_returns_zero(self) -> None:
-        """run --help should return exit code 0."""
+    def test_implement_help_returns_zero(self) -> None:
+        """implement --help should return exit code 0."""
         with pytest.raises(SystemExit) as exc_info:
-            main(["run", "--help"])
+            main(["implement", "--help"])
         assert exc_info.value.code == 0
 
     def test_reconcile_help_returns_zero(self) -> None:
@@ -64,22 +64,22 @@ class TestMainNoArgs:
         assert exc_info.value.code != 0
 
 
-class TestMainRun:
-    """Tests for CLI run command."""
+class TestMainImplement:
+    """Tests for CLI implement command."""
 
-    def test_run_nonexistent_file_returns_error(self) -> None:
-        """run with nonexistent file should return 1."""
-        result = main(["run", "/nonexistent/path/design.md"])
+    def test_implement_nonexistent_file_returns_error(self) -> None:
+        """implement with nonexistent file should return 1."""
+        result = main(["implement", "/nonexistent/path/design.md"])
         assert result == 1
 
-    def test_run_with_design_doc_runs_preflight(self, tmp_path: Path) -> None:
-        """run should execute preflight checks."""
+    def test_implement_with_design_doc_runs_preflight(self, tmp_path: Path) -> None:
+        """implement should execute preflight checks."""
         design_doc = tmp_path / "doc" / "design.md"
         design_doc.parent.mkdir(parents=True)
         design_doc.write_text("# Design Doc")
 
         # Should fail because not a git repo
-        result = main(["run", str(design_doc)])
+        result = main(["implement", str(design_doc)])
         assert result == 1
 
 
@@ -119,7 +119,7 @@ class TestMainWorkspaceOption:
 
         # Should use workspace for git checks
         result = main(
-            ["run", str(design_doc), "--workspace", str(workspace)]
+            ["implement", str(design_doc), "--workspace", str(workspace)]
         )
         # Will fail at later stage but should pass git root check
         # (fails on remote check since no origin configured)
@@ -138,15 +138,15 @@ class TestCLIIntegration:
             cwd=Path(__file__).parent.parent,
         )
         assert result.returncode == 0
-        assert "long-horizon-agent" in result.stdout
+        assert "lxa" in result.stdout
 
-    def test_run_subcommand_in_help(self) -> None:
-        """Help should show run subcommand."""
+    def test_implement_subcommand_in_help(self) -> None:
+        """Help should show implement subcommand."""
         result = subprocess.run(
             ["python", "-m", "src", "--help"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
         )
-        assert "run" in result.stdout
+        assert "implement" in result.stdout
         assert "reconcile" in result.stdout

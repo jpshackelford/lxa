@@ -1,7 +1,7 @@
 [project]
-name = "long-horizon-agent"
+name = "lxa"
 version = "0.1.0"
-description = "Long horizon autonomous agent using OpenHands SDK"
+description = "LXA (Long Execution Agent) - Agent-assisted software development"
 requires-python = ">=3.12"
 dependencies = [
     "openhands-sdk>=0.9.0",
@@ -19,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-long-horizon-agent = "src.__main__:main"
+lxa = "src.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

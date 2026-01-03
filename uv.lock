@@ -1523,38 +1523,6 @@ wheels = [
 ]
 
 [[package]]
-name = "long-horizon-agent"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "openhands-sdk" },
-    { name = "openhands-tools" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "basedpyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.0" },
-    { name = "openhands-sdk", specifier = ">=0.9.0" },
-    { name = "openhands-tools", specifier = ">=1.7.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "lupa"
 version = "2.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1605,6 +1573,38 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b6/36/a0f007dc58fc1bbf51fb85dcc82fcb1f21b8c4261361de7dab0e3d8521ef/lupa-2.6-cp314-cp314t-win32.whl", hash = "sha256:1849efeba7a8f6fb8aa2c13790bee988fd242ae404bd459509640eeea3d1e291", size = 1590104, upload-time = "2025-10-24T07:19:33.514Z" },
     { url = "https://files.pythonhosted.org/packages/7d/5e/db903ce9cf82c48d6b91bf6d63ae4c8d0d17958939a4e04ba6b9f38b8643/lupa-2.6-cp314-cp314t-win_amd64.whl", hash = "sha256:fc1498d1a4fc028bc521c26d0fad4ca00ed63b952e32fb95949bda76a04bad52", size = 1913818, upload-time = "2025-10-24T07:19:36.039Z" },
 ]
+
+[[package]]
+name = "lxa"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "openhands-sdk" },
+    { name = "openhands-tools" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "basedpyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.0" },
+    { name = "openhands-sdk", specifier = ">=0.9.0" },
+    { name = "openhands-tools", specifier = ">=1.7.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "lxml"

@@ -1,1 +1,1 @@
-"""Tests for long-horizon-agent."""
+"""Tests for LXA (Long Execution Agent)."""

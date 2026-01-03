@@ -1,12 +1,12 @@
-"""CLI entry point for the Long Horizon Agent.
+"""CLI entry point for LXA (Long Execution Agent).
 
 Usage:
-    python -m src doc/design.md              # Start orchestration
+    python -m src implement doc/design.md    # Start implementation
     python -m src reconcile doc/design.md    # Run reconciliation (post-merge)
 
 Or via the installed command:
-    long-horizon-agent doc/design.md
-    long-horizon-agent reconcile doc/design.md
+    lxa implement doc/design/feature.md
+    lxa reconcile doc/design/feature.md
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    console.print(Panel("[bold blue]Long Horizon Agent[/]", expand=False))
+    console.print(Panel("[bold blue]LXA - Implementation[/]", expand=False))
     console.print()
 
     # Validate design doc exists
@@ -153,7 +153,7 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    console.print(Panel("[bold blue]Long Horizon Agent - Reconcile[/]", expand=False))
+    console.print(Panel("[bold blue]LXA - Reconcile[/]", expand=False))
     console.print()
 
     if not design_doc.exists():
@@ -203,29 +203,29 @@ def main(argv: list[str] | None = None) -> int:
         Exit code
     """
     parser = argparse.ArgumentParser(
-        prog="long-horizon-agent",
-        description="Long horizon autonomous agent for implementing design documents",
+        prog="lxa",
+        description="LXA (Long Execution Agent) - Agent-assisted software development",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  long-horizon-agent run doc/design.md        Start orchestration
-  long-horizon-agent reconcile doc/design.md  Update design doc with code refs
+  lxa implement doc/design/feature.md   Start implementation from design doc
+  lxa reconcile doc/design/feature.md   Update design doc with code refs
 """,
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Run subcommand
-    run_parser = subparsers.add_parser(
-        "run",
-        help="Start orchestration from a design document",
+    # Implement subcommand
+    implement_parser = subparsers.add_parser(
+        "implement",
+        help="Start implementation from a design document",
     )
-    run_parser.add_argument(
+    implement_parser.add_argument(
         "design_doc",
         type=Path,
         help="Path to the design document",
     )
-    run_parser.add_argument(
+    implement_parser.add_argument(
         "--workspace",
         "-w",
         type=Path,
@@ -269,6 +269,7 @@ Examples:
     if args.command == "reconcile":
         return run_reconcile(design_doc, workspace, dry_run=args.dry_run)
 
+    # implement command
     return run_orchestrator(design_doc, workspace)
 
 

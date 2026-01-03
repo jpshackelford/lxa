@@ -1,4 +1,4 @@
-"""Agent definitions for the long-horizon agent system."""
+"""Agent definitions for LXA (Long Execution Agent)."""
 
 from src.agents.orchestrator import (
     GitPlatform,
