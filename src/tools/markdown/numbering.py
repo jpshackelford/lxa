@@ -14,7 +14,7 @@ class NumberingIssue:
     actual: str | None
     line_number: int
     issue_type: str  # 'missing_number', 'wrong_number', 'invalid_format'
-    
+
     @property
     def message(self) -> str:
         """Generate a descriptive message for this issue."""

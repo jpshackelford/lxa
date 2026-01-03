@@ -20,7 +20,6 @@ from .numbering import SectionNumberer
 from .parser import MarkdownParser
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation import LocalConversation
     from openhands.sdk.conversation.state import ConversationState
 
 
@@ -57,7 +56,7 @@ class MarkdownAction(Action):
         elif self.command == "parse":
             content.append("📄 ", style="yellow")
             content.append("Parse Document Structure", style="yellow")
-        
+
         content.append(f" - {self.file}", style="white")
         return content
 
@@ -70,7 +69,7 @@ class MarkdownObservation(Observation):
     )
     file: str = Field(description="Path to the markdown file that was processed.")
     result: str = Field(description="Result of the operation: 'success', 'error', or 'warning'.")
-    
+
     # Validation-specific fields
     numbering_valid: bool | None = Field(default=None, description="Whether section numbering is valid.")
     numbering_issues: list[dict[str, str]] | None = Field(
@@ -79,11 +78,11 @@ class MarkdownObservation(Observation):
     recommendations: list[str] | None = Field(
         default=None, description="Recommendations for fixing issues."
     )
-    
+
     # Renumbering-specific fields
     sections_renumbered: int | None = Field(default=None, description="Number of sections renumbered.")
     toc_skipped: bool | None = Field(default=None, description="Whether TOC section was skipped.")
-    
+
     # Parse-specific fields
     document_title: str | None = Field(default=None, description="Document title (h1 heading).")
     toc_section_found: bool | None = Field(default=None, description="Whether a TOC section was found.")
@@ -118,12 +117,12 @@ class MarkdownObservation(Observation):
                 text.append("Document structure has issues", style="yellow")
                 if self.numbering_issues:
                     text.append(f" ({len(self.numbering_issues)} issues found)", style="yellow")
-        
+
         elif self.command == "renumber":
             text.append(f"Renumbered {self.sections_renumbered} sections", style="green")
             if self.toc_skipped:
                 text.append(" (TOC skipped)", style="dim")
-        
+
         elif self.command == "parse":
             text.append(f"Parsed {self.total_sections} sections", style="blue")
             if self.document_title:
@@ -137,7 +136,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def __init__(self, workspace_dir: Path):
         """Initialize the markdown executor.
-        
+
         Args:
             workspace_dir: Path to the workspace directory.
         """
@@ -145,13 +144,13 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self.parser = MarkdownParser()
         self.numberer = SectionNumberer()
 
-    def __call__(self, action: MarkdownAction, conversation=None) -> MarkdownObservation:
+    def __call__(self, action: MarkdownAction, conversation=None) -> MarkdownObservation:  # noqa: ARG002
         """Execute a markdown action.
-        
+
         Args:
             action: The action to execute.
             conversation: The conversation context (unused).
-            
+
         Returns:
             Observation with the results.
         """
@@ -159,16 +158,16 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def execute(self, action: MarkdownAction) -> MarkdownObservation:
         """Execute a markdown action.
-        
+
         Args:
             action: The action to execute.
-            
+
         Returns:
             Observation with the results.
         """
         try:
             file_path = self.workspace_dir / action.file
-            
+
             if not file_path.exists():
                 return MarkdownObservation.from_text(
                     text=f"File not found: {action.file}",
@@ -177,7 +176,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     file=action.file,
                     result="error"
                 )
-            
+
             # Read file content
             try:
                 content = file_path.read_text(encoding="utf-8")
@@ -189,7 +188,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     file=action.file,
                     result="error"
                 )
-            
+
             if action.command == "validate":
                 return self._validate_document(action, content)
             elif action.command == "renumber":
@@ -206,7 +205,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     file=action.file,
                     result="error"
                 )
-                
+
         except Exception as e:
             return MarkdownObservation.from_text(
                 text=f"Unexpected error: {str(e)}",
@@ -220,7 +219,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         """Validate document structure."""
         sections = self.parser.parse_content(content)
         validation = self.numberer.validate(sections, self.parser.toc_section)
-        
+
         # Convert issues to dict format for observation
         issues_dict = []
         for issue in validation.issues:
@@ -231,7 +230,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 "actual": issue.actual or "",
                 "message": issue.message
             })
-        
+
         return MarkdownObservation(
             command=action.command,
             file=action.file,
@@ -245,14 +244,14 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         """Renumber document sections."""
         sections = self.parser.parse_content(content)
         renumber_result = self.numberer.renumber(sections, self.parser.toc_section)
-        
+
         if renumber_result["result"] == "success":
             # Reconstruct the document with updated numbering
             updated_content = self._reconstruct_document(content, sections)
-            
+
             # Write back to file
             file_path.write_text(updated_content, encoding="utf-8")
-            
+
             return MarkdownObservation(
                 command=action.command,
                 file=action.file,
@@ -272,12 +271,12 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
     def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Parse document and return structure information."""
         sections = self.parser.parse_content(content)
-        
+
         # Build section structure for observation
         section_structure = []
         for section in sections:
             self._add_section_to_structure(section, section_structure)
-        
+
         return MarkdownObservation(
             command=action.command,
             file=action.file,
@@ -297,17 +296,17 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             "start_line": section.start_line,
             "end_line": section.end_line
         })
-        
+
         for child in section.children:
             self._add_section_to_structure(child, structure_list)
 
-    def _reconstruct_document(self, original_content: str, sections: list) -> str:
+    def _reconstruct_document(self, original_content: str, sections: list) -> str:  # noqa: ARG002
         """Reconstruct document with updated section numbering."""
         lines = original_content.splitlines()
-        
+
         # Get all sections flattened (parser already has the sections from parse_content)
         all_sections = self.parser.get_all_sections()
-        
+
         # Update heading lines with new numbers
         for section in all_sections:
             if section.start_line < len(lines):
@@ -317,7 +316,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 if heading_match:
                     hashes, _ = heading_match.groups()
                     level_prefix = hashes + " "
-                    
+
                     if section.number:
                         # Level 2 sections get a period, level 3+ don't
                         if section.level == 2:
@@ -326,9 +325,9 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                             new_heading = f"{level_prefix}{section.number} {section.title}"
                     else:
                         new_heading = f"{level_prefix}{section.title}"
-                    
+
                     lines[section.start_line] = new_heading
-        
+
         return "\n".join(lines)
 
 
@@ -353,8 +352,7 @@ class MarkdownDocumentTool(ToolDefinition[MarkdownAction, MarkdownObservation]):
                 action_type=MarkdownAction,
                 observation_type=MarkdownObservation,
                 annotations=ToolAnnotations(
-                    name="markdown_document",
-                    display_name="Markdown Document Tool",
+                    title="Markdown Document Tool",
                 ),
                 executor=executor,
             )

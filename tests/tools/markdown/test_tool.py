@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from src.tools.markdown.tool import MarkdownAction, MarkdownExecutor, MarkdownObservation
 
 
@@ -37,13 +35,13 @@ The purpose section.
 
 This is the methods section.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         action = MarkdownAction(command="validate", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "validate"
         assert observation.file == "test.md"
         assert observation.result == "success"
@@ -67,13 +65,13 @@ The purpose section.
 
 This is the methods section.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         action = MarkdownAction(command="validate", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "validate"
         assert observation.file == "test.md"
         assert observation.result == "warning"
@@ -98,19 +96,19 @@ The purpose section.
 
 This is the methods section.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         action = MarkdownAction(command="renumber", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "renumber"
         assert observation.file == "test.md"
         assert observation.result == "success"
         assert observation.sections_renumbered == 3
         assert observation.toc_skipped is False
-        
+
         # Check that file was updated
         updated_content = test_file.read_text()
         assert "## 1. Introduction" in updated_content
@@ -134,19 +132,19 @@ This is the introduction.
 
 This is the methods section.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         action = MarkdownAction(command="renumber", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "renumber"
         assert observation.file == "test.md"
         assert observation.result == "success"
         assert observation.sections_renumbered == 2  # Only non-TOC sections
         assert observation.toc_skipped is True
-        
+
         # Check that file was updated and TOC was preserved
         updated_content = test_file.read_text()
         assert "## Table of Contents" in updated_content  # TOC preserved
@@ -174,13 +172,13 @@ The purpose section.
 
 This is the methods section.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         action = MarkdownAction(command="parse", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "parse"
         assert observation.file == "test.md"
         assert observation.result == "success"
@@ -194,7 +192,7 @@ This is the methods section.
         """Test handling of non-existent file."""
         action = MarkdownAction(command="validate", file="nonexistent.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "validate"
         assert observation.file == "nonexistent.md"
         assert observation.result == "error"
@@ -204,10 +202,10 @@ This is the methods section.
         """Test handling of non-UTF8 file."""
         test_file = self.temp_dir / "binary.md"
         test_file.write_bytes(b'\x80\x81\x82')  # Invalid UTF-8
-        
+
         action = MarkdownAction(command="validate", file="binary.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "validate"
         assert observation.file == "binary.md"
         assert observation.result == "error"
@@ -218,12 +216,12 @@ This is the methods section.
         content = "# Test Document"
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         # Create action with invalid command using model_construct to bypass validation
         action = MarkdownAction.model_construct(command="unknown", file="test.md")
-        
+
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "validate"  # Unknown commands use "validate" in observation
         assert observation.file == "test.md"
         assert observation.result == "error"
@@ -233,10 +231,10 @@ This is the methods section.
         """Test handling of empty document."""
         test_file = self.temp_dir / "empty.md"
         test_file.write_text("")
-        
+
         action = MarkdownAction(command="parse", file="empty.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.command == "parse"
         assert observation.file == "empty.md"
         assert observation.result == "success"
@@ -257,24 +255,24 @@ This is unnumbered.
 
 This is also unnumbered.
 """
-        
+
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
-        
+
         # Validate should show issues
         action = MarkdownAction(command="validate", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.numbering_valid is False
         assert observation.numbering_issues is not None
-        
+
         # Renumber should fix it
         action = MarkdownAction(command="renumber", file="test.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.result == "success"
         assert observation.sections_renumbered == 2
-        
+
         # Check file was updated
         updated_content = test_file.read_text()
         assert "## 1. Introduction" in updated_content
@@ -304,22 +302,22 @@ This is deeply nested.
 
 ## 3. Results
 """
-        
+
         test_file = self.temp_dir / "complex.md"
         test_file.write_text(content)
-        
+
         # Parse should handle deep nesting
         action = MarkdownAction(command="parse", file="complex.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.result == "success"
         assert observation.total_sections == 9  # All sections including nested ones
         assert observation.section_structure is not None
-        
+
         # Validate should pass
         action = MarkdownAction(command="validate", file="complex.md")
         observation = self.executor.execute(action)
-        
+
         assert observation.numbering_valid is True
         assert observation.numbering_issues is None
 

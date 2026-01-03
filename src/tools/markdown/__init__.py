@@ -5,10 +5,10 @@ from .parser import MarkdownParser, Section
 from .tool import MarkdownAction, MarkdownDocumentTool, MarkdownObservation
 
 __all__ = [
-    "MarkdownParser", 
-    "Section", 
-    "SectionNumberer", 
-    "NumberingIssue", 
+    "MarkdownParser",
+    "Section",
+    "SectionNumberer",
+    "NumberingIssue",
     "ValidationResult",
     "MarkdownDocumentTool",
     "MarkdownAction",

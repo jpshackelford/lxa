@@ -1,6 +1,5 @@
 """Tests for section numbering functionality."""
 
-import pytest
 
 from src.tools.markdown.numbering import NumberingIssue, SectionNumberer, ValidationResult
 from src.tools.markdown.parser import Section
@@ -20,9 +19,9 @@ class TestSectionNumberer:
             Section(level=2, number="2", title="Methods", start_line=5, end_line=10),
             Section(level=2, number="3", title="Results", start_line=10, end_line=15),
         ]
-        
+
         result = self.numberer.validate(sections)
-        
+
         assert result.valid is True
         assert len(result.issues) == 0
         assert len(result.recommendations) == 0
@@ -32,16 +31,16 @@ class TestSectionNumberer:
         # Create nested structure
         subsection1 = Section(level=3, number="1.1", title="Subsection 1", start_line=2, end_line=4)
         subsection2 = Section(level=3, number="1.2", title="Subsection 2", start_line=4, end_line=6)
-        
+
         section1 = Section(level=2, number="1", title="Introduction", start_line=0, end_line=6)
         section1.children = [subsection1, subsection2]
-        
+
         section2 = Section(level=2, number="2", title="Methods", start_line=6, end_line=10)
-        
+
         sections = [section1, section2]
-        
+
         result = self.numberer.validate(sections)
-        
+
         assert result.valid is True
         assert len(result.issues) == 0
 
@@ -52,9 +51,9 @@ class TestSectionNumberer:
             Section(level=2, number=None, title="Methods", start_line=5, end_line=10),
             Section(level=2, number="3", title="Results", start_line=10, end_line=15),
         ]
-        
+
         result = self.numberer.validate(sections)
-        
+
         assert result.valid is False
         assert len(result.issues) == 1
         assert result.issues[0].issue_type == "missing_number"
@@ -69,17 +68,17 @@ class TestSectionNumberer:
             Section(level=2, number="5", title="Methods", start_line=5, end_line=10),
             Section(level=2, number="7", title="Results", start_line=10, end_line=15),
         ]
-        
+
         result = self.numberer.validate(sections)
-        
+
         assert result.valid is False
         assert len(result.issues) == 2
-        
+
         # Check first issue (wrong number)
         assert result.issues[0].issue_type == "wrong_number"
         assert result.issues[0].expected == "2"
         assert result.issues[0].actual == "5"
-        
+
         # Check second issue (wrong number)
         assert result.issues[1].issue_type == "wrong_number"
         assert result.issues[1].expected == "3"
@@ -88,15 +87,15 @@ class TestSectionNumberer:
     def test_validate_with_toc_section(self):
         """Test validation skipping TOC section."""
         toc_section = Section(level=2, number=None, title="Table of Contents", start_line=1, end_line=3)
-        
+
         sections = [
             Section(level=2, number="1", title="Introduction", start_line=3, end_line=8),
             toc_section,
             Section(level=2, number="2", title="Methods", start_line=8, end_line=13),
         ]
-        
+
         result = self.numberer.validate(sections, toc_section)
-        
+
         assert result.valid is True
         assert len(result.issues) == 0
 
@@ -107,9 +106,9 @@ class TestSectionNumberer:
             Section(level=2, number=None, title="Methods", start_line=5, end_line=10),
             Section(level=2, number="10", title="Results", start_line=10, end_line=15),
         ]
-        
+
         normalized = self.numberer.normalize(sections)
-        
+
         assert normalized[0].number == "1"
         assert normalized[1].number == "2"
         assert normalized[2].number == "3"
@@ -119,16 +118,16 @@ class TestSectionNumberer:
         # Create nested structure with wrong numbers
         subsection1 = Section(level=3, number="5.1", title="Subsection 1", start_line=2, end_line=4)
         subsection2 = Section(level=3, number="5.5", title="Subsection 2", start_line=4, end_line=6)
-        
+
         section1 = Section(level=2, number="5", title="Introduction", start_line=0, end_line=6)
         section1.children = [subsection1, subsection2]
-        
+
         section2 = Section(level=2, number="10", title="Methods", start_line=6, end_line=10)
-        
+
         sections = [section1, section2]
-        
+
         normalized = self.numberer.normalize(sections)
-        
+
         assert normalized[0].number == "1"
         assert normalized[0].children[0].number == "1.1"
         assert normalized[0].children[1].number == "1.2"
@@ -140,14 +139,14 @@ class TestSectionNumberer:
         subsubsection = Section(level=4, number="1.1.1.5", title="Deep section", start_line=3, end_line=4)
         subsection = Section(level=3, number="1.1.5", title="Subsection", start_line=2, end_line=4)
         subsection.children = [subsubsection]
-        
+
         section = Section(level=2, number="1", title="Main section", start_line=0, end_line=4)
         section.children = [subsection]
-        
+
         sections = [section]
-        
+
         normalized = self.numberer.normalize(sections)
-        
+
         assert normalized[0].number == "1"
         assert normalized[0].children[0].number == "1.1"
         assert normalized[0].children[0].children[0].number == "1.1.1"
@@ -159,9 +158,9 @@ class TestSectionNumberer:
             Section(level=2, number=None, title="Methods", start_line=5, end_line=10),
             Section(level=2, number="10", title="Results", start_line=10, end_line=15),
         ]
-        
+
         result = self.numberer.renumber(sections)
-        
+
         assert result["result"] == "success"
         assert result["sections_renumbered"] == 3
         assert result["toc_skipped"] is False
@@ -171,15 +170,15 @@ class TestSectionNumberer:
     def test_renumber_with_toc(self):
         """Test renumbering with TOC section."""
         toc_section = Section(level=2, number=None, title="Table of Contents", start_line=1, end_line=3)
-        
+
         sections = [
             Section(level=2, number="1", title="Introduction", start_line=3, end_line=8),
             toc_section,
             Section(level=2, number="2", title="Methods", start_line=8, end_line=13),
         ]
-        
+
         result = self.numberer.renumber(sections, toc_section)
-        
+
         assert result["result"] == "success"
         assert result["toc_skipped"] is True
         assert result["sections_renumbered"] == 2  # Only non-TOC sections
@@ -214,7 +213,7 @@ class TestSectionNumberer:
         assert self.numberer.is_valid_number_format("1.2") is True
         assert self.numberer.is_valid_number_format("1.2.3") is True
         assert self.numberer.is_valid_number_format("10.20.30") is True
-        
+
         assert self.numberer.is_valid_number_format("") is False
         assert self.numberer.is_valid_number_format("0") is False
         assert self.numberer.is_valid_number_format("1.0") is False
@@ -234,9 +233,9 @@ class TestSectionNumberer:
             Section(level=2, number="", title="Section 2", start_line=10, end_line=15),
             Section(level=3, number="", title="Subsection 2.1", start_line=12, end_line=14),
         ]
-        
+
         expected = self.numberer._generate_expected_numbers(sections)
-        
+
         assert expected == ["1", "1.1", "1.2", "1.2.1", "2", "2.1"]
 
     def test_empty_sections_list(self):
@@ -244,10 +243,10 @@ class TestSectionNumberer:
         result = self.numberer.validate([])
         assert result.valid is True
         assert len(result.issues) == 0
-        
+
         normalized = self.numberer.normalize([])
         assert normalized == []
-        
+
         renumber_result = self.numberer.renumber([])
         assert renumber_result["sections_renumbered"] == 0
 
@@ -264,7 +263,7 @@ class TestNumberingIssue:
             line_number=5,
             issue_type="wrong_number"
         )
-        
+
         assert issue.section_title == "Introduction"
         assert issue.expected == "1"
         assert issue.actual == "2"
@@ -281,13 +280,13 @@ class TestValidationResult:
             NumberingIssue("Section 1", "1", "2", 5, "wrong_number"),
             NumberingIssue("Section 2", "2", None, 10, "missing_number")
         ]
-        
+
         result = ValidationResult(
             valid=False,
             issues=issues,
             recommendations=["Run renumber command"]
         )
-        
+
         assert result.valid is False
         assert len(result.issues) == 2
         assert len(result.recommendations) == 1
