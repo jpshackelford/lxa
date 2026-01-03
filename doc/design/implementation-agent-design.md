@@ -1,6 +1,9 @@
-# Long Horizon Agent
+# LXA Implementation Agent
 
 ## 1. Introduction
+
+LXA (Long Execution Agent) is a system for agent-assisted software development.
+This document describes the implementation phase.
 
 ### 1.1 Problem Statement
 
@@ -15,8 +18,9 @@ calculations."
 
 Standard "chat-with-code" sessions have transient memory. When the context
 window fills or a session is interrupted, prior reasoning is lost. This makes
-autonomous execution of complex, multi-day projects—such as implementing a board
-game from a 20-page rulebook—unreliable without continuous human supervision.
+autonomous implementation of complex, multi-day projects—such as implementing a
+board game from a 20-page rulebook—unreliable without continuous human
+supervision.
 
 The impact is that agents cannot be trusted with extended autonomous work. Users
 must either micromanage each step or accept degraded output quality as tasks
@@ -41,12 +45,12 @@ the agent to continue.
   plan and delegates individual tasks to sub-agents. Its context stays minimal
   and never fills.
 - **Task Agents**: Short-lived sub-agents scoped to one checklist item. Each
-  reads the design document and a shared journal for context, executes the task
-  (tests, code, lint, commit), writes a journal entry summarizing what it did
-  and learned, then terminates.
-- **Filesystem-as-Memory**: The design document (`doc/design.md`) and journal
-  (`doc/journal.md`) serve as persistent, intentional context that survives
-  agent boundaries. No vector databases or external services required.
+  reads the design document and a shared journal for context, implements the
+  task (tests, code, lint, commit), writes a journal entry summarizing what it
+  did and learned, then terminates.
+- **Filesystem-as-Memory**: The design document and journal serve as persistent,
+  intentional context that survives agent boundaries. No vector databases or
+  external services required.
 
 **Trade-offs**: This approach requires more agent spawning overhead than a
 single long-running agent, but gains predictable context management and clear
@@ -58,28 +62,29 @@ after merge.
 ### 2.1 Workflow Overview
 
 ```plaintext
-┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│   Design    │ ──► │  Execution  │ ──► │ Reconciliation  │
-│   Phase     │     │   Phase     │     │     Phase       │
-└─────────────┘     └─────────────┘     └─────────────────┘
-    Human            Agent-driven          Human-triggered
+┌─────────────┐     ┌────────────────┐     ┌─────────────────┐
+│   Design    │ ──► │ Implementation │ ──► │ Reconciliation  │
+│   Phase     │     │     Phase      │     │     Phase       │
+└─────────────┘     └────────────────┘     └─────────────────┘
+    Human or          Agent-driven          Human-triggered
+    lxa design
 ```
 
 ### 2.2 Design Phase
 
-Developer creates `doc/design.md` with:
+Developer creates design doc (manually or via `lxa design`) with:
 
 - Problem statement and proposed solution
 - Technical design
 - Implementation plan with milestones and task checklists
 
-### 2.3 Execution Phase (Agent)
+### 2.3 Implementation Phase (Agent)
 
 Developer starts the orchestrator:
 
 ```bash
-# Start execution from the design document
-python -m long_horizon_agent doc/design.md
+# Start implementation from the design document
+lxa implement doc/design/feature-name.md
 ```
 
 The orchestrator:
@@ -98,7 +103,7 @@ After PR merge, developer can invoke:
 
 ```bash
 # Update design doc to reference implemented code
-python -m long_horizon_agent reconcile doc/design.md
+lxa reconcile doc/design/feature-name.md
 ```
 
 This updates the technical design sections to reference actual files and method

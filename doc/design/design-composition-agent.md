@@ -1,6 +1,9 @@
-# Design Composition Agent
+# LXA Design Composition Agent
 
 ## 1. Introduction
+
+LXA (Long Execution Agent) is a system for agent-assisted software development.
+This document describes the design composition phase.
 
 ### 1.1 Problem Statement
 
@@ -34,41 +37,47 @@ The agent uses skills (prompt-based guidance) rather than custom semantic
 analysis tools. Skills encode the domain knowledge about what makes a good
 design document. The TaskTrackerTool prevents skipping quality steps.
 
-### 1.3 Overall Flow: Exploration → Design → Execute
+### 1.3 Overall Flow: Exploration → Design → Implement
 
 This agent is part of a larger workflow:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     long-horizon (interactive)                   │
+│                       lxa (interactive)                          │
 └─────────────────────────────────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
         │                     │                     │
         ▼                     ▼                     ▼
 ┌───────────────┐    ┌───────────────┐    ┌───────────────┐
-│  Exploration  │ ─► │    Design     │ ─► │   Execution   │
+│  Exploration  │ ─► │    Design     │ ─► │ Implementation│
 │  (optional)   │    │  Composition  │    │    Agent      │
 └───────────────┘    └───────────────┘    └───────────────┘
-  Conversational      This document        execution-agent-
-  learning about      describes this       design.md
+  Conversational      This document        implementation-
+  learning about      describes this       agent-design.md
   problem space       phase                (implemented)
 ```
 
-**Context management**: When transitioning from design to execution, the
-execution agent starts with clean context — only the design doc and codebase,
-not the exploration/design conversation history. This prevents context
+**CLI commands**:
+
+- `lxa` — Interactive session, agent determines phase from context
+- `lxa design` — Start design phase directly
+- `lxa implement` — Start implementation phase with existing design doc
+
+**Context management**: When transitioning from design to implementation, the
+implementation agent starts with clean context — only the design doc and
+codebase, not the exploration/design conversation history. This prevents context
 pollution.
 
 **Handoff**: The design composition agent outputs the design doc path. The user
-can then invoke execution:
+can then invoke implementation:
 
 ```bash
-python -m long_horizon_agent doc/design/feature-name.md
+lxa implement doc/design/feature-name.md
 ```
 
-Or in interactive mode, say "execute the design" and the orchestrator spawns
-the execution agent with the design doc path.
+Or in interactive mode, say "implement the design" and the orchestrator spawns
+the implementation agent with the design doc path.
 
 ## 2. Developer Experience
 
@@ -78,10 +87,10 @@ The agent is invoked with context about what to design:
 
 ```bash
 # From an exploration document
-long-horizon design --from doc/exploration/feature-x.md
+lxa design --from doc/exploration/feature-x.md
 
 # From conversation context (interactive mode)
-long-horizon design
+lxa design
 ```
 
 ### 2.2 Workflow
@@ -146,11 +155,11 @@ User provides context (exploration doc, conversation)
                             │
          ┌──────────────────┼──────────────────┐
          │                  │                  │
-    Changes needed     Approved          Execute
+    Changes needed     Approved          Implement
          │                  │                  │
          ▼                  ▼                  ▼
    (loop back to       Done             Hand off to
-      draft)                            execution agent
+      draft)                            implementation agent
 ```
 
 ### 2.3 Precheck
@@ -379,7 +388,7 @@ All tasks require:
 **Goal**: Agent that composes design documents with quality checklist review,
 commits to feature branch, and can hand off to execution.
 
-**Demo**: Run `long-horizon design --from exploration.md`, observe:
+**Demo**: Run `lxa design --from exploration.md`, observe:
 1. Environment precheck (git, branch, doc path)
 2. Content precheck (problem, solution, technical direction)
 3. Drafting from template

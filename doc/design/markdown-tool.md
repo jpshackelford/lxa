@@ -1,6 +1,9 @@
-# Markdown Document Tool
+# LXA Markdown Document Tool
 
 ## 1. Introduction
+
+LXA (Long Execution Agent) is a system for agent-assisted software development.
+This document describes the markdown document tool used for structural editing.
 
 ### 1.1 Problem Statement
 
@@ -40,7 +43,7 @@ The tool's observations guide agent behavior by reminding the agent to run
 The tool is invoked with a command and file path:
 
 ```python
-from long_horizon_agent.tools import MarkdownDocumentTool
+from lxa.tools import MarkdownDocumentTool
 
 tool = MarkdownDocumentTool()
 

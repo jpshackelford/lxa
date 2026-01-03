@@ -1,8 +1,8 @@
-# Agent-Assisted Development Process
+# LXA Agent-Assisted Development Process
 
 This document describes a process for working with AI agents on long-horizon
-software development projects. It captures what has worked well and what
-challenges have been observed.
+software development projects using LXA (Long Execution Agent). It captures what
+has worked well and what challenges have been observed.
 
 ## 1. Overview
 
@@ -10,7 +10,7 @@ The process consists of three phases:
 
 1. **Exploration Phase** — Research and technology selection (optional)
 2. **Design Phase** — Developing the design document
-3. **Execution Phase** — Implementing the plan through milestones and tasks
+3. **Implementation Phase** — Implementing the plan through milestones and tasks
 
 Each phase has distinct goals and artifacts. The phases build on each other,
 with later phases referencing artifacts from earlier phases.
@@ -49,7 +49,7 @@ document is written.
 ### 2.4 Current Status
 
 Exploration phase is left as future work. The current focus is on design and
-execution phases.
+implementation phases.
 
 ## 3. Phase 2: Design
 
@@ -258,11 +258,11 @@ Everything in the design document should be crisply actionable. If security or
 performance considerations are genuinely needed, they must have specific
 implementation steps, not general platitudes.
 
-## 4. Phase 3: Execution
+## 4. Phase 3: Implementation
 
 ### 4.1 Purpose
 
-Once the design document is complete, it is time to execute the plan. In this
+Once the design document is complete, it is time to implement the plan. In this
 phase an agent familiarizes itself with the implementation plan and begins
 working on checklist items.
 
