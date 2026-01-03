@@ -29,16 +29,19 @@ delegating to task agents, pushing commits, and creating a PR.
 ### Step 1: Install GitHub CLI
 
 **macOS:**
+
 ```bash
 brew install gh
 ```
 
 **Linux:**
+
 ```bash
 # See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
 ```
 
 **Authenticate:**
+
 ```bash
 gh auth login
 ```
@@ -58,16 +61,19 @@ cd orchestrator-demo
 ### Step 3: Set Up Your API Key
 
 **For Anthropic (Claude):**
+
 ```bash
 export ANTHROPIC_API_KEY=your-api-key-here
 ```
 
 **For OpenAI:**
+
 ```bash
 export OPENAI_API_KEY=your-api-key-here
 ```
 
 To get an API key:
+
 - Anthropic: https://console.anthropic.com/settings/keys
 - OpenAI: https://platform.openai.com/api-keys
 
@@ -81,6 +87,7 @@ uv run python doc/examples/orchestrator/demo_orchestrator.py ~/path/to/orchestra
 ```
 
 The demo will:
+
 1. Create a simple design doc with one task
 2. Run pre-flight checks
 3. Start the orchestrator
@@ -109,6 +116,7 @@ The demo creates a minimal design doc with a single task:
 ```
 
 The orchestrator will:
+
 1. Read the design doc and find the first unchecked task
 2. Spawn a task agent to implement it
 3. The task agent writes tests, implements, runs quality checks, commits
@@ -119,12 +127,12 @@ The orchestrator will:
 
 The `run_preflight_checks()` function validates:
 
-| Check | Failure Message |
-|-------|-----------------|
-| Git repository exists | "Not a git repository" |
-| Origin remote configured | "No 'origin' remote configured" |
-| Platform detected | "Unknown git platform" |
-| Working tree clean | "Working tree has uncommitted changes" |
+| Check                    | Failure Message                        |
+| ------------------------ | -------------------------------------- |
+| Git repository exists    | "Not a git repository"                 |
+| Origin remote configured | "No 'origin' remote configured"        |
+| Platform detected        | "Unknown git platform"                 |
+| Working tree clean       | "Working tree has uncommitted changes" |
 
 Returns a `PreflightResult`:
 
@@ -139,8 +147,8 @@ class PreflightResult:
 
 ## Platform Detection
 
-| URL Pattern | Platform | CLI |
-|-------------|----------|-----|
-| `github.com` | GitHub | `gh` |
-| `gitlab.com` | GitLab | `glab` |
-| `bitbucket.org` | Bitbucket | API |
+| URL Pattern     | Platform  | CLI    |
+| --------------- | --------- | ------ |
+| `github.com`    | GitHub    | `gh`   |
+| `gitlab.com`    | GitLab    | `glab` |
+| `bitbucket.org` | Bitbucket | API    |

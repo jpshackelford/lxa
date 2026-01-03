@@ -2,10 +2,10 @@
 
 Demos for testing and understanding the long-horizon agent components.
 
-| Example | Description | API Key |
-|---------|-------------|---------|
+| Example                           | Description                                                  | API Key  |
+| --------------------------------- | ------------------------------------------------------------ | -------- |
 | [checklist_tool](checklist_tool/) | ImplementationChecklistTool for tracking design doc progress | Optional |
-| [task_agent](task_agent/) | Task Agent and JournalTool for persistent memory | Optional |
+| [task_agent](task_agent/)         | Task Agent and JournalTool for persistent memory             | Optional |
 
 ## Quick Start
 

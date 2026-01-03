@@ -565,12 +565,14 @@ without waiting for human permission. Human interaction happens via the PR
 OpenHands caution about pushing.
 
 **Pre-flight Checks**: Before starting work, the orchestrator must:
+
 1. Verify we're in a git repository
 2. Verify a remote is configured (origin)
 3. Detect the platform (GitHub, GitLab, Bitbucket) from the remote URL
 4. Fail fast with clear error if any check fails
 
 **Platform Detection**: Parse remote URL to determine CLI/API:
+
 - `github.com` → use `gh` CLI
 - `gitlab.com` → use `glab` CLI or API
 - `bitbucket.org` → use API
