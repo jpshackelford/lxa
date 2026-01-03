@@ -593,7 +593,7 @@ OpenHands caution about pushing.
 
 #### 5.4.1 Main Module
 
-- [x] src/__main__.py - CLI entry point with argument parsing
+- [x] `src/__main__.py` - CLI entry point with argument parsing
 - [x] tests/test_cli.py - Tests for CLI argument handling
 
 ### 5.5 Reconciliation Skill (M5)
@@ -604,7 +604,12 @@ reference implemented code.
 **Demo**: Run reconcile command, observe technical design sections updated with
 file references.
 
+```bash
+python -m src reconcile doc/design.md --dry-run  # Preview changes
+python -m src reconcile doc/design.md            # Apply changes
+```
+
 #### 5.5.1 Reconciliation Logic
 
-- [ ] src/skills/reconcile.py - Logic to find implementations and update design doc
-- [ ] tests/skills/test_reconcile.py - Tests for reconciliation behavior
+- [x] src/skills/reconcile.py - Logic to find implementations and update design doc
+- [x] tests/skills/test_reconcile.py - Tests for reconciliation behavior

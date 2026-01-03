@@ -25,6 +25,7 @@ from src.agents.orchestrator import (
     create_orchestrator_agent,
     run_preflight_checks,
 )
+from src.skills.reconcile import reconcile_design_doc
 
 # Load environment variables
 load_dotenv()
@@ -141,12 +142,13 @@ Remember: Push commits and create PRs autonomously. Do not wait for permission.
     return 0
 
 
-def run_reconcile(design_doc: Path, workspace: Path) -> int:  # noqa: ARG001
+def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -> int:
     """Run reconciliation to update design doc with implementation references.
 
     Args:
         design_doc: Path to the design document
-        workspace: Path to the workspace (used in M5 implementation)
+        workspace: Path to the workspace
+        dry_run: If True, show what would change without modifying
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -158,11 +160,36 @@ def run_reconcile(design_doc: Path, workspace: Path) -> int:  # noqa: ARG001
         console.print(f"[red]Error:[/] Design document not found: {design_doc}")
         return 1
 
-    # TODO: Implement reconciliation in M5
-    console.print("[yellow]Reconciliation not yet implemented (M5)[/]")
-    console.print(
-        "[dim]This will update the design doc to reference implemented code.[/]"
-    )
+    console.print(f"[dim]Design doc: {design_doc}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    if dry_run:
+        console.print("[yellow]Dry run mode - no changes will be made[/]")
+    console.print()
+
+    result = reconcile_design_doc(design_doc, workspace, dry_run=dry_run)
+
+    if not result.success:
+        console.print(f"[red]Error:[/] {result.error}")
+        return 1
+
+    console.print(f"[bold]Technical sections found:[/] {result.sections_found}")
+    console.print(f"[bold]Sections updated:[/] {result.sections_updated}")
+    console.print()
+
+    if result.updates:
+        console.print("[bold green]Updates:[/]")
+        for heading, ref in result.updates:
+            console.print(f"  • {heading}")
+            console.print(f"    → See {ref}")
+        console.print()
+
+        if dry_run:
+            console.print("[yellow]Run without --dry-run to apply changes.[/]")
+        else:
+            console.print("[green]✓[/] Design document updated.")
+    else:
+        console.print("[dim]No sections needed updating.[/]")
+
     return 0
 
 
@@ -223,6 +250,12 @@ Examples:
         default=None,
         help="Workspace directory (defaults to git root)",
     )
+    reconcile_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be updated without making changes",
+    )
 
     args = parser.parse_args(argv)
 
@@ -234,7 +267,7 @@ Examples:
     )
 
     if args.command == "reconcile":
-        return run_reconcile(design_doc, workspace)
+        return run_reconcile(design_doc, workspace, dry_run=args.dry_run)
 
     return run_orchestrator(design_doc, workspace)
 
