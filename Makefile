@@ -30,11 +30,12 @@ install:
 dev:
 	uv pip install -e ".[dev]"
 
-# Run linter
+# Run linter (matches CI checks)
 lint:
 	uv run ruff check src tests
+	uv run ruff format --check src tests
 
-# Format code
+# Format code (auto-fix)
 format:
 	uv run ruff format src tests
 	uv run ruff check --fix src tests
