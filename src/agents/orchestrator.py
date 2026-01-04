@@ -255,6 +255,47 @@ After completing the task, write a journal entry documenting files read,
 files modified, and any lessons learned (especially gotchas and pitfalls)."
 
 {platform_instructions}
+PR CREATION:
+When creating a draft PR (after first task completion), write a well-structured
+description that includes:
+
+1. **Summary**: One paragraph explaining what this milestone implements and why
+2. **Design Context**: Link to the design document section being implemented
+3. **Changes**: List the key files/components being added or modified
+4. **Progress**: Current status (e.g., "Task 1 of 5 complete")
+
+As you complete more tasks, update the PR description to reflect progress.
+
+When milestone is complete, update the description with:
+- Final summary of all changes
+- Testing verification (lint, typecheck, tests passed)
+- Any lessons learned or gotchas from the journal
+
+Example PR title: "Milestone 1: Implement ImplementationChecklistTool"
+
+Example PR body structure:
+```
+## Summary
+Implements [milestone name] from the design document. This milestone adds [brief description].
+
+## Design Document
+See `doc/design/feature.md` section 5.1
+
+## Changes
+- `src/tools/foo.py` - New FooTool with status, next, complete commands
+- `tests/tools/test_foo.py` - Unit tests for FooTool
+
+## Status
+- [x] Task 1: Implement FooParser class
+- [ ] Task 2: Add status command
+- [ ] Task 3: Add tests
+
+## Testing
+- `make lint` - ✓ passed
+- `make typecheck` - ✓ passed
+- `make test` - ✓ 42 tests passed
+```
+
 COMPLETION:
 - When milestone is complete, comment "Ready for review" on PR and STOP
 - Report: "MILESTONE COMPLETE: <milestone name> - PR ready for review"
@@ -351,6 +392,26 @@ def create_orchestrator_agent(
                 "If a task agent fails, STOP and report the failure.\n"
                 "If CI fails repeatedly (3+ times same issue), STOP and report.\n"
                 "Do not attempt workarounds that might corrupt the repository state."
+            ),
+            trigger=None,
+        ),
+        Skill(
+            name="pr_creation",
+            content=(
+                "When creating or updating a PR, write a DETAILED description.\n\n"
+                "GATHER CONTEXT FIRST:\n"
+                "1. Read the design document section for this milestone\n"
+                "2. Review the git log for commits in this branch\n"
+                "3. Check the journal file for lessons learned\n\n"
+                "PR DESCRIPTION MUST INCLUDE:\n"
+                "- Summary: What this milestone implements and why\n"
+                "- Design Context: Link to design doc section\n"
+                "- Changes: List of files/components modified\n"
+                "- Status: Checklist of tasks (complete/remaining)\n"
+                "- Testing: Results of lint, typecheck, test runs\n\n"
+                "UPDATE THE PR as tasks complete. The description should always\n"
+                "reflect current progress. When milestone is complete, add final\n"
+                "testing results and any lessons learned from the journal."
             ),
             trigger=None,
         ),

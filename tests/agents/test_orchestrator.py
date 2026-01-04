@@ -183,6 +183,7 @@ class TestCreateOrchestratorAgent:
         assert "delegation_only" in skill_names
         assert "ci_gating" in skill_names
         assert "fail_fast" in skill_names
+        assert "pr_creation" in skill_names
 
     def test_system_prompt_includes_autonomous_behavior(self):
         """System prompt should emphasize autonomous operation."""
@@ -250,3 +251,26 @@ class TestCreateOrchestratorAgent:
         assert ci_skill is not None
         assert "NEVER move to the next task" in ci_skill.content
         assert "LOCAL/CI DISCREPANCY" in ci_skill.content
+
+    def test_system_prompt_includes_pr_creation_guidance(self):
+        """System prompt should include PR creation guidance with structure."""
+        assert "PR CREATION" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Summary" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Design Context" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Changes" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Status" in ORCHESTRATOR_SYSTEM_PROMPT
+        assert "Testing" in ORCHESTRATOR_SYSTEM_PROMPT
+
+    def test_pr_creation_skill_content(self, mock_llm: LLM):
+        """PR creation skill should guide detailed PR descriptions."""
+        agent = create_orchestrator_agent(mock_llm)
+
+        assert agent.agent_context is not None
+        pr_skill = next(
+            (s for s in agent.agent_context.skills if s.name == "pr_creation"), None
+        )
+        assert pr_skill is not None
+        assert "DETAILED description" in pr_skill.content
+        assert "GATHER CONTEXT FIRST" in pr_skill.content
+        assert "design document" in pr_skill.content
+        assert "journal file" in pr_skill.content
