@@ -139,7 +139,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
 Start milestone execution for this project.
 
 Design document: {design_doc_relative}
-Journal file: {design_doc_relative.parent / 'journal.md'}
+Journal file: {design_doc_relative.parent / "journal.md"}
 
 Workflow:
 1. Check the implementation status using the checklist tool

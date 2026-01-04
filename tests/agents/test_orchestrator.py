@@ -245,9 +245,7 @@ class TestCreateOrchestratorAgent:
         agent = create_orchestrator_agent(mock_llm)
 
         assert agent.agent_context is not None
-        ci_skill = next(
-            (s for s in agent.agent_context.skills if s.name == "ci_gating"), None
-        )
+        ci_skill = next((s for s in agent.agent_context.skills if s.name == "ci_gating"), None)
         assert ci_skill is not None
         assert "NEVER move to the next task" in ci_skill.content
         assert "LOCAL/CI DISCREPANCY" in ci_skill.content
@@ -266,9 +264,7 @@ class TestCreateOrchestratorAgent:
         agent = create_orchestrator_agent(mock_llm)
 
         assert agent.agent_context is not None
-        pr_skill = next(
-            (s for s in agent.agent_context.skills if s.name == "pr_creation"), None
-        )
+        pr_skill = next((s for s in agent.agent_context.skills if s.name == "pr_creation"), None)
         assert pr_skill is not None
         assert "DETAILED description" in pr_skill.content
         assert "GATHER CONTEXT FIRST" in pr_skill.content
