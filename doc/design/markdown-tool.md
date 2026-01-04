@@ -541,7 +541,7 @@ All tasks require:
 
 #### 4.3.1 Checklist
 
-- [ ] src/tools/markdown/toc.py - `TocManager` with update, remove
+- [x] src/tools/markdown/toc.py - `TocManager` with update, remove
 - [ ] tests/tools/markdown/test_toc.py - Tests for generation, update, depth
       parameter, remove
 
