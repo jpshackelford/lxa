@@ -304,6 +304,26 @@ class TestChecklistExecutor:
         assert obs.is_error
         assert "no matching" in obs.text.lower()
 
+    def test_complete_last_task_shows_correct_progress(self, partial_doc: Path) -> None:
+        """Test that completing the last task shows 100% progress for that milestone.
+
+        Bug fix regression test: Previously, completing the last task would show 0%
+        progress because it retrieved the progress from the next milestone instead
+        of the one that was just completed (issue #6).
+        """
+        executor = ChecklistExecutor(partial_doc)
+        # Complete the last remaining task in milestone 1
+        action = ChecklistAction(command="complete", task_description="tests/test_feature.py")
+
+        obs = executor(action)
+
+        assert not obs.is_error
+        assert obs.command == "complete"
+        # Milestone 1 had 2 tasks (1 complete, 1 remaining)
+        # After completing the last task, it should show 2/2 complete (100%)
+        assert obs.tasks_complete == 2
+        assert obs.tasks_remaining == 0
+
     def test_missing_design_doc(self, temp_workspace: Path) -> None:
         """Test error when design doc doesn't exist."""
         missing_path = temp_workspace / "nonexistent.md"
