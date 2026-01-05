@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.tools.journal import (
     JournalAction,
     JournalEntry,
@@ -40,7 +38,7 @@ class TestJournalEntry:
 class TestJournalAction:
     """Tests for JournalAction model."""
 
-    def test_action_visualization(self):
+    def test_append_action_visualization(self):
         action = JournalAction(
             command="append",
             entry=JournalEntry(task_name="My Task"),
@@ -50,17 +48,23 @@ class TestJournalAction:
         assert "Journal Entry" in viz_str
         assert "My Task" in viz_str
 
-    def test_action_requires_entry(self):
-        from pydantic import ValidationError
+    def test_read_action_visualization(self):
+        action = JournalAction(command="read")
+        viz = action.visualize
+        viz_str = viz.plain
+        assert "Read Journal" in viz_str
 
-        with pytest.raises(ValidationError):
-            JournalAction(command="append")  # type: ignore[call-arg]
+    def test_action_entry_optional_for_read(self):
+        # Should not raise - entry is optional for read
+        action = JournalAction(command="read")
+        assert action.command == "read"
+        assert action.entry is None
 
 
 class TestJournalObservation:
     """Tests for JournalObservation model."""
 
-    def test_success_visualization(self):
+    def test_append_success_visualization(self):
         obs = JournalObservation(
             command="append",
             journal_path="doc/journal.md",
@@ -73,6 +77,36 @@ class TestJournalObservation:
         assert "Journal Entry Added" in viz_str
         assert "doc/journal.md" in viz_str
         assert "2024-01-15 14:30" in viz_str
+
+    def test_read_success_visualization_new_journal(self):
+        obs = JournalObservation(
+            command="read",
+            journal_path="doc/journal.md",
+            success=True,
+            message="Journal initialized - no prior entries",
+            journal_content="# Project Journal\n\n",
+            entry_count=0,
+            was_created=True,
+        )
+        viz = obs.visualize
+        viz_str = viz.plain
+        assert "Journal Initialized" in viz_str
+        assert "first task" in viz_str
+
+    def test_read_success_visualization_existing_journal(self):
+        obs = JournalObservation(
+            command="read",
+            journal_path="doc/journal.md",
+            success=True,
+            message="Journal contains 2 prior entries",
+            journal_content="# Project Journal\n\n## Task 1\n\n## Task 2\n",
+            entry_count=2,
+            was_created=False,
+        )
+        viz = obs.visualize
+        viz_str = viz.plain
+        assert "Journal Contents" in viz_str
+        assert "Entries: 2" in viz_str
 
     def test_error_visualization(self):
         obs = JournalObservation(
@@ -89,6 +123,47 @@ class TestJournalObservation:
 
 class TestJournalExecutor:
     """Tests for JournalExecutor."""
+
+    def test_read_creates_file_if_not_exists(self, tmp_path: Path):
+        """Read command should create journal if it doesn't exist."""
+        journal_path = tmp_path / "doc" / "journal.md"
+        executor = JournalExecutor(journal_path)
+
+        action = JournalAction(command="read")
+        obs = executor(action)
+
+        assert obs.success
+        assert obs.was_created
+        assert obs.entry_count == 0
+        assert journal_path.exists()
+        content = journal_path.read_text()
+        assert "# Project Journal" in content
+        assert obs.journal_content == content
+
+    def test_read_existing_journal(self, tmp_path: Path):
+        """Read command should return contents of existing journal."""
+        journal_path = tmp_path / "journal.md"
+        journal_path.write_text("# Project Journal\n\n## Task 1\n\nDid some work.\n")
+
+        executor = JournalExecutor(journal_path)
+        action = JournalAction(command="read")
+        obs = executor(action)
+
+        assert obs.success
+        assert not obs.was_created
+        assert obs.entry_count == 1
+        assert "## Task 1" in obs.journal_content
+
+    def test_read_has_content_for_llm(self, tmp_path: Path):
+        """Read observations must have non-empty content for SDK prompt caching."""
+        journal_path = tmp_path / "journal.md"
+        executor = JournalExecutor(journal_path)
+
+        action = JournalAction(command="read")
+        obs = executor(action)
+
+        assert len(obs.content) > 0, "Read observation must have content for LLM"
+        assert obs.text, "Observation.text must return non-empty string"
 
     def test_append_creates_file_if_not_exists(self, tmp_path: Path):
         journal_path = tmp_path / "doc" / "journal.md"
@@ -109,6 +184,18 @@ class TestJournalExecutor:
         content = journal_path.read_text()
         assert "# Project Journal" in content
         assert "## First Task" in content
+
+    def test_append_without_entry_fails(self, tmp_path: Path):
+        """Append command requires an entry."""
+        journal_path = tmp_path / "journal.md"
+        executor = JournalExecutor(journal_path)
+
+        action = JournalAction(command="append")  # No entry provided
+        obs = executor(action)
+
+        assert not obs.success
+        assert "entry" in obs.message.lower()
+        assert "required" in obs.message.lower()
 
     def test_append_to_existing_file(self, tmp_path: Path):
         journal_path = tmp_path / "journal.md"

@@ -46,18 +46,29 @@ class JournalEntry(BaseModel):
 class JournalAction(Action):
     """Action for the journal tool."""
 
-    command: Literal["append"] = Field(
-        description="The command to execute. 'append' adds a new journal entry."
+    command: Literal["read", "append"] = Field(
+        description=(
+            "The command to execute. 'read' retrieves the journal contents "
+            "(creating an empty journal if none exists). 'append' adds a new entry."
+        )
     )
-    entry: JournalEntry = Field(description="The journal entry to append")
+    entry: JournalEntry | None = Field(
+        default=None,
+        description="The journal entry to append (required for 'append' command)",
+    )
 
     @property
     def visualize(self) -> Text:
         """Rich text visualization of the action."""
         text = Text()
-        text.append("📝 ", style="green")
-        text.append("Append Journal Entry", style="green")
-        text.append(f': "{self.entry.task_name}"')
+        if self.command == "read":
+            text.append("📖 ", style="blue")
+            text.append("Read Journal", style="blue")
+        else:
+            text.append("📝 ", style="green")
+            text.append("Append Journal Entry", style="green")
+            if self.entry:
+                text.append(f': "{self.entry.task_name}"')
         return text
 
 
@@ -69,12 +80,37 @@ class JournalObservation(Observation):
     success: bool = Field(description="Whether the operation succeeded")
     message: str = Field(description="Status message")
     entry_timestamp: str | None = Field(default=None, description="Timestamp of the appended entry")
+    journal_content: str | None = Field(
+        default=None, description="Journal contents (for read command)"
+    )
+    entry_count: int | None = Field(
+        default=None, description="Number of entries in the journal (for read command)"
+    )
+    was_created: bool = Field(
+        default=False, description="Whether the journal was created (for read command)"
+    )
 
     @property
     def visualize(self) -> Text:
         """Rich text visualization of the observation."""
         text = Text()
-        if self.success:
+        if self.command == "read":
+            if self.success:
+                if self.was_created:
+                    text.append("📖 Journal Initialized\n", style="bold blue")
+                    text.append(f"({self.journal_path})\n\n", style="bold blue")
+                    text.append("No prior entries - this is the first task.\n", style="white")
+                else:
+                    text.append("📖 Journal Contents\n", style="bold blue")
+                    text.append(f"({self.journal_path})\n\n", style="bold blue")
+                    text.append(f"Entries: {self.entry_count or 0}\n\n", style="white")
+                    if self.journal_content:
+                        text.append(self.journal_content, style="dim")
+            else:
+                text.append("❌ Journal Error\n", style="bold red")
+                text.append(f"({self.journal_path})\n\n", style="bold red")
+                text.append(self.message, style="red")
+        elif self.success:
             text.append("📝 Journal Entry Added\n", style="bold green")
             text.append(f"({self.journal_path})\n\n", style="bold green")
             text.append(f"{self.message}\n", style="white")
@@ -98,7 +134,18 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
         conversation: object | None = None,  # noqa: ARG002
     ) -> JournalObservation:
         """Execute the journal action."""
-        if action.command == "append":
+        if action.command == "read":
+            return self._read_journal()
+        elif action.command == "append":
+            if action.entry is None:
+                return JournalObservation.from_text(
+                    text="Error: 'entry' is required for 'append' command",
+                    is_error=True,
+                    command=action.command,
+                    journal_path=str(self.journal_path),
+                    success=False,
+                    message="'entry' is required for 'append' command",
+                )
             return self._append_entry(action.entry)
         else:
             return JournalObservation.from_text(
@@ -109,6 +156,41 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
                 success=False,
                 message=f"Unknown command: {action.command}",
             )
+
+    def _read_journal(self) -> JournalObservation:
+        """Read the journal file, creating it if it doesn't exist."""
+        was_created = False
+
+        # Ensure parent directory exists
+        self.journal_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create file with header if it doesn't exist
+        if not self.journal_path.exists():
+            self.journal_path.write_text("# Project Journal\n\n")
+            was_created = True
+
+        content = self.journal_path.read_text()
+
+        # Count entries (## headers that aren't the title)
+        entry_count = content.count("\n## ")
+
+        if was_created:
+            message = "Journal initialized - no prior entries"
+            text = f"Journal created at {self.journal_path}\nNo prior entries - this is the first task."
+        else:
+            message = f"Journal contains {entry_count} prior entries"
+            text = f"Journal at {self.journal_path}\n{entry_count} prior entries\n\n{content}"
+
+        return JournalObservation.from_text(
+            text=text,
+            command="read",
+            journal_path=str(self.journal_path),
+            success=True,
+            message=message,
+            journal_content=content,
+            entry_count=entry_count,
+            was_created=was_created,
+        )
 
     def _append_entry(self, entry: JournalEntry) -> JournalObservation:
         """Append a journal entry to the file."""
@@ -164,14 +246,18 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
         )
 
 
-JOURNAL_DESCRIPTION = """Appends structured entries to the project journal (doc/journal.md).
-
-Use this tool to record what files you read, what you modified, and lessons
-learned that will help future tasks. The journal serves as persistent memory
-across task boundaries.
+JOURNAL_DESCRIPTION = """Manages the project journal (doc/journal.md) for persistent memory across task boundaries.
 
 Commands:
-- append: Add a new journal entry
+- read: Read journal contents. Creates an empty journal if none exists. Use this
+  at the START of your task to understand context from prior tasks. If the journal
+  doesn't exist, it will be created automatically - DO NOT skip this step or defer
+  journal reading.
+- append: Add a new journal entry. Use this at the END of your task.
+
+IMPORTANT: Always use the 'read' command first to check for prior context. Even if
+the journal doesn't exist yet (first task), the read command will create it and
+confirm you're starting fresh.
 
 The lessons_learned field is for GOTCHAS and PITFALLS only - issues you hit
 that another developer would likely encounter. Do NOT include:
