@@ -169,6 +169,13 @@ class ChecklistParser:
                 return milestone
         return None
 
+    def get_milestone_by_index(self, index: int) -> Milestone | None:
+        """Get a specific milestone by its index number."""
+        for milestone in self.parse_milestones():
+            if milestone.index == index:
+                return milestone
+        return None
+
     def mark_task_complete(self, task: Task) -> None:
         """Mark a task as complete by updating the checkbox in the file."""
         # Line numbers are 1-indexed
@@ -426,12 +433,13 @@ class ChecklistExecutor(ToolExecutor[ChecklistAction, ChecklistObservation]):
 
         # Mark the task complete
         line_number = matching_task.line_number
+        milestone_index = milestone.index
         self.parser.mark_task_complete(matching_task)
 
-        # Re-parse to get updated counts
-        milestone = self.parser.get_current_milestone()
-        tasks_complete = milestone.tasks_complete if milestone else 0
-        tasks_remaining = milestone.tasks_remaining if milestone else 0
+        # Re-parse to get updated counts for the SAME milestone (not the next one)
+        updated_milestone = self.parser.get_milestone_by_index(milestone_index)
+        tasks_complete = updated_milestone.tasks_complete if updated_milestone else 0
+        tasks_remaining = updated_milestone.tasks_remaining if updated_milestone else 0
 
         return ChecklistObservation.from_text(
             text=f"Marked complete: {matching_task.description}",
