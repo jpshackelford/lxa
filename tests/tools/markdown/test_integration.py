@@ -42,10 +42,11 @@ This is the results section.
 """
 
         # Parse the document
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
+        sections = result.sections
 
         # Validate numbering
-        validation = self.numberer.validate(sections, self.parser.toc_section)
+        validation = self.numberer.validate(sections, result.toc_section)
 
         assert validation.valid is True
         assert len(validation.issues) == 0
@@ -81,10 +82,11 @@ This is the results section.
 """
 
         # Parse the document
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
+        sections = result.sections
 
         # Validate numbering (should find issues)
-        validation = self.numberer.validate(sections, self.parser.toc_section)
+        validation = self.numberer.validate(sections, result.toc_section)
         assert validation.valid is False
         assert len(validation.issues) > 0
 
@@ -92,7 +94,7 @@ This is the results section.
         self.numberer.normalize(sections)
 
         # Validate again (should be fixed)
-        validation_after = self.numberer.validate(sections, self.parser.toc_section)
+        validation_after = self.numberer.validate(sections, result.toc_section)
         assert validation_after.valid is True
         assert len(validation_after.issues) == 0
 
@@ -128,14 +130,15 @@ This is the results section.
 """
 
         # Parse the document
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
+        sections = result.sections
 
         # Should detect TOC
-        assert self.parser.toc_section is not None
-        assert self.parser.toc_section.title == "Table of Contents"
+        assert result.toc_section is not None
+        assert result.toc_section.title == "Table of Contents"
 
         # Renumber sections
-        renumber_result = self.numberer.renumber(sections, self.parser.toc_section)
+        renumber_result = self.numberer.renumber(sections, result.toc_section)
 
         assert renumber_result["result"] == "success"
         assert renumber_result["toc_skipped"] is True
@@ -145,7 +148,7 @@ This is the results section.
         assert self.parser.toc_section.number is None  # TOC should remain unnumbered
 
         # Find the non-TOC sections
-        non_toc_sections = [s for s in sections if s != self.parser.toc_section]
+        non_toc_sections = [s for s in sections if s != result.toc_section]
         assert non_toc_sections[0].number == "1"
         assert non_toc_sections[1].number == "2"
         assert non_toc_sections[2].number == "3"
@@ -172,7 +175,8 @@ This subsection has no number.
 """
 
         # Parse the document
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
+        sections = result.sections
 
         # Normalize numbering
         self.numberer.normalize(sections)
@@ -207,10 +211,11 @@ This is deeply nested.
 """
 
         # Parse the document
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
+        sections = result.sections
 
         # Should validate correctly
-        validation = self.numberer.validate(sections, self.parser.toc_section)
+        validation = self.numberer.validate(sections, result.toc_section)
         assert validation.valid is True
 
         # Get all sections flattened

@@ -96,7 +96,8 @@ This is a subsection.
 """
 
         parser = MarkdownParser()
-        sections = parser.parse_content(content)
+        result = parser.parse_content(content)
+        sections = result.sections
 
         assert len(sections) == 2
         assert sections[0].number == "1"
@@ -132,7 +133,8 @@ More content.
 """
 
         parser = MarkdownParser()
-        sections = parser.parse_content(content)
+        result = parser.parse_content(content)
+        sections = result.sections
 
         # Should have TOC + 2 numbered sections
         assert len(sections) == 3
@@ -168,7 +170,8 @@ Unnumbered subsection.
 """
 
         parser = MarkdownParser()
-        sections = parser.parse_content(content)
+        result = parser.parse_content(content)
+        sections = result.sections
 
         assert len(sections) == 2
         assert sections[0].number is None
@@ -204,7 +207,8 @@ Another numbered section.
 """
 
         parser = MarkdownParser()
-        sections = parser.parse_content(content)
+        result = parser.parse_content(content)
+        sections = result.sections
 
         assert len(sections) == 4
 
@@ -246,7 +250,8 @@ More content.
 """
 
         parser = MarkdownParser()
-        sections = parser.parse_content(content)
+        result = parser.parse_content(content)
+        sections = result.sections
 
         assert len(sections) == 2
 
@@ -274,11 +279,11 @@ More content.
     def test_parse_empty_document(self):
         """Test parsing empty document."""
         parser = MarkdownParser()
-        sections = parser.parse_content("")
+        result = parser.parse_content("")
 
-        assert sections == []
-        assert parser.get_document_title() is None
-        assert parser.get_toc_section() is None
+        assert result.sections == []
+        assert result.document_title is None
+        assert result.toc_section is None
 
     def test_parse_document_title_detection(self):
         """Test document title detection."""

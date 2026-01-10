@@ -6,6 +6,16 @@ from pathlib import Path
 
 
 @dataclass
+class ParseResult:
+    """Result of parsing a markdown document."""
+
+    sections: list["Section"]
+    document_title: str | None
+    toc_section: "Section | None"
+    lines: list[str]
+
+
+@dataclass
 class Section:
     """Represents a section in a markdown document."""
 
@@ -61,13 +71,11 @@ class MarkdownParser:
     TOC_TITLE_PATTERN = re.compile(r"^table\s+of\s+contents$", re.IGNORECASE)
 
     def __init__(self):
-        self.lines: list[str] = []
-        self.document_title: str | None = None
-        self.toc_section: Section | None = None
-        self.sections: list[Section] = []
+        # Store last parse result for convenience methods
+        self._result: ParseResult | None = None
 
-    def parse_file(self, file_path: str | Path) -> list[Section]:
-        """Parse a markdown file and return the section tree."""
+    def parse_file(self, file_path: str | Path) -> ParseResult:
+        """Parse a markdown file and return the parse result."""
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -77,26 +85,19 @@ class MarkdownParser:
 
         return self.parse_content(content)
 
-    def parse_content(self, content: str) -> list[Section]:
-        """Parse markdown content and return the section tree."""
-        self.lines = content.splitlines()
-        self.document_title = None
-        self.toc_section = None
-        self.sections = []
+    def parse_content(self, content: str) -> ParseResult:
+        """Parse markdown content and return the parse result.
+
+        Returns:
+            ParseResult containing sections, document_title, toc_section, and lines.
+        """
+        lines = content.splitlines()
+        document_title: str | None = None
+        toc_section: Section | None = None
 
         # Find all headings first
-        headings = self._find_headings()
-
-        # Build section tree
-        self.sections = self._build_section_tree(headings)
-
-        return self.sections
-
-    def _find_headings(self) -> list[tuple[int, int, str, str | None, str]]:
-        """Find all headings and return (line_num, level, full_text, number, title)."""
-        headings = []
-
-        for i, line in enumerate(self.lines):
+        headings: list[tuple[int, int, str, str | None, str]] = []
+        for i, line in enumerate(lines):
             match = self.HEADING_PATTERN.match(line.strip())
             if match:
                 hashes, text = match.groups()
@@ -119,37 +120,51 @@ class MarkdownParser:
                         headings.append((i, level, text, None, text))
 
                 # Check for document title (first h1)
-                if level == 1 and self.document_title is None:
-                    self.document_title = text
+                if level == 1 and document_title is None:
+                    document_title = text
 
-        return headings
+        # Build section tree
+        sections, toc_section = self._build_section_tree(headings, lines)
+
+        # Store result for convenience methods
+        self._result = ParseResult(
+            sections=sections,
+            document_title=document_title,
+            toc_section=toc_section,
+            lines=lines,
+        )
+
+        return self._result
 
     def _build_section_tree(
-        self, headings: list[tuple[int, int, str, str | None, str]]
-    ) -> list[Section]:
-        """Build a hierarchical section tree from headings."""
+        self, headings: list[tuple[int, int, str, str | None, str]], lines: list[str]
+    ) -> tuple[list[Section], Section | None]:
+        """Build a hierarchical section tree from headings.
+
+        Returns:
+            Tuple of (sections list, toc_section or None)
+        """
         if not headings:
-            return []
+            return [], None
+
+        toc_section: Section | None = None
 
         # Filter out h1 headings (document title) but keep them for end line calculation
         h2_plus_headings = [
-            (i, line_num, level, full_text, number, title)
-            for i, (line_num, level, full_text, number, title) in enumerate(headings)
+            (line_num, level, number, title)
+            for line_num, level, _full_text, number, title in headings
             if level >= 2
         ]
 
         if not h2_plus_headings:
-            return []
+            return [], None
 
-        sections = []
+        sections: list[Section] = []
         stack: list[Section] = []  # Stack to track parent sections
 
-        for j, (_orig_i, line_num, level, _full_text, number, title) in enumerate(h2_plus_headings):
+        for j, (line_num, level, number, title) in enumerate(h2_plus_headings):
             # Determine end line (start of next section or end of document)
-            if j + 1 < len(h2_plus_headings):
-                end_line = h2_plus_headings[j + 1][1]  # line_num of next section
-            else:
-                end_line = len(self.lines)
+            end_line = h2_plus_headings[j + 1][0] if j + 1 < len(h2_plus_headings) else len(lines)
 
             # Create section
             section = Section(
@@ -158,7 +173,7 @@ class MarkdownParser:
 
             # Check if this is the TOC section
             if level == 2 and number is None and self.TOC_TITLE_PATTERN.match(title):
-                self.toc_section = section
+                toc_section = section
 
             # Find the correct parent by popping stack until we find a valid parent
             while stack and stack[-1].level >= level:
@@ -173,7 +188,29 @@ class MarkdownParser:
             # Add to stack for potential children
             stack.append(section)
 
-        return sections
+        return sections, toc_section
+
+    # Convenience methods that operate on the last parse result
+
+    @property
+    def document_title(self) -> str | None:
+        """Get the document title from the last parse."""
+        return self._result.document_title if self._result else None
+
+    @property
+    def toc_section(self) -> Section | None:
+        """Get the TOC section from the last parse."""
+        return self._result.toc_section if self._result else None
+
+    @property
+    def sections(self) -> list[Section]:
+        """Get the sections from the last parse."""
+        return self._result.sections if self._result else []
+
+    @property
+    def lines(self) -> list[str]:
+        """Get the lines from the last parse."""
+        return self._result.lines if self._result else []
 
     def get_document_title(self) -> str | None:
         """Get the document title (first h1 heading)."""
@@ -185,7 +222,7 @@ class MarkdownParser:
 
     def get_all_sections(self) -> list[Section]:
         """Get all sections in document order (flattened tree)."""
-        all_sections = []
+        all_sections: list[Section] = []
         for section in self.sections:
             all_sections.extend(section.get_all_sections())
         return all_sections
@@ -200,11 +237,7 @@ class MarkdownParser:
 
     def get_numbered_sections(self) -> list[Section]:
         """Get all numbered sections (excluding TOC and document title)."""
-        numbered = []
-        for section in self.get_all_sections():
-            if section.number is not None:
-                numbered.append(section)
-        return numbered
+        return [s for s in self.get_all_sections() if s.number is not None]
 
     def get_section_content(self, section: Section) -> str:
         """Get the content of a section (including heading)."""

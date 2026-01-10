@@ -223,8 +223,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def _validate_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Validate document structure."""
-        sections = self.parser.parse_content(content)
-        validation = self.numberer.validate(sections, self.parser.toc_section)
+        result = self.parser.parse_content(content)
+        validation = self.numberer.validate(result.sections, result.toc_section)
 
         # Convert issues to dict format for observation
         issues_dict = []
@@ -252,12 +252,12 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self, action: MarkdownAction, content: str, file_path: Path
     ) -> MarkdownObservation:
         """Renumber document sections."""
-        sections = self.parser.parse_content(content)
-        renumber_result = self.numberer.renumber(sections, self.parser.toc_section)
+        result = self.parser.parse_content(content)
+        renumber_result = self.numberer.renumber(result.sections, result.toc_section)
 
         if renumber_result["result"] == "success":
             # Reconstruct the document with updated numbering
-            updated_content = self._reconstruct_document(content, sections)
+            updated_content = self._reconstruct_document(content)
 
             # Write back to file
             file_path.write_text(updated_content, encoding="utf-8")
@@ -280,19 +280,19 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Parse document and return structure information."""
-        sections = self.parser.parse_content(content)
+        result = self.parser.parse_content(content)
 
         # Build section structure for observation
-        section_structure = []
-        for section in sections:
+        section_structure: list[dict[str, str | int]] = []
+        for section in result.sections:
             self._add_section_to_structure(section, section_structure)
 
         return MarkdownObservation(
             command=action.command,
             file=action.file,
             result="success",
-            document_title=self.parser.document_title,
-            toc_section_found=self.parser.toc_section is not None,
+            document_title=result.document_title,
+            toc_section_found=result.toc_section is not None,
             total_sections=len(self.parser.get_all_sections()),
             section_structure=section_structure,
         )
@@ -312,11 +312,11 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         for child in section.children:
             self._add_section_to_structure(child, structure_list)
 
-    def _reconstruct_document(self, original_content: str, sections: list) -> str:  # noqa: ARG002
+    def _reconstruct_document(self, original_content: str) -> str:
         """Reconstruct document with updated section numbering."""
         lines = original_content.splitlines()
 
-        # Get all sections flattened (parser already has the sections from parse_content)
+        # Get all sections flattened from the last parse result
         all_sections = self.parser.get_all_sections()
 
         # Update heading lines with new numbers
