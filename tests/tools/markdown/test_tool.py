@@ -332,6 +332,174 @@ This is deeply nested.
         assert observation.numbering_valid is True
         assert observation.numbering_issues is None
 
+    def test_toc_update_creates_new_toc(self):
+        """Test TOC update creates TOC when none exists."""
+        content = """# My Document
+
+## 1. Introduction
+
+Some intro text.
+
+## 2. Methods
+
+Some methods text.
+
+### 2.1 Approach
+
+Description of approach.
+"""
+
+        test_file = self.temp_dir / "test.md"
+        test_file.write_text(content)
+
+        action = MarkdownAction(command="toc_update", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "toc_update"
+        assert observation.file == "test.md"
+        assert observation.result == "success"
+        assert observation.toc_action == "created"
+        assert observation.toc_entries == 3  # 1. Intro, 2. Methods, 2.1 Approach
+        assert observation.toc_depth == 3
+
+        # Verify file was updated
+        updated_content = test_file.read_text()
+        assert "## Table Of Contents" in updated_content
+        assert "- 1. Introduction" in updated_content
+        assert "- 2. Methods" in updated_content
+        assert "- 2.1 Approach" in updated_content
+
+    def test_toc_update_updates_existing_toc(self):
+        """Test TOC update modifies existing TOC."""
+        content = """# My Document
+
+## Table of Contents
+
+- 1. Old Section
+
+## 1. Introduction
+
+Some intro text.
+
+## 2. Methods
+
+Some methods text.
+"""
+
+        test_file = self.temp_dir / "test.md"
+        test_file.write_text(content)
+
+        action = MarkdownAction(command="toc_update", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "toc_update"
+        assert observation.result == "success"
+        assert observation.toc_action == "updated"
+        assert observation.toc_entries == 2  # 1. Introduction, 2. Methods
+
+        # Verify file was updated
+        updated_content = test_file.read_text()
+        assert "- 1. Introduction" in updated_content
+        assert "- 2. Methods" in updated_content
+        assert "- 1. Old Section" not in updated_content
+
+    def test_toc_update_with_custom_depth(self):
+        """Test TOC update with custom depth parameter."""
+        content = """# My Document
+
+## 1. Introduction
+
+Some intro text.
+
+### 1.1 Background
+
+Background text.
+
+#### 1.1.1 History
+
+History text.
+"""
+
+        test_file = self.temp_dir / "test.md"
+        test_file.write_text(content)
+
+        # Default depth=3 should include ### but not ####
+        action = MarkdownAction(command="toc_update", file="test.md", depth=3)
+        observation = self.executor.execute(action)
+
+        assert observation.result == "success"
+        assert observation.toc_depth == 3
+
+        updated_content = test_file.read_text()
+        assert "- 1. Introduction" in updated_content
+        assert "- 1.1 Background" in updated_content
+        # Level 4 (####) should not be included with depth=3
+        # Check TOC entries only, not document headings
+        assert "- 1.1.1 History" not in updated_content  # TOC entry shouldn't exist
+        assert "#### 1.1.1 History" in updated_content  # Document heading still exists
+
+    def test_toc_remove_existing_toc(self):
+        """Test TOC remove removes existing TOC."""
+        content = """# My Document
+
+## Table of Contents
+
+- 1. Introduction
+- 2. Methods
+
+## 1. Introduction
+
+Some intro text.
+
+## 2. Methods
+
+Some methods text.
+"""
+
+        test_file = self.temp_dir / "test.md"
+        test_file.write_text(content)
+
+        action = MarkdownAction(command="toc_remove", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "toc_remove"
+        assert observation.file == "test.md"
+        assert observation.result == "success"
+        assert observation.toc_action == "removed"
+
+        # Verify TOC was removed
+        updated_content = test_file.read_text()
+        assert "## Table of Contents" not in updated_content
+        assert "- 1. Introduction" not in updated_content  # TOC entry removed
+        assert "## 1. Introduction" in updated_content  # Section still exists
+
+    def test_toc_remove_no_toc_exists(self):
+        """Test TOC remove when no TOC exists."""
+        content = """# My Document
+
+## 1. Introduction
+
+Some intro text.
+
+## 2. Methods
+
+Some methods text.
+"""
+
+        test_file = self.temp_dir / "test.md"
+        test_file.write_text(content)
+
+        action = MarkdownAction(command="toc_remove", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "toc_remove"
+        assert observation.result == "warning"
+        assert observation.toc_action == "not_found"
+
+        # Verify file wasn't modified
+        updated_content = test_file.read_text()
+        assert updated_content == content
+
 
 class TestMarkdownAction:
     """Test the markdown action class."""
@@ -356,6 +524,14 @@ class TestMarkdownAction:
         action = MarkdownAction(command="parse", file="test.md")
         text = action.visualize
         assert "Parse Document Structure" in str(text)
+
+        action = MarkdownAction(command="toc_update", file="test.md")
+        text = action.visualize
+        assert "Update Table of Contents" in str(text)
+
+        action = MarkdownAction(command="toc_remove", file="test.md")
+        text = action.visualize
+        assert "Remove Table of Contents" in str(text)
 
 
 class TestMarkdownObservation:
@@ -426,3 +602,53 @@ class TestMarkdownObservation:
         text = obs.visualize
         # Should show error indicator
         assert "❌" in str(text) or "ERROR" in str(text)
+
+    def test_observation_visualization_toc_update_created(self):
+        """Test observation visualization for TOC creation."""
+        obs = MarkdownObservation(
+            command="toc_update",
+            file="test.md",
+            result="success",
+            toc_action="created",
+            toc_entries=5,
+            toc_depth=3,
+        )
+        text = obs.visualize
+        assert "Created TOC with 5 entries" in str(text)
+        assert "depth 3" in str(text)
+
+    def test_observation_visualization_toc_update_updated(self):
+        """Test observation visualization for TOC update."""
+        obs = MarkdownObservation(
+            command="toc_update",
+            file="test.md",
+            result="success",
+            toc_action="updated",
+            toc_entries=8,
+            toc_depth=4,
+        )
+        text = obs.visualize
+        assert "Updated TOC with 8 entries" in str(text)
+        assert "depth 4" in str(text)
+
+    def test_observation_visualization_toc_remove(self):
+        """Test observation visualization for TOC removal."""
+        obs = MarkdownObservation(
+            command="toc_remove",
+            file="test.md",
+            result="success",
+            toc_action="removed",
+        )
+        text = obs.visualize
+        assert "Removed table of contents" in str(text)
+
+    def test_observation_visualization_toc_remove_not_found(self):
+        """Test observation visualization when TOC not found."""
+        obs = MarkdownObservation(
+            command="toc_remove",
+            file="test.md",
+            result="warning",
+            toc_action="not_found",
+        )
+        text = obs.visualize
+        assert "No table of contents found" in str(text)

@@ -18,6 +18,7 @@ from rich.text import Text
 
 from .numbering import SectionNumberer
 from .parser import MarkdownParser, Section
+from .toc import TocManager
 
 if TYPE_CHECKING:
     from openhands.sdk.conversation.state import ConversationState
@@ -30,6 +31,7 @@ This tool provides commands for:
 - Validating document structure (section numbering consistency)
 - Renumbering sections sequentially
 - Parsing and analyzing document structure
+- Managing table of contents (generate, update, remove)
 
 The tool helps maintain consistent markdown document structure and numbering.
 """.strip()
@@ -38,10 +40,13 @@ The tool helps maintain consistent markdown document structure and numbering.
 class MarkdownAction(Action):
     """Action for the markdown document tool."""
 
-    command: Literal["validate", "renumber", "parse"] = Field(
-        description="Command to execute: 'validate' checks structure, 'renumber' fixes numbering, 'parse' shows structure"
+    command: Literal["validate", "renumber", "parse", "toc_update", "toc_remove"] = Field(
+        description="Command to execute: 'validate' checks structure, 'renumber' fixes numbering, 'parse' shows structure, 'toc_update' generates/updates TOC, 'toc_remove' removes TOC"
     )
     file: str = Field(description="Path to the markdown file to process")
+    depth: int = Field(
+        default=3, description="Maximum heading depth for TOC (default 3, used with toc_update)"
+    )
 
     @property
     def visualize(self) -> Text:
@@ -56,6 +61,12 @@ class MarkdownAction(Action):
         elif self.command == "parse":
             content.append("📄 ", style="yellow")
             content.append("Parse Document Structure", style="yellow")
+        elif self.command == "toc_update":
+            content.append("📑 ", style="cyan")
+            content.append("Update Table of Contents", style="cyan")
+        elif self.command == "toc_remove":
+            content.append("🗑️  ", style="red")
+            content.append("Remove Table of Contents", style="red")
 
         content.append(f" - {self.file}", style="white")
         return content
@@ -64,7 +75,7 @@ class MarkdownAction(Action):
 class MarkdownObservation(Observation):
     """Observation from the markdown document tool."""
 
-    command: Literal["validate", "renumber", "parse"] = Field(
+    command: Literal["validate", "renumber", "parse", "toc_update", "toc_remove"] = Field(
         description="The command that was executed."
     )
     file: str = Field(description="Path to the markdown file that was processed.")
@@ -96,6 +107,13 @@ class MarkdownObservation(Observation):
     section_structure: list[dict[str, str | int]] | None = Field(
         default=None, description="Hierarchical structure of sections."
     )
+
+    # TOC-specific fields
+    toc_action: str | None = Field(
+        default=None, description="TOC action performed: 'created', 'updated', or 'removed'."
+    )
+    toc_entries: int | None = Field(default=None, description="Number of entries in the TOC.")
+    toc_depth: int | None = Field(default=None, description="Depth parameter used for TOC.")
 
     @property
     def visualize(self) -> Text:
@@ -134,6 +152,20 @@ class MarkdownObservation(Observation):
             if self.document_title:
                 text.append(f" - Title: {self.document_title}", style="dim")
 
+        elif self.command == "toc_update":
+            if self.toc_action == "created":
+                text.append(f"Created TOC with {self.toc_entries} entries", style="cyan")
+            else:
+                text.append(f"Updated TOC with {self.toc_entries} entries", style="cyan")
+            if self.toc_depth:
+                text.append(f" (depth {self.toc_depth})", style="dim")
+
+        elif self.command == "toc_remove":
+            if self.toc_action == "removed":
+                text.append("Removed table of contents", style="red")
+            else:
+                text.append("No table of contents found", style="dim")
+
         return text
 
 
@@ -149,6 +181,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self.workspace_dir = workspace_dir
         self.parser = MarkdownParser()
         self.numberer = SectionNumberer()
+        self.toc_manager = TocManager()
 
     def __call__(self, action: MarkdownAction, conversation=None) -> MarkdownObservation:  # noqa: ARG002
         """Execute a markdown action.
@@ -211,6 +244,10 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 return self._renumber_document(action, content, file_path)
             elif action.command == "parse":
                 return self._parse_document(action, content)
+            elif action.command == "toc_update":
+                return self._toc_update(action, content, file_path)
+            elif action.command == "toc_remove":
+                return self._toc_remove(action, content, file_path)
             else:
                 # For unknown commands, use "validate" as the command in observation
                 # but include the actual unknown command in the error message
@@ -353,6 +390,48 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     lines[section.start_line] = new_heading
 
         return "\n".join(lines)
+
+    def _toc_update(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Generate or update the table of contents."""
+        updated_content, toc_data = self.toc_manager.update(content, depth=action.depth)
+
+        # Write back to file
+        file_path.write_text(updated_content, encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            toc_action=toc_data["action"],
+            toc_entries=toc_data["entries"],
+            toc_depth=toc_data["depth"],
+        )
+
+    def _toc_remove(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Remove the table of contents."""
+        updated_content, toc_data = self.toc_manager.remove(content)
+
+        if toc_data["result"] == "no_toc_found":
+            return MarkdownObservation(
+                command=action.command,
+                file=action.file,
+                result="warning",
+                toc_action="not_found",
+            )
+
+        # Write back to file
+        file_path.write_text(updated_content, encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            toc_action="removed",
+        )
 
 
 class MarkdownDocumentTool(ToolDefinition[MarkdownAction, MarkdownObservation]):
