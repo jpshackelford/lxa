@@ -378,6 +378,128 @@ issues_fixed: 2
 issues_remaining: 0
 ```
 
+### 3.4 MarkdownFormatter
+
+The formatter uses two external tools for different purposes:
+
+- **mdformat**: For paragraph rewrapping (preserves code blocks, tables, lists)
+- **pymarkdownlnt**: For linting and auto-fixing markdown issues
+
+#### 3.4.1 Dependencies
+
+```toml
+# pyproject.toml
+[project.dependencies]
+mdformat = ">=0.7"
+pymarkdownlnt = ">=0.9"
+```
+
+#### 3.4.2 Rewrap Implementation
+
+Uses mdformat's Python API with the `wrap` option:
+
+```python
+import mdformat
+
+def rewrap(content: str, width: int = 80) -> str:
+    """Rewrap paragraphs to specified width.
+
+    Preserves:
+    - Code blocks (fenced and indented)
+    - Tables
+    - Lists (maintains indentation)
+    - Links and references
+    """
+    return mdformat.text(content, options={"wrap": width})
+```
+
+mdformat parses the markdown AST and only wraps paragraph text, leaving
+structural elements intact. It also validates that the rendered HTML is
+identical before and after formatting.
+
+#### 3.4.3 Lint Implementation
+
+Uses pymarkdownlnt's Python API to scan for issues:
+
+```python
+from pymarkdown.api import PyMarkdownApi, PyMarkdownApiException
+
+def lint(file_path: str) -> list[LintIssue]:
+    """Scan file for markdown issues.
+
+    Returns list of issues with:
+    - line: Line number
+    - rule: Rule ID (e.g., MD009, MD012)
+    - message: Human-readable description
+    - fixable: Whether auto-fix is available
+    """
+    api = PyMarkdownApi()
+    result = api.scan_path(file_path)
+    return [
+        LintIssue(
+            line=issue.line_number,
+            rule=issue.rule_id,
+            message=issue.rule_description,
+            fixable=issue.is_fixable,
+        )
+        for issue in result.scan_failures
+    ]
+```
+
+#### 3.4.4 Fix Implementation
+
+Uses pymarkdownlnt's fix mode to auto-fix issues in a single pass:
+
+```python
+from pymarkdown.api import PyMarkdownApi
+
+def fix(file_path: str) -> FixResult:
+    """Auto-fix markdown issues where possible.
+
+    Returns:
+    - issues_fixed: Count of fixed issues
+    - issues_remaining: List of issues that couldn't be auto-fixed
+    """
+    api = PyMarkdownApi()
+    result = api.fix_path(file_path)
+    return FixResult(
+        issues_fixed=result.fixed_count,
+        issues_remaining=[
+            LintIssue(
+                line=issue.line_number,
+                rule=issue.rule_id,
+                message=issue.rule_description,
+            )
+            for issue in result.unfixed_failures
+        ],
+    )
+```
+
+#### 3.4.5 Workflow Integration
+
+The intended workflow for agents:
+
+1. **rewrap** - Normalize line lengths first (prevents MD013 line-length issues)
+2. **lint** - Discover remaining issues
+3. **fix** - Auto-fix all fixable issues in one pass
+4. **Review** - Remaining issues returned to agent to fix with edit tool
+
+```yaml
+# Example: Issues remaining after fix that agent must address manually
+command: fix
+file: doc/design/my-feature.md
+result: partial
+issues_fixed: 5
+issues_remaining:
+  - line: 23
+    rule: MD024
+    message: "Multiple headings with the same content"
+  - line: 89
+    rule: MD051
+    message: "Link fragments should be valid"
+recommendation: "2 issues require manual fixes. Use edit tool to resolve."
+```
+
 ## 4. Implementation Plan
 
 All tasks require:
@@ -394,8 +516,8 @@ All tasks require:
 
 #### 4.1.1 Checklist
 
-- [ ] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
-- [ ] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
+- [x] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
+- [x] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
       TOC detection, numbered vs unnumbered sections
 
 ### 4.2 Validation and Renumbering (M2)
@@ -406,9 +528,9 @@ All tasks require:
 
 #### 4.2.1 Checklist
 
-- [ ] src/tools/markdown/numbering.py - `SectionNumberer` with validate,
+- [x] src/tools/markdown/numbering.py - `SectionNumberer` with validate,
       renumber
-- [ ] tests/tools/markdown/test_numbering.py - Tests for validation, sequential
+- [x] tests/tools/markdown/test_numbering.py - Tests for validation, sequential
       renumbering, TOC skipping
 
 ### 4.3 TOC Management (M3)
@@ -458,6 +580,19 @@ rewrap → lint → fix.
 
 #### 4.6.1 Checklist
 
-- [ ] src/tools/markdown/tool.py - `MarkdownDocumentTool` with all commands
-- [ ] tests/tools/markdown/test_tool.py - Integration tests for command routing
-      and observations
+- [x] src/tools/markdown/tool.py - `MarkdownDocumentTool` base structure
+- [x] src/tools/markdown/tool.py - validate command
+- [x] src/tools/markdown/tool.py - renumber command
+- [x] src/tools/markdown/tool.py - parse command
+- [ ] src/tools/markdown/tool.py - toc update command (depends on M3)
+- [ ] src/tools/markdown/tool.py - toc remove command (depends on M3)
+- [ ] src/tools/markdown/tool.py - move command (depends on M4)
+- [ ] src/tools/markdown/tool.py - insert command (depends on M4)
+- [ ] src/tools/markdown/tool.py - delete command (depends on M4)
+- [ ] src/tools/markdown/tool.py - promote command (depends on M4)
+- [ ] src/tools/markdown/tool.py - demote command (depends on M4)
+- [ ] src/tools/markdown/tool.py - rewrap command (depends on M5)
+- [ ] src/tools/markdown/tool.py - lint command (depends on M5)
+- [ ] src/tools/markdown/tool.py - fix command (depends on M5)
+- [x] tests/tools/markdown/test_tool.py - Integration tests for implemented
+      commands (validate, renumber, parse)
