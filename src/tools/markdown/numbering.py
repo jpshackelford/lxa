@@ -178,9 +178,7 @@ class SectionNumberer:
             counters[level] += 1
 
             # Reset counters for deeper levels
-            levels_to_reset = [lvl for lvl in counters if lvl > level]
-            for lvl in levels_to_reset:
-                del counters[lvl]
+            counters = {lvl: cnt for lvl, cnt in counters.items() if lvl <= level}
 
             # Build number string
             number_parts = []
