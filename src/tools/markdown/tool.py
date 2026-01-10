@@ -172,7 +172,17 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             Observation with the results.
         """
         try:
-            file_path = self.workspace_dir / action.file
+            file_path = (self.workspace_dir / action.file).resolve()
+
+            # Prevent path traversal attacks
+            if not file_path.is_relative_to(self.workspace_dir.resolve()):
+                return MarkdownObservation.from_text(
+                    text=f"Invalid path (outside workspace): {action.file}",
+                    is_error=True,
+                    command=action.command,
+                    file=action.file,
+                    result="error",
+                )
 
             if not file_path.exists():
                 return MarkdownObservation.from_text(

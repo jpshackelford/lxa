@@ -212,6 +212,14 @@ This is the methods section.
         assert observation.result == "error"
         assert "Could not read file as UTF-8" in str(observation.content)
 
+    def test_path_traversal_blocked(self):
+        """Test that path traversal attempts are blocked."""
+        action = MarkdownAction(command="validate", file="../../../etc/passwd")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "error"
+        assert "Invalid path" in str(observation.content) or "outside workspace" in str(observation.content)
+
     def test_unknown_command(self):
         """Test handling of unknown command."""
         content = "# Test Document"
