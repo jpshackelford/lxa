@@ -109,8 +109,8 @@ class MarkdownParser:
         lines = content.splitlines()
         document_title: str | None = None
 
-        # Find all headings
-        headings: list[tuple[int, int, str, str | None, str]] = []
+        # Find all headings: (line_num, level, number, title)
+        headings: list[tuple[int, int, str | None, str]] = []
         for i, line in enumerate(lines):
             match = self.HEADING_PATTERN.match(line.strip())
             if not match:
@@ -120,7 +120,7 @@ class MarkdownParser:
             level = len(hashes)
             text = text.strip()
             number, title = self._parse_heading_text(text)
-            headings.append((i, level, text, number, title))
+            headings.append((i, level, number, title))
 
             # Track document title (first h1)
             if level == 1 and document_title is None:
@@ -140,9 +140,13 @@ class MarkdownParser:
         return self._result
 
     def _build_section_tree(
-        self, headings: list[tuple[int, int, str, str | None, str]], lines: list[str]
+        self, headings: list[tuple[int, int, str | None, str]], lines: list[str]
     ) -> tuple[list[Section], Section | None]:
         """Build a hierarchical section tree from headings.
+
+        Args:
+            headings: List of (line_num, level, number, title) tuples
+            lines: Original document lines for determining section end
 
         Returns:
             Tuple of (sections list, toc_section or None)
@@ -152,12 +156,8 @@ class MarkdownParser:
 
         toc_section: Section | None = None
 
-        # Filter out h1 headings (document title) but keep them for end line calculation
-        h2_plus_headings = [
-            (line_num, level, number, title)
-            for line_num, level, _full_text, number, title in headings
-            if level >= 2
-        ]
+        # Filter out h1 headings (document title)
+        h2_plus_headings = [h for h in headings if h[1] >= 2]
 
         if not h2_plus_headings:
             return [], None
