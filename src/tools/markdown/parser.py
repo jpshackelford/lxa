@@ -64,10 +64,8 @@ class MarkdownParser:
 
     # Regex patterns for parsing
     HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$")
-    NUMBERED_SECTION_PATTERN = re.compile(r"^(\d+(?:\.\d+)*)\.\s+(.+)$")
-    NUMBERED_TITLE_PATTERN = re.compile(
-        r"^(\d+(?:\.\d+)*)\s+(.+)$"
-    )  # For titles like "2.1 Subsection"
+    # Matches "1. Title", "1.1. Title", "1.1 Title" - optional trailing dot
+    NUMBERED_HEADING_PATTERN = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(.+)$")
     TOC_TITLE_PATTERN = re.compile(r"^table\s+of\s+contents$", re.IGNORECASE)
 
     def __init__(self):
@@ -94,15 +92,9 @@ class MarkdownParser:
         Returns:
             Tuple of (number or None, title)
         """
-        # Check numbered formats: "1. Title" or "1.1 Title"
-        number_match = self.NUMBERED_SECTION_PATTERN.match(text)
+        number_match = self.NUMBERED_HEADING_PATTERN.match(text)
         if number_match:
             number, title = number_match.groups()
-            return number, title.strip()
-
-        title_number_match = self.NUMBERED_TITLE_PATTERN.match(text)
-        if title_number_match:
-            number, title = title_number_match.groups()
             return number, title.strip()
 
         # Unnumbered section
