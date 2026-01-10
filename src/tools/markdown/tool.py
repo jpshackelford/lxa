@@ -17,7 +17,7 @@ from pydantic import Field
 from rich.text import Text
 
 from .numbering import SectionNumberer
-from .parser import MarkdownParser
+from .parser import MarkdownParser, Section
 
 if TYPE_CHECKING:
     from openhands.sdk.conversation.state import ConversationState
@@ -307,7 +307,9 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             section_structure=section_structure,
         )
 
-    def _add_section_to_structure(self, section, structure_list: list):
+    def _add_section_to_structure(
+        self, section: Section, structure_list: list[dict[str, str | int]]
+    ) -> None:
         """Recursively add section and children to structure list."""
         structure_list.append(
             {
