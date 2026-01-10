@@ -218,7 +218,9 @@ This is the methods section.
         observation = self.executor.execute(action)
 
         assert observation.result == "error"
-        assert "Invalid path" in str(observation.content) or "outside workspace" in str(observation.content)
+        assert "Invalid path" in str(observation.content) or "outside workspace" in str(
+            observation.content
+        )
 
     def test_unknown_command(self):
         """Test handling of unknown command."""

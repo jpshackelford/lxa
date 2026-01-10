@@ -85,6 +85,29 @@ class MarkdownParser:
 
         return self.parse_content(content)
 
+    def _parse_heading_text(self, text: str) -> tuple[str | None, str]:
+        """Parse heading text to extract number and title.
+
+        Args:
+            text: The heading text (without # prefix)
+
+        Returns:
+            Tuple of (number or None, title)
+        """
+        # Check numbered formats: "1. Title" or "1.1 Title"
+        number_match = self.NUMBERED_SECTION_PATTERN.match(text)
+        if number_match:
+            number, title = number_match.groups()
+            return number, title.strip()
+
+        title_number_match = self.NUMBERED_TITLE_PATTERN.match(text)
+        if title_number_match:
+            number, title = title_number_match.groups()
+            return number, title.strip()
+
+        # Unnumbered section
+        return None, text
+
     def parse_content(self, content: str) -> ParseResult:
         """Parse markdown content and return the parse result.
 
@@ -93,35 +116,23 @@ class MarkdownParser:
         """
         lines = content.splitlines()
         document_title: str | None = None
-        toc_section: Section | None = None
 
-        # Find all headings first
+        # Find all headings
         headings: list[tuple[int, int, str, str | None, str]] = []
         for i, line in enumerate(lines):
             match = self.HEADING_PATTERN.match(line.strip())
-            if match:
-                hashes, text = match.groups()
-                level = len(hashes)
-                text = text.strip()
+            if not match:
+                continue
 
-                # Check if this is a numbered section (format: "1. Title")
-                number_match = self.NUMBERED_SECTION_PATTERN.match(text)
-                if number_match:
-                    number, title = number_match.groups()
-                    headings.append((i, level, text, number, title.strip()))
-                else:
-                    # Check if this is a numbered title (format: "1.1 Title")
-                    title_number_match = self.NUMBERED_TITLE_PATTERN.match(text)
-                    if title_number_match:
-                        number, title = title_number_match.groups()
-                        headings.append((i, level, text, number, title.strip()))
-                    else:
-                        # Unnumbered section
-                        headings.append((i, level, text, None, text))
+            hashes, text = match.groups()
+            level = len(hashes)
+            text = text.strip()
+            number, title = self._parse_heading_text(text)
+            headings.append((i, level, text, number, title))
 
-                # Check for document title (first h1)
-                if level == 1 and document_title is None:
-                    document_title = text
+            # Track document title (first h1)
+            if level == 1 and document_title is None:
+                document_title = text
 
         # Build section tree
         sections, toc_section = self._build_section_tree(headings, lines)
