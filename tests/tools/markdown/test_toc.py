@@ -1,6 +1,6 @@
 """Tests for TocManager functionality."""
 
-from src.tools.markdown.toc import TocManager
+from src.tools.markdown.toc import TocAction, TocManager
 
 
 class TestTocManager:
@@ -35,8 +35,8 @@ Final section.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         assert result.entries > 0
         assert "## Table of Contents" in result.content
         assert "- 1. Introduction" in result.content
@@ -64,8 +64,8 @@ More content.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "updated"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.UPDATED
         assert "- Old entry" not in result.content
         assert "- 1. Introduction" in result.content
         assert "- 2. New Section" in result.content
@@ -235,8 +235,8 @@ Content.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         assert result.entries == 0
         assert "## Table of Contents" in result.content
 
@@ -249,8 +249,8 @@ Some introductory text.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         assert result.entries == 0
         assert "## Table of Contents" in result.content
         # TOC should be inserted after title
@@ -274,8 +274,8 @@ More content.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         assert result.entries == 2
         # TOC should be inserted at beginning
         assert result.content.startswith("## Table of Contents")
@@ -301,8 +301,8 @@ Final thoughts.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         assert "- Introduction" in result.content
         assert "- Technical Design" in result.content
         assert "- Conclusion" in result.content
@@ -338,8 +338,8 @@ Final section.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         toc_section = result.content.split("## 1. Introduction")[0]
         assert "- 1. Introduction" in toc_section
         assert "- Background" in toc_section
@@ -369,8 +369,8 @@ Content here.
         # Test with depth=6 to include all levels
         result = self.toc_manager.update(content, depth=6)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         toc_section = result.content.split("## 1. Section")[0]
         assert "- 1. Section" in toc_section
         assert "  - 1.1 Subsection" in toc_section
@@ -405,8 +405,8 @@ Content with unicode.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "created"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.CREATED
         toc_section = result.content.split("## 1. Introduction")[0]
         assert "- 1. Introduction & Overview" in toc_section
         assert "- 2. API's & SDK's" in toc_section
@@ -466,8 +466,8 @@ More content.
         # Update with depth=4 (should include more levels than original)
         result = self.toc_manager.update(content, depth=4)
 
-        assert result.action in ["created", "updated"]
-        assert result.action == "updated"
+        assert result.action in [TocAction.CREATED, TocAction.UPDATED]
+        assert result.action == TocAction.UPDATED
         toc_section = result.content.split("## 1. Section")[0]
         assert "- 1. Section" in toc_section
         assert "  - 1.1 Subsection" in toc_section
@@ -620,7 +620,7 @@ More content.
 
         # Step 1: Create TOC
         result1 = self.toc_manager.update(content, depth=3)
-        assert result1.action == "created"
+        assert result1.action == TocAction.CREATED
         assert "## Table of Contents" in result1.content
         content = result1.content
 
@@ -646,7 +646,7 @@ Implementation details.""",
 
         # Step 5: Update TOC
         result2 = self.toc_manager.update(content, depth=3)
-        assert result2.action == "updated"
+        assert result2.action == TocAction.UPDATED
         assert "- 3. Implementation" in result2.content
         content = result2.content
 
@@ -705,7 +705,7 @@ Final thoughts.
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action == "updated"
+        assert result.action == TocAction.UPDATED
 
         # Check that all original content is preserved
         assert "Some introduction text." in result.content
@@ -752,7 +752,7 @@ Fourth overview (different main section).
 
         result = self.toc_manager.update(content, depth=3)
 
-        assert result.action == "created"
+        assert result.action == TocAction.CREATED
         toc_section = result.content.split("## 1. Overview")[0]
 
         # All sections should be included, even with duplicate titles

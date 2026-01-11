@@ -1,7 +1,7 @@
 """Table of Contents management for markdown documents."""
 
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
 
 from .parser import MarkdownParser, Section
 
@@ -9,12 +9,19 @@ from .parser import MarkdownParser, Section
 TOC_TITLES = frozenset(["table of contents", "contents"])
 
 
+class TocAction(Enum):
+    """Actions that can be performed on a TOC."""
+
+    CREATED = "created"
+    UPDATED = "updated"
+
+
 @dataclass
 class TocUpdateResult:
     """Result of a TOC update operation."""
 
     content: str
-    action: Literal["created", "updated"]
+    action: TocAction
     entries: int
     depth: int
 
@@ -93,7 +100,7 @@ class TocManager:
                 + [""]  # Blank line after TOC
                 + lines[toc_section.end_line :]  # Rest of document
             )
-            action: Literal["created", "updated"] = "updated"
+            action = TocAction.UPDATED
         else:
             # Insert new TOC after document title
             insert_pos = self._find_toc_insert_position(lines)
@@ -104,7 +111,7 @@ class TocManager:
                 + [""]
                 + lines[insert_pos:]
             )
-            action = "created"
+            action = TocAction.CREATED
 
         updated_content = "\n".join(new_lines)
 

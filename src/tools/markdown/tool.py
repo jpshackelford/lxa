@@ -414,7 +414,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             command=action.command,
             file=action.file,
             result="success",
-            toc_action=result.action,
+            toc_action=result.action.value,
             toc_entries=result.entries,
             toc_depth=result.depth,
         )
