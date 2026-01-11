@@ -126,20 +126,13 @@ More content.
         assert "## 1. Introduction" in result.content
         assert "## 2. Technical Design" in result.content
 
-    def test_remove_no_toc_found(self):
+    def test_remove_no_toc_found(self, simple_doc):
         """Test removing TOC when none exists."""
-        content = """# My Document
-
-## 1. Introduction
-
-Content here.
-"""
-
-        result = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(simple_doc)
 
         assert result.found is not None
         assert result.found is False
-        assert result.content == content
+        assert result.content == simple_doc
 
     def test_validate_toc_valid(self):
         """Test validating a correct TOC."""
@@ -229,25 +222,18 @@ Content.
 
     # Additional comprehensive test cases
 
-    def test_update_empty_document(self):
+    def test_update_empty_document(self, empty_doc):
         """Test updating TOC in an empty document."""
-        content = ""
-
-        result = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(empty_doc, depth=3)
 
         assert result.action in [TocAction.CREATED, TocAction.UPDATED]
         assert result.action == TocAction.CREATED
         assert result.entries == 0
         assert "## Table of Contents" in result.content
 
-    def test_update_document_with_only_title(self):
+    def test_update_document_with_only_title(self, doc_title_only):
         """Test updating TOC in document with only h1 title."""
-        content = """# My Document
-
-Some introductory text.
-"""
-
-        result = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(doc_title_only, depth=3)
 
         assert result.action in [TocAction.CREATED, TocAction.UPDATED]
         assert result.action == TocAction.CREATED
@@ -280,26 +266,9 @@ More content.
         # TOC should be inserted at beginning
         assert result.content.startswith("## Table of Contents")
 
-    def test_update_unnumbered_sections(self):
+    def test_update_unnumbered_sections(self, doc_unnumbered):
         """Test updating TOC with unnumbered sections."""
-        content = """# My Document
-
-## Introduction
-
-Content here.
-
-## Technical Design
-
-### Overview
-
-More content.
-
-## Conclusion
-
-Final thoughts.
-"""
-
-        result = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(doc_unnumbered, depth=3)
 
         assert result.action in [TocAction.CREATED, TocAction.UPDATED]
         assert result.action == TocAction.CREATED
