@@ -2,6 +2,13 @@
 
 from .numbering import NumberingIssue, SectionNumberer, ValidationResult
 from .parser import MarkdownParser, ParseResult, Section
+from .toc import (
+    TocAction,
+    TocManager,
+    TocRemoveResult,
+    TocUpdateResult,
+    TocValidationResult,
+)
 from .tool import MarkdownAction, MarkdownDocumentTool, MarkdownObservation
 
 __all__ = [
@@ -14,4 +21,9 @@ __all__ = [
     "MarkdownDocumentTool",
     "MarkdownAction",
     "MarkdownObservation",
+    "TocAction",
+    "TocManager",
+    "TocUpdateResult",
+    "TocRemoveResult",
+    "TocValidationResult",
 ]

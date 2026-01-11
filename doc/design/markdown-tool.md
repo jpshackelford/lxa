@@ -519,6 +519,9 @@ All tasks require:
 - [x] src/tools/markdown/parser.py - `MarkdownParser` class, `Section` dataclass
 - [x] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
       TOC detection, numbered vs unnumbered sections
+- [x] src/tools/markdown/tool.py - `MarkdownDocumentTool` base structure
+- [x] src/tools/markdown/tool.py - parse command
+- [x] tests/tools/markdown/test_tool.py - Integration tests for parse command
 
 ### 4.2 Validation and Renumbering (M2)
 
@@ -532,6 +535,9 @@ All tasks require:
       renumber
 - [x] tests/tools/markdown/test_numbering.py - Tests for validation, sequential
       renumbering, TOC skipping
+- [x] src/tools/markdown/tool.py - validate command
+- [x] src/tools/markdown/tool.py - renumber command
+- [x] tests/tools/markdown/test_tool.py - Tests for validate and renumber
 
 ### 4.3 TOC Management (M3)
 
@@ -541,9 +547,12 @@ All tasks require:
 
 #### 4.3.1 Checklist
 
-- [ ] src/tools/markdown/toc.py - `TocManager` with update, remove
-- [ ] tests/tools/markdown/test_toc.py - Tests for generation, update, depth
+- [x] src/tools/markdown/toc.py - `TocManager` with update, remove
+- [x] tests/tools/markdown/test_toc.py - Tests for generation, update, depth
       parameter, remove
+- [x] src/tools/markdown/tool.py - toc_update command
+- [x] src/tools/markdown/tool.py - toc_remove command
+- [x] tests/tools/markdown/test_tool.py - Tests for TOC tool commands
 
 ### 4.4 Section Operations (M4)
 
@@ -557,6 +566,12 @@ All tasks require:
       delete, promote, demote
 - [ ] tests/tools/markdown/test_operations.py - Tests for each operation,
       children handling, observation reminders
+- [ ] src/tools/markdown/tool.py - move command
+- [ ] src/tools/markdown/tool.py - insert command
+- [ ] src/tools/markdown/tool.py - delete command
+- [ ] src/tools/markdown/tool.py - promote command
+- [ ] src/tools/markdown/tool.py - demote command
+- [ ] tests/tools/markdown/test_tool.py - Tests for section operation commands
 
 ### 4.5 Formatting (M5)
 
@@ -570,29 +585,7 @@ All tasks require:
       fix
 - [ ] tests/tools/markdown/test_formatter.py - Tests for rewrap boundaries,
       lint detection, auto-fix
-
-### 4.6 Tool Integration (M6)
-
-**Goal**: Unified tool interface exposing all commands.
-
-**Demo**: Full workflow: validate → structural edits → renumber → toc update →
-rewrap → lint → fix.
-
-#### 4.6.1 Checklist
-
-- [x] src/tools/markdown/tool.py - `MarkdownDocumentTool` base structure
-- [x] src/tools/markdown/tool.py - validate command
-- [x] src/tools/markdown/tool.py - renumber command
-- [x] src/tools/markdown/tool.py - parse command
-- [ ] src/tools/markdown/tool.py - toc update command (depends on M3)
-- [ ] src/tools/markdown/tool.py - toc remove command (depends on M3)
-- [ ] src/tools/markdown/tool.py - move command (depends on M4)
-- [ ] src/tools/markdown/tool.py - insert command (depends on M4)
-- [ ] src/tools/markdown/tool.py - delete command (depends on M4)
-- [ ] src/tools/markdown/tool.py - promote command (depends on M4)
-- [ ] src/tools/markdown/tool.py - demote command (depends on M4)
-- [ ] src/tools/markdown/tool.py - rewrap command (depends on M5)
-- [ ] src/tools/markdown/tool.py - lint command (depends on M5)
-- [ ] src/tools/markdown/tool.py - fix command (depends on M5)
-- [x] tests/tools/markdown/test_tool.py - Integration tests for implemented
-      commands (validate, renumber, parse)
+- [ ] src/tools/markdown/tool.py - rewrap command
+- [ ] src/tools/markdown/tool.py - lint command
+- [ ] src/tools/markdown/tool.py - fix command
+- [ ] tests/tools/markdown/test_tool.py - Tests for formatting commands
