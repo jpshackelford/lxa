@@ -43,7 +43,11 @@ class TocManager:
 
         Args:
             content: The markdown content
-            depth: Maximum heading depth to include (default 3 for ##, ###, ####)
+            depth: Maximum heading level to include in the TOC (default 3).
+                   Depth 2 includes only ## headings.
+                   Depth 3 includes ## and ### headings.
+                   Depth 4 includes ##, ###, and #### headings.
+                   Default of 3 balances detail with readability for most documents.
 
         Returns:
             TocUpdateResult with updated content and metadata.
