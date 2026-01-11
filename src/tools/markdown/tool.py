@@ -17,6 +17,7 @@ from pydantic import Field
 from rich.text import Text
 
 from .numbering import SectionNumberer
+from .operations import SectionOperations
 from .parser import MarkdownParser, Section
 from .toc import TocManager
 
@@ -32,6 +33,7 @@ This tool provides commands for:
 - Renumbering sections sequentially
 - Parsing and analyzing document structure
 - Managing table of contents (generate, update, remove)
+- Section operations (move, insert, delete, promote, demote)
 
 The tool helps maintain consistent markdown document structure and numbering.
 """.strip()
@@ -40,12 +42,46 @@ The tool helps maintain consistent markdown document structure and numbering.
 class MarkdownAction(Action):
     """Action for the markdown document tool."""
 
-    command: Literal["validate", "renumber", "parse", "toc_update", "toc_remove"] = Field(
-        description="Command to execute: 'validate' checks structure, 'renumber' fixes numbering, 'parse' shows structure, 'toc_update' generates/updates TOC, 'toc_remove' removes TOC"
+    command: Literal[
+        "validate",
+        "renumber",
+        "parse",
+        "toc_update",
+        "toc_remove",
+        "move",
+        "insert",
+        "delete",
+        "promote",
+        "demote",
+    ] = Field(
+        description=(
+            "Command to execute: 'validate' checks structure, 'renumber' fixes numbering, "
+            "'parse' shows structure, 'toc_update' generates/updates TOC, 'toc_remove' removes TOC, "
+            "'move' moves a section, 'insert' inserts a new section, 'delete' removes a section, "
+            "'promote' increases heading level (### → ##), 'demote' decreases heading level (## → ###)"
+        )
     )
     file: str = Field(description="Path to the markdown file to process")
     depth: int = Field(
         default=3, description="Maximum heading depth for TOC (default 3, used with toc_update)"
+    )
+    # Section operation parameters
+    section: str | None = Field(
+        default=None,
+        description="Section to operate on (by number like '3.2' or title). Used with move, delete, promote, demote.",
+    )
+    position: Literal["before", "after"] | None = Field(
+        default=None, description="Position relative to target section. Used with move, insert."
+    )
+    target: str | None = Field(
+        default=None,
+        description="Target section (by number or title). Used with move, insert.",
+    )
+    heading: str | None = Field(
+        default=None, description="Title for new section. Used with insert."
+    )
+    level: int | None = Field(
+        default=None, description="Heading level (2 for ##, 3 for ###). Used with insert."
     )
 
     @property
@@ -67,6 +103,21 @@ class MarkdownAction(Action):
         elif self.command == "toc_remove":
             content.append("🗑️ ", style="red")
             content.append("Remove Table of Contents", style="red")
+        elif self.command == "move":
+            content.append("↔️ ", style="magenta")
+            content.append(f"Move Section '{self.section}'", style="magenta")
+        elif self.command == "insert":
+            content.append("➕ ", style="green")
+            content.append(f"Insert Section '{self.heading}'", style="green")
+        elif self.command == "delete":
+            content.append("🗑️ ", style="red")
+            content.append(f"Delete Section '{self.section}'", style="red")
+        elif self.command == "promote":
+            content.append("⬆️ ", style="blue")
+            content.append(f"Promote Section '{self.section}'", style="blue")
+        elif self.command == "demote":
+            content.append("⬇️ ", style="yellow")
+            content.append(f"Demote Section '{self.section}'", style="yellow")
 
         content.append(f" - {self.file}", style="white")
         return content
@@ -75,9 +126,18 @@ class MarkdownAction(Action):
 class MarkdownObservation(Observation):
     """Observation from the markdown document tool."""
 
-    command: Literal["validate", "renumber", "parse", "toc_update", "toc_remove"] = Field(
-        description="The command that was executed."
-    )
+    command: Literal[
+        "validate",
+        "renumber",
+        "parse",
+        "toc_update",
+        "toc_remove",
+        "move",
+        "insert",
+        "delete",
+        "promote",
+        "demote",
+    ] = Field(description="The command that was executed.")
     file: str = Field(description="Path to the markdown file that was processed.")
     result: str = Field(description="Result of the operation: 'success', 'error', or 'warning'.")
 
@@ -114,6 +174,23 @@ class MarkdownObservation(Observation):
     )
     toc_entries: int | None = Field(default=None, description="Number of entries in the TOC.")
     toc_depth: int | None = Field(default=None, description="Depth parameter used for TOC.")
+
+    # Section operation fields
+    section_moved: str | None = Field(default=None, description="Section that was moved.")
+    section_inserted: str | None = Field(default=None, description="Section that was inserted.")
+    section_deleted: str | None = Field(default=None, description="Section that was deleted.")
+    section_promoted: str | None = Field(default=None, description="Section that was promoted.")
+    section_demoted: str | None = Field(default=None, description="Section that was demoted.")
+    new_position: str | None = Field(default=None, description="New position of moved section.")
+    new_level: int | None = Field(
+        default=None, description="New heading level after promote/demote."
+    )
+    children_affected: int | None = Field(
+        default=None, description="Number of child sections affected."
+    )
+    reminder: str | None = Field(
+        default=None, description="Reminder to renumber after structural changes."
+    )
 
     @property
     def visualize(self) -> Text:
@@ -166,6 +243,35 @@ class MarkdownObservation(Observation):
             else:
                 text.append("No table of contents found", style="dim")
 
+        elif self.command == "move":
+            text.append(f"Moved '{self.section_moved}'", style="magenta")
+            if self.new_position:
+                text.append(f" {self.new_position}", style="dim")
+
+        elif self.command == "insert":
+            text.append(f"Inserted '{self.section_inserted}'", style="green")
+            if self.new_level:
+                text.append(f" (level {self.new_level})", style="dim")
+
+        elif self.command == "delete":
+            text.append(f"Deleted '{self.section_deleted}'", style="red")
+            if self.children_affected:
+                text.append(f" ({self.children_affected} children)", style="dim")
+
+        elif self.command == "promote":
+            text.append(f"Promoted '{self.section_promoted}'", style="blue")
+            if self.new_level:
+                text.append(f" → level {self.new_level}", style="dim")
+            if self.children_affected:
+                text.append(f" ({self.children_affected} children)", style="dim")
+
+        elif self.command == "demote":
+            text.append(f"Demoted '{self.section_demoted}'", style="yellow")
+            if self.new_level:
+                text.append(f" → level {self.new_level}", style="dim")
+            if self.children_affected:
+                text.append(f" ({self.children_affected} children)", style="dim")
+
         return text
 
 
@@ -181,6 +287,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self.workspace_dir = workspace_dir
         self.numberer = SectionNumberer()
         self.toc_manager = TocManager()
+        self.section_ops = SectionOperations()
 
     def __call__(self, action: MarkdownAction, conversation=None) -> MarkdownObservation:  # noqa: ARG002
         """Execute a markdown action.
@@ -247,6 +354,16 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 return self._toc_update(action, content, file_path)
             elif action.command == "toc_remove":
                 return self._toc_remove(action, content, file_path)
+            elif action.command == "move":
+                return self._move_section(action, content, file_path)
+            elif action.command == "insert":
+                return self._insert_section(action, content, file_path)
+            elif action.command == "delete":
+                return self._delete_section(action, content, file_path)
+            elif action.command == "promote":
+                return self._promote_section(action, content, file_path)
+            elif action.command == "demote":
+                return self._demote_section(action, content, file_path)
             else:
                 # For unknown commands, use "validate" as the command in observation
                 # but include the actual unknown command in the error message
@@ -441,6 +558,236 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             file=action.file,
             result="success",
             toc_action="removed",
+        )
+
+    def _move_section(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Move a section to a new position."""
+        # Validate required parameters
+        if not action.section:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'section'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+        if not action.position:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'position'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+        if not action.target:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'target'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        result = self.section_ops.move(content, action.section, action.position, action.target)
+
+        if not result.success:
+            return MarkdownObservation.from_text(
+                text=result.error or "Move operation failed",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        # Write back to file
+        file_path.write_text(result.content or "", encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            section_moved=result.section_moved,
+            new_position=result.new_position,
+            reminder=result.reminder,
+        )
+
+    def _insert_section(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Insert a new section."""
+        # Validate required parameters
+        if not action.heading:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'heading'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+        if action.level is None:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'level'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+        if not action.position:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'position'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+        if not action.target:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'target'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        result = self.section_ops.insert(
+            content, action.heading, action.level, action.position, action.target
+        )
+
+        if not result.success:
+            return MarkdownObservation.from_text(
+                text=result.error or "Insert operation failed",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        # Write back to file
+        file_path.write_text(result.content or "", encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            section_inserted=result.section_inserted,
+            new_level=result.level,
+            new_position=result.position,
+            reminder=result.reminder,
+        )
+
+    def _delete_section(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Delete a section."""
+        # Validate required parameters
+        if not action.section:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'section'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        result = self.section_ops.delete(content, action.section)
+
+        if not result.success:
+            return MarkdownObservation.from_text(
+                text=result.error or "Delete operation failed",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        # Write back to file
+        file_path.write_text(result.content or "", encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            section_deleted=result.section_deleted,
+            children_affected=result.children_deleted,
+            reminder=result.reminder,
+        )
+
+    def _promote_section(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Promote a section (### → ##)."""
+        # Validate required parameters
+        if not action.section:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'section'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        result = self.section_ops.promote(content, action.section)
+
+        if not result.success:
+            return MarkdownObservation.from_text(
+                text=result.error or "Promote operation failed",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        # Write back to file
+        file_path.write_text(result.content or "", encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            section_promoted=result.section_promoted,
+            new_level=result.new_level,
+            children_affected=result.children_promoted,
+            reminder=result.reminder,
+        )
+
+    def _demote_section(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Demote a section (## → ###)."""
+        # Validate required parameters
+        if not action.section:
+            return MarkdownObservation.from_text(
+                text="Missing required parameter: 'section'",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        result = self.section_ops.demote(content, action.section)
+
+        if not result.success:
+            return MarkdownObservation.from_text(
+                text=result.error or "Demote operation failed",
+                is_error=True,
+                command=action.command,
+                file=action.file,
+                result="error",
+            )
+
+        # Write back to file
+        file_path.write_text(result.content or "", encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            section_demoted=result.section_demoted,
+            new_level=result.new_level,
+            children_affected=result.children_demoted,
+            reminder=result.reminder,
         )
 
 

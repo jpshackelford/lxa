@@ -562,16 +562,16 @@ All tasks require:
 
 #### 4.4.1 Checklist
 
-- [ ] src/tools/markdown/operations.py - `SectionOperations` with move, insert,
+- [x] src/tools/markdown/operations.py - `SectionOperations` with move, insert,
       delete, promote, demote
-- [ ] tests/tools/markdown/test_operations.py - Tests for each operation,
+- [x] tests/tools/markdown/test_operations.py - Tests for each operation,
       children handling, observation reminders
-- [ ] src/tools/markdown/tool.py - move command
-- [ ] src/tools/markdown/tool.py - insert command
-- [ ] src/tools/markdown/tool.py - delete command
-- [ ] src/tools/markdown/tool.py - promote command
-- [ ] src/tools/markdown/tool.py - demote command
-- [ ] tests/tools/markdown/test_tool.py - Tests for section operation commands
+- [x] src/tools/markdown/tool.py - move command
+- [x] src/tools/markdown/tool.py - insert command
+- [x] src/tools/markdown/tool.py - delete command
+- [x] src/tools/markdown/tool.py - promote command
+- [x] src/tools/markdown/tool.py - demote command
+- [x] tests/tools/markdown/test_tool.py - Tests for section operation commands
 
 ### 4.5 Formatting (M5)
 

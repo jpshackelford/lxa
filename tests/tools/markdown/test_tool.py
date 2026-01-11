@@ -652,3 +652,411 @@ class TestMarkdownObservation:
         )
         text = obs.visualize
         assert "No table of contents found" in str(text)
+
+
+class TestSectionOperationCommands:
+    """Test the section operation commands in the tool."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.executor = MarkdownExecutor(self.temp_dir)
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_test_file(self, content: str, filename: str = "test.md") -> Path:
+        """Helper to create test files."""
+        test_file = self.temp_dir / filename
+        test_file.write_text(content)
+        return test_file
+
+    def test_move_section(self):
+        """Test moving a section to a new position."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+## 2. Methods
+
+This is the methods section.
+
+## 3. Conclusion
+
+Final thoughts.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(
+            command="move", file="test.md", section="3", position="before", target="1"
+        )
+        observation = self.executor.execute(action)
+
+        assert observation.command == "move"
+        assert observation.result == "success"
+        assert observation.section_moved == "3 Conclusion"
+        assert observation.new_position is not None
+        assert "renumber" in observation.reminder.lower()
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        # Conclusion should come before Introduction
+        concl_idx = updated_content.find("## 3. Conclusion")
+        intro_idx = updated_content.find("## 1. Introduction")
+        assert concl_idx < intro_idx
+
+    def test_move_missing_section_param(self):
+        """Test move fails without section parameter."""
+        content = "# Test\n\n## 1. Intro\n\n## 2. Body"
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="move", file="test.md", position="after", target="1")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "error"
+        assert "section" in str(observation.content).lower()
+
+    def test_insert_section(self):
+        """Test inserting a new section."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+## 2. Methods
+
+This is the methods section.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(
+            command="insert",
+            file="test.md",
+            heading="New Section",
+            level=2,
+            position="after",
+            target="1",
+        )
+        observation = self.executor.execute(action)
+
+        assert observation.command == "insert"
+        assert observation.result == "success"
+        assert observation.section_inserted == "New Section"
+        assert observation.new_level == 2
+        assert "renumber" in observation.reminder.lower()
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "## New Section" in updated_content
+
+    def test_insert_missing_params(self):
+        """Test insert fails without required parameters."""
+        content = "# Test\n\n## 1. Intro"
+        self._create_test_file(content)
+
+        # Missing heading
+        action = MarkdownAction(
+            command="insert", file="test.md", level=2, position="after", target="1"
+        )
+        observation = self.executor.execute(action)
+        assert observation.result == "error"
+        assert "heading" in str(observation.content).lower()
+
+        # Missing level
+        action = MarkdownAction(
+            command="insert", file="test.md", heading="New", position="after", target="1"
+        )
+        observation = self.executor.execute(action)
+        assert observation.result == "error"
+        assert "level" in str(observation.content).lower()
+
+    def test_delete_section(self):
+        """Test deleting a section."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+## 2. Methods
+
+This is the methods section.
+
+## 3. Conclusion
+
+Final thoughts.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="delete", file="test.md", section="2")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "delete"
+        assert observation.result == "success"
+        assert observation.section_deleted == "2 Methods"
+        assert "renumber" in observation.reminder.lower()
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "## 2. Methods" not in updated_content
+        assert "## 1. Introduction" in updated_content
+        assert "## 3. Conclusion" in updated_content
+
+    def test_delete_section_with_children(self):
+        """Test deleting a section with children."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+### 1.1 Background
+
+Background info.
+
+### 1.2 Purpose
+
+Purpose info.
+
+## 2. Methods
+
+This is the methods section.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="delete", file="test.md", section="1")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "delete"
+        assert observation.result == "success"
+        assert observation.children_affected == 2
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "Introduction" not in updated_content
+        assert "Background" not in updated_content
+        assert "Purpose" not in updated_content
+        assert "## 2. Methods" in updated_content
+
+    def test_delete_missing_section_param(self):
+        """Test delete fails without section parameter."""
+        content = "# Test\n\n## 1. Intro"
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="delete", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "error"
+        assert "section" in str(observation.content).lower()
+
+    def test_promote_section(self):
+        """Test promoting a section (### → ##)."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+### 1.1 Background
+
+Background info.
+
+## 2. Methods
+
+This is the methods section.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="promote", file="test.md", section="1.1")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "promote"
+        assert observation.result == "success"
+        assert observation.section_promoted == "1.1 Background"
+        assert observation.new_level == 2
+        assert "renumber" in observation.reminder.lower()
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "## 1.1 Background" in updated_content
+
+    def test_promote_level_2_fails(self):
+        """Test promoting level 2 section fails."""
+        content = "# Test\n\n## 1. Intro\n\nText."
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="promote", file="test.md", section="1")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "error"
+        assert "cannot promote" in str(observation.content).lower()
+
+    def test_demote_section(self):
+        """Test demoting a section (## → ###)."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+## 2. Methods
+
+This is the methods section.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="demote", file="test.md", section="2")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "demote"
+        assert observation.result == "success"
+        assert observation.section_demoted == "2 Methods"
+        assert observation.new_level == 3
+        assert "renumber" in observation.reminder.lower()
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "### 2. Methods" in updated_content
+
+    def test_demote_with_children(self):
+        """Test demoting a section with children."""
+        content = """# Document Title
+
+## 1. Introduction
+
+This is the introduction.
+
+### 1.1 Background
+
+Background info.
+
+## 2. Methods
+
+This is the methods section.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="demote", file="test.md", section="1")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "demote"
+        assert observation.result == "success"
+        assert observation.children_affected == 1
+
+        # Verify file was updated
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "### 1. Introduction" in updated_content
+        assert "#### 1.1 Background" in updated_content
+
+    def test_section_not_found(self):
+        """Test operations fail gracefully when section not found."""
+        content = "# Test\n\n## 1. Intro"
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="delete", file="test.md", section="99")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "error"
+        assert "not found" in str(observation.content).lower()
+
+    def test_action_visualization_section_ops(self):
+        """Test action visualization for section operations."""
+        action = MarkdownAction(
+            command="move", file="test.md", section="2", position="after", target="3"
+        )
+        text = action.visualize
+        assert "Move Section" in str(text)
+        assert "2" in str(text)
+
+        action = MarkdownAction(
+            command="insert",
+            file="test.md",
+            heading="New",
+            level=2,
+            position="after",
+            target="1",
+        )
+        text = action.visualize
+        assert "Insert Section" in str(text)
+        assert "New" in str(text)
+
+        action = MarkdownAction(command="delete", file="test.md", section="3")
+        text = action.visualize
+        assert "Delete Section" in str(text)
+        assert "3" in str(text)
+
+        action = MarkdownAction(command="promote", file="test.md", section="1.1")
+        text = action.visualize
+        assert "Promote Section" in str(text)
+        assert "1.1" in str(text)
+
+        action = MarkdownAction(command="demote", file="test.md", section="1")
+        text = action.visualize
+        assert "Demote Section" in str(text)
+        assert "1" in str(text)
+
+    def test_observation_visualization_section_ops(self):
+        """Test observation visualization for section operations."""
+        obs = MarkdownObservation(
+            command="move",
+            file="test.md",
+            result="success",
+            section_moved="2 Methods",
+            new_position='after "1 Introduction"',
+        )
+        text = obs.visualize
+        assert "Moved" in str(text)
+        assert "2 Methods" in str(text)
+
+        obs = MarkdownObservation(
+            command="insert",
+            file="test.md",
+            result="success",
+            section_inserted="New Section",
+            new_level=2,
+        )
+        text = obs.visualize
+        assert "Inserted" in str(text)
+        assert "New Section" in str(text)
+
+        obs = MarkdownObservation(
+            command="delete",
+            file="test.md",
+            result="success",
+            section_deleted="3 Conclusion",
+            children_affected=2,
+        )
+        text = obs.visualize
+        assert "Deleted" in str(text)
+        assert "2 children" in str(text)
+
+        obs = MarkdownObservation(
+            command="promote",
+            file="test.md",
+            result="success",
+            section_promoted="1.1 Background",
+            new_level=2,
+            children_affected=1,
+        )
+        text = obs.visualize
+        assert "Promoted" in str(text)
+        assert "1.1 Background" in str(text)
+        assert "level 2" in str(text)
+
+        obs = MarkdownObservation(
+            command="demote",
+            file="test.md",
+            result="success",
+            section_demoted="2 Methods",
+            new_level=3,
+        )
+        text = obs.visualize
+        assert "Demoted" in str(text)
+        assert "2 Methods" in str(text)
+        assert "level 3" in str(text)
