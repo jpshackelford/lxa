@@ -41,7 +41,25 @@ class TocValidationResult:
 class TocManager:
     """Manages table of contents generation, updating, and removal."""
 
-    def update(self, content: str, depth: int = 3) -> TocUpdateResult:
+    def _get_parser(self, content: str, parser: MarkdownParser | None = None) -> MarkdownParser:
+        """Get or create a parser for the content.
+
+        Args:
+            content: The markdown content to parse
+            parser: Optional pre-parsed MarkdownParser instance
+
+        Returns:
+            A MarkdownParser with parsed content
+        """
+        if parser is not None:
+            return parser
+        new_parser = MarkdownParser()
+        new_parser.parse_content(content)
+        return new_parser
+
+    def update(
+        self, content: str, depth: int = 3, *, parser: MarkdownParser | None = None
+    ) -> TocUpdateResult:
         """Generate or update the table of contents.
 
         Args:
@@ -51,13 +69,13 @@ class TocManager:
                    Depth 3 includes ## and ### headings.
                    Depth 4 includes ##, ###, and #### headings.
                    Default of 3 balances detail with readability for most documents.
+            parser: Optional pre-parsed MarkdownParser instance to avoid re-parsing
 
         Returns:
             TocUpdateResult with updated content and metadata.
         """
-        parser = MarkdownParser()
+        parser = self._get_parser(content, parser)
         lines = content.split("\n")
-        parser.parse_content(content)
         sections = parser.sections
 
         # Find existing TOC section
@@ -97,18 +115,18 @@ class TocManager:
             depth=depth,
         )
 
-    def remove(self, content: str) -> TocRemoveResult:
+    def remove(self, content: str, *, parser: MarkdownParser | None = None) -> TocRemoveResult:
         """Remove the table of contents section.
 
         Args:
             content: The markdown content
+            parser: Optional pre-parsed MarkdownParser instance to avoid re-parsing
 
         Returns:
             TocRemoveResult with updated content and status.
         """
-        parser = MarkdownParser()
+        parser = self._get_parser(content, parser)
         lines = content.split("\n")
-        parser.parse_content(content)
 
         # Find TOC section
         toc_section = parser.get_toc_section()
@@ -203,17 +221,19 @@ class TocManager:
         # If no title found, insert at beginning
         return 0
 
-    def validate_toc(self, content: str) -> TocValidationResult:
+    def validate_toc(
+        self, content: str, *, parser: MarkdownParser | None = None
+    ) -> TocValidationResult:
         """Validate that TOC matches current document structure.
 
         Args:
             content: The markdown content
+            parser: Optional pre-parsed MarkdownParser instance to avoid re-parsing
 
         Returns:
             TocValidationResult with validation status and any discrepancies.
         """
-        parser = MarkdownParser()
-        parser.parse_content(content)
+        parser = self._get_parser(content, parser)
         sections = parser.sections
         toc_section = parser.get_toc_section()
 
