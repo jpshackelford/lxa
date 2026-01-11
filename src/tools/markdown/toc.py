@@ -74,7 +74,7 @@ class TocManager:
             insert_pos = self._find_toc_insert_position(lines)
             new_lines = (
                 lines[:insert_pos]
-                + ["## Table Of Contents", ""]
+                + ["## Table of Contents", ""]
                 + toc_lines
                 + [""]
                 + lines[insert_pos:]

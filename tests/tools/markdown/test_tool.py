@@ -364,7 +364,7 @@ Description of approach.
 
         # Verify file was updated
         updated_content = test_file.read_text()
-        assert "## Table Of Contents" in updated_content
+        assert "## Table of Contents" in updated_content
         assert "- 1. Introduction" in updated_content
         assert "- 2. Methods" in updated_content
         assert "- 2.1 Approach" in updated_content

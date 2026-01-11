@@ -38,7 +38,7 @@ Final section.
         assert result.action in ["created", "updated"]
         assert result.action == "created"
         assert result.entries > 0
-        assert "## Table Of Contents" in result.content
+        assert "## Table of Contents" in result.content
         assert "- 1. Introduction" in result.content
         assert "- 2. Technical Design" in result.content
         assert "  - 2.1 Overview" in result.content
@@ -121,7 +121,7 @@ More content.
 
         assert result.found is not None
         assert result.found is True
-        assert "## Table Of Contents" not in result.content
+        assert "## Table of Contents" not in result.content
         assert "- 1. Introduction" not in result.content
         assert "## 1. Introduction" in result.content
         assert "## 2. Technical Design" in result.content
@@ -238,7 +238,7 @@ Content.
         assert result.action in ["created", "updated"]
         assert result.action == "created"
         assert result.entries == 0
-        assert "## Table Of Contents" in result.content
+        assert "## Table of Contents" in result.content
 
     def test_update_document_with_only_title(self):
         """Test updating TOC in document with only h1 title."""
@@ -252,12 +252,12 @@ Some introductory text.
         assert result.action in ["created", "updated"]
         assert result.action == "created"
         assert result.entries == 0
-        assert "## Table Of Contents" in result.content
+        assert "## Table of Contents" in result.content
         # TOC should be inserted after title
         lines = result.content.split("\n")
         title_index = next(i for i, line in enumerate(lines) if line.startswith("# My Document"))
         toc_index = next(
-            i for i, line in enumerate(lines) if line.startswith("## Table Of Contents")
+            i for i, line in enumerate(lines) if line.startswith("## Table of Contents")
         )
         assert toc_index > title_index
 
@@ -278,7 +278,7 @@ More content.
         assert result.action == "created"
         assert result.entries == 2
         # TOC should be inserted at beginning
-        assert result.content.startswith("## Table Of Contents")
+        assert result.content.startswith("## Table of Contents")
 
     def test_update_unnumbered_sections(self):
         """Test updating TOC with unnumbered sections."""
@@ -495,7 +495,7 @@ Content here.
 
         assert result.found is not None
         assert result.found is True
-        assert "## Table Of Contents" not in result.content
+        assert "## Table of Contents" not in result.content
         # Should clean up extra blank lines
         lines = result.content.split("\n")
         # Should not have more than one consecutive blank line
@@ -525,7 +525,7 @@ Content here.
 
         assert result.found is not None
         assert result.found is True
-        assert "## Table Of Contents" not in result.content
+        assert "## Table of Contents" not in result.content
         assert result.content.startswith("## 1. Introduction")
 
     def test_remove_toc_at_document_end(self):
@@ -545,7 +545,7 @@ Content here.
 
         assert result.found is not None
         assert result.found is True
-        assert "## Table Of Contents" not in result.content
+        assert "## Table of Contents" not in result.content
         assert result.content.endswith("Content here.")
 
     def test_validate_toc_case_insensitive(self):
@@ -621,7 +621,7 @@ More content.
         # Step 1: Create TOC
         result1 = self.toc_manager.update(content, depth=3)
         assert result1.action == "created"
-        assert "## Table Of Contents" in result1.content
+        assert "## Table of Contents" in result1.content
         content = result1.content
 
         # Step 2: Validate TOC
@@ -657,7 +657,7 @@ Implementation details.""",
         # Step 7: Remove TOC
         result3 = self.toc_manager.remove(content)
         assert result3.found is True
-        assert "## Table Of Contents" not in result3.content
+        assert "## Table of Contents" not in result3.content
 
         # Step 8: Validate should show no TOC
         validation = self.toc_manager.validate_toc(result3.content)
