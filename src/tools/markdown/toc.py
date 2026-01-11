@@ -214,13 +214,35 @@ class TocManager:
         # If no title found, insert at beginning
         return 0
 
+    def _detect_toc_depth(self, toc_lines: list[str]) -> int:
+        """Detect the maximum depth used in existing TOC entries.
+
+        Args:
+            toc_lines: List of TOC entry lines
+
+        Returns:
+            Detected depth (2-6), defaults to 3 if unable to determine
+        """
+        max_indent = 0
+        for line in toc_lines:
+            # Count leading spaces (2 spaces per indent level)
+            stripped = line.lstrip()
+            if stripped.startswith("- "):
+                indent = len(line) - len(stripped)
+                indent_level = indent // 2
+                max_indent = max(max_indent, indent_level)
+        # Depth = 2 (base) + number of indent levels found
+        return min(2 + max_indent, 6) if toc_lines else 3
+
     def validate_toc(
-        self, content: str, *, parser: MarkdownParser | None = None
+        self, content: str, depth: int | None = None, *, parser: MarkdownParser | None = None
     ) -> TocValidationResult:
         """Validate that TOC matches current document structure.
 
         Args:
             content: The markdown content
+            depth: Maximum heading depth to validate against. If None, auto-detects
+                   from existing TOC indentation.
             parser: Optional pre-parsed MarkdownParser instance to avoid re-parsing
 
         Returns:
@@ -243,8 +265,11 @@ class TocManager:
             if line.strip().startswith("- "):
                 toc_lines.append(line)
 
+        # Auto-detect depth if not specified
+        effective_depth = depth if depth is not None else self._detect_toc_depth(toc_lines)
+
         # Generate expected TOC
-        expected_toc = self._generate_toc_lines(sections, 3)
+        expected_toc = self._generate_toc_lines(sections, effective_depth)
 
         # Compare
         missing_entries = []
