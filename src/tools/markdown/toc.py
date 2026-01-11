@@ -150,6 +150,28 @@ class TocManager:
 
         return TocRemoveResult(content=updated_content, success=True, found=True)
 
+    def _is_toc_section(self, section: Section) -> bool:
+        """Check if a section is a Table of Contents section."""
+        return section.level == 2 and section.number is None and section.title.lower() in TOC_TITLES
+
+    def _should_include_in_toc(self, section: Section, max_depth: int) -> bool:
+        """Determine if a section should be included in the TOC."""
+        if section.level < 2 or section.level > max_depth:
+            return False
+        if self._is_toc_section(section):
+            return False
+        # Unnumbered subsections (level 3+) are excluded
+        return not (section.number is None and section.level > 2)
+
+    def _format_toc_entry(self, section: Section) -> str:
+        """Format a section as a TOC entry line."""
+        indent = "  " * (section.level - 2)
+        if section.number:
+            # Level 2 sections get a trailing dot on the number
+            dot = "." if section.level == 2 else ""
+            return f"{indent}- {section.number}{dot} {section.title}"
+        return f"{indent}- {section.title}"
+
     def _generate_toc_lines(self, sections: list[Section], max_depth: int) -> list[str]:
         """Generate table of contents lines.
 
@@ -160,45 +182,16 @@ class TocManager:
         Returns:
             List of TOC lines
         """
-        toc_lines = []
+        entries: list[str] = []
 
-        def add_section_to_toc(section: Section):
-            # Skip TOC section itself and document title (level 1)
-            if (
-                section.level == 2
-                and section.number is None
-                and section.title.lower() in TOC_TITLES
-            ):
-                return
+        def walk(section_list: list[Section]) -> None:
+            for section in section_list:
+                if self._should_include_in_toc(section, max_depth):
+                    entries.append(self._format_toc_entry(section))
+                walk(section.children)
 
-            if section.level <= max_depth and section.level >= 2:
-                # Calculate indentation (level 2 = no indent, level 3 = 2 spaces, etc.)
-                indent = "  " * (section.level - 2)
-
-                # Format the TOC entry
-                if section.number:
-                    # Main sections (level 2) get a dot, subsections don't
-                    if section.level == 2:
-                        entry = f"{indent}- {section.number}. {section.title}"
-                    else:
-                        entry = f"{indent}- {section.number} {section.title}"
-                else:
-                    # Skip unnumbered sections except for special cases
-                    if section.level == 2:
-                        entry = f"{indent}- {section.title}"
-                    else:
-                        return
-
-                toc_lines.append(entry)
-
-            # Recursively add children
-            for child in section.children:
-                add_section_to_toc(child)
-
-        for section in sections:
-            add_section_to_toc(section)
-
-        return toc_lines
+        walk(sections)
+        return entries
 
     def _find_toc_insert_position(self, lines: list[str]) -> int:
         """Find the position to insert a new TOC.
