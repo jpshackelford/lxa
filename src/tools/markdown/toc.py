@@ -111,7 +111,7 @@ class TocManager:
         """
         toc_lines = []
 
-        def add_section_to_toc(section: Section, current_depth: int = 2):
+        def add_section_to_toc(section: Section):
             # Skip TOC section itself and document title (level 1)
             if (
                 section.level == 2
@@ -142,7 +142,7 @@ class TocManager:
 
             # Recursively add children
             for child in section.children:
-                add_section_to_toc(child, current_depth + 1)
+                add_section_to_toc(child)
 
         for section in sections:
             add_section_to_toc(section)
