@@ -6,9 +6,6 @@ from .parser import MarkdownParser, Section
 class TocManager:
     """Manages table of contents generation, updating, and removal."""
 
-    def __init__(self):
-        self.parser = MarkdownParser()
-
     def update(self, content: str, depth: int = 3) -> tuple[str, dict]:
         """Generate or update the table of contents.
 
@@ -19,12 +16,13 @@ class TocManager:
         Returns:
             Tuple of (updated_content, observation_data)
         """
+        parser = MarkdownParser()
         lines = content.split("\n")
-        self.parser.parse_content(content)
-        sections = self.parser.sections
+        parser.parse_content(content)
+        sections = parser.sections
 
         # Find existing TOC section
-        toc_section = self.parser.get_toc_section()
+        toc_section = parser.get_toc_section()
 
         # Generate TOC content
         toc_lines = self._generate_toc_lines(sections, depth)
@@ -71,11 +69,12 @@ class TocManager:
         Returns:
             Tuple of (updated_content, observation_data)
         """
+        parser = MarkdownParser()
         lines = content.split("\n")
-        self.parser.parse_content(content)
+        parser.parse_content(content)
 
         # Find TOC section
-        toc_section = self.parser.get_toc_section()
+        toc_section = parser.get_toc_section()
 
         if not toc_section:
             observation = {"command": "toc remove", "result": "no_toc_found"}
@@ -179,9 +178,10 @@ class TocManager:
         Returns:
             Validation results
         """
-        self.parser.parse_content(content)
-        sections = self.parser.sections
-        toc_section = self.parser.get_toc_section()
+        parser = MarkdownParser()
+        parser.parse_content(content)
+        sections = parser.sections
+        toc_section = parser.get_toc_section()
 
         if not toc_section:
             return {"valid": True, "has_toc": False, "issues": []}
