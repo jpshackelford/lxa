@@ -5,6 +5,9 @@ from typing import Literal
 
 from .parser import MarkdownParser, Section
 
+# Canonical set of TOC section title patterns (case-insensitive matching)
+TOC_TITLES = frozenset(["table of contents", "contents"])
+
 
 @dataclass
 class TocUpdateResult:
@@ -146,7 +149,7 @@ class TocManager:
             if (
                 section.level == 2
                 and section.number is None
-                and section.title.lower() in ["table of contents", "contents"]
+                and section.title.lower() in TOC_TITLES
             ):
                 return
 
