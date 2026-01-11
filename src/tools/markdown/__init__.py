@@ -3,7 +3,6 @@
 from .numbering import NumberingIssue, SectionNumberer, ValidationResult
 from .parser import MarkdownParser, ParseResult, Section
 from .toc import (
-    TOC_TITLES,
     TocAction,
     TocManager,
     TocRemoveResult,
@@ -27,5 +26,4 @@ __all__ = [
     "TocUpdateResult",
     "TocRemoveResult",
     "TocValidationResult",
-    "TOC_TITLES",
 ]

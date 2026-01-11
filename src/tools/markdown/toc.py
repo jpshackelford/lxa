@@ -1,12 +1,13 @@
 """Table of Contents management for markdown documents."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 
 from .parser import MarkdownParser, Section
 
 # Canonical set of TOC section title patterns (case-insensitive matching)
-TOC_TITLES = frozenset(["table of contents", "contents"])
+_TOC_TITLES = frozenset(["table of contents", "contents"])
 
 
 class TocAction(Enum):
@@ -31,7 +32,6 @@ class TocRemoveResult:
     """Result of a TOC remove operation."""
 
     content: str
-    success: bool
     found: bool
 
 
@@ -139,7 +139,7 @@ class TocManager:
         toc_section = parser.get_toc_section()
 
         if not toc_section:
-            return TocRemoveResult(content=content, success=True, found=False)
+            return TocRemoveResult(content=content, found=False)
 
         # Remove TOC section and surrounding blank lines
         start_line = toc_section.start_line
@@ -155,11 +155,13 @@ class TocManager:
         new_lines = lines[:start_line] + lines[end_line:]
         updated_content = "\n".join(new_lines)
 
-        return TocRemoveResult(content=updated_content, success=True, found=True)
+        return TocRemoveResult(content=updated_content, found=True)
 
     def _is_toc_section(self, section: Section) -> bool:
         """Check if a section is a Table of Contents section."""
-        return section.level == 2 and section.number is None and section.title.lower() in TOC_TITLES
+        return (
+            section.level == 2 and section.number is None and section.title.lower() in _TOC_TITLES
+        )
 
     def _should_include_in_toc(self, section: Section, max_depth: int) -> bool:
         """Determine if a section should be included in the TOC."""
@@ -189,16 +191,14 @@ class TocManager:
         Returns:
             List of TOC lines
         """
-        entries: list[str] = []
 
-        def walk(section_list: list[Section]) -> None:
+        def walk(section_list: list[Section]) -> Iterator[str]:
             for section in section_list:
                 if self._should_include_in_toc(section, max_depth):
-                    entries.append(self._format_toc_entry(section))
-                walk(section.children)
+                    yield self._format_toc_entry(section)
+                yield from walk(section.children)
 
-        walk(sections)
-        return entries
+        return list(walk(sections))
 
     def _find_toc_insert_position(self, lines: list[str]) -> int:
         """Find the position to insert a new TOC.

@@ -65,7 +65,7 @@ class MarkdownAction(Action):
             content.append("📑 ", style="cyan")
             content.append("Update Table of Contents", style="cyan")
         elif self.command == "toc_remove":
-            content.append("🗑️  ", style="red")
+            content.append("🗑️ ", style="red")
             content.append("Remove Table of Contents", style="red")
 
         content.append(f" - {self.file}", style="white")
