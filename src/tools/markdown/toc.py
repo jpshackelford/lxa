@@ -257,7 +257,7 @@ class TocManager:
                 valid=True, has_toc=False, missing_entries=[], stale_entries=[]
             )
 
-        # Extract current TOC entries
+        # Extract current TOC entries (normalize whitespace for comparison)
         lines = content.split("\n")
         toc_lines = []
         for i in range(toc_section.start_line + 1, toc_section.end_line):
@@ -271,19 +271,19 @@ class TocManager:
         # Generate expected TOC
         expected_toc = self._generate_toc_lines(sections, effective_depth)
 
-        # Compare
-        missing_entries = []
-        stale_entries = []
+        # Normalize entries for comparison (strip and remove leading "- ")
+        def normalize_entry(entry: str) -> str:
+            stripped = entry.strip()
+            return stripped[2:] if stripped.startswith("- ") else stripped
 
-        for expected in expected_toc:
-            if expected not in toc_lines:
-                missing_entries.append(expected.replace("- ", ""))
+        actual_set = {normalize_entry(line) for line in toc_lines}
+        expected_set = {normalize_entry(line) for line in expected_toc}
 
-        for actual in toc_lines:
-            if actual not in expected_toc:
-                stale_entries.append(actual.replace("- ", ""))
+        # Use set operations for O(n) comparison instead of O(n²)
+        missing_entries = sorted(expected_set - actual_set)
+        stale_entries = sorted(actual_set - expected_set)
 
-        is_valid = len(missing_entries) == 0 and len(stale_entries) == 0
+        is_valid = not missing_entries and not stale_entries
 
         return TocValidationResult(
             valid=is_valid,
