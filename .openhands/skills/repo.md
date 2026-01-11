@@ -94,3 +94,6 @@ LXA (Language eXtension Agent) is a system for building AI agents with specializ
 - Edge case coverage (empty documents, mixed numbering, etc.)
 - Real-world testing with actual design documents
 - No mocking - tests real code paths
+
+## Development Journals
+Development journals documenting implementation decisions, lessons learned, and gotchas are stored in `.openhands/journal/`. Files are named by PR number (e.g., `pr-005.md`). These provide historical context for why certain decisions were made.
