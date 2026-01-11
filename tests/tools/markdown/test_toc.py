@@ -33,17 +33,17 @@ More details here.
 Final section.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        assert observation["entries"] > 0
-        assert "## Table Of Contents" in updated_content
-        assert "- 1. Introduction" in updated_content
-        assert "- 2. Technical Design" in updated_content
-        assert "  - 2.1 Overview" in updated_content
-        assert "  - 2.2 Details" in updated_content
-        assert "- 3. Implementation" in updated_content
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        assert result.entries > 0
+        assert "## Table Of Contents" in result.content
+        assert "- 1. Introduction" in result.content
+        assert "- 2. Technical Design" in result.content
+        assert "  - 2.1 Overview" in result.content
+        assert "  - 2.2 Details" in result.content
+        assert "- 3. Implementation" in result.content
 
     def test_update_modifies_existing_toc(self):
         """Test that update modifies an existing TOC."""
@@ -62,13 +62,13 @@ New content.
 More content.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "updated"
-        assert "- Old entry" not in updated_content
-        assert "- 1. Introduction" in updated_content
-        assert "- 2. New Section" in updated_content
+        assert result.action in ["created", "updated"]
+        assert result.action == "updated"
+        assert "- Old entry" not in result.content
+        assert "- 1. Introduction" in result.content
+        assert "- 2. New Section" in result.content
 
     def test_update_respects_depth_parameter(self):
         """Test that update respects the depth parameter."""
@@ -86,17 +86,17 @@ Content here.
 """
 
         # Test depth=2 (only ## headings)
-        updated_content, observation = self.toc_manager.update(content, depth=2)
-        assert "- 1. Section" in updated_content
-        assert "- 1.1 Subsection" not in updated_content
+        result = self.toc_manager.update(content, depth=2)
+        assert "- 1. Section" in result.content
+        assert "- 1.1 Subsection" not in result.content
 
         # Test depth=4 (## through #### headings)
-        updated_content, observation = self.toc_manager.update(content, depth=4)
-        assert "- 1. Section" in updated_content
-        assert "  - 1.1 Subsection" in updated_content
-        assert "    - 1.1.1 Sub-subsection" in updated_content
+        result = self.toc_manager.update(content, depth=4)
+        assert "- 1. Section" in result.content
+        assert "  - 1.1 Subsection" in result.content
+        assert "    - 1.1.1 Sub-subsection" in result.content
         # The deep section should not be in the TOC, but should still be in the document
-        toc_section = updated_content.split("## 1. Section")[0]
+        toc_section = result.content.split("## 1. Section")[0]
         assert "1.1.1.1 Deep section" not in toc_section
 
     def test_remove_existing_toc(self):
@@ -117,14 +117,14 @@ Content here.
 More content.
 """
 
-        updated_content, observation = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        assert observation["command"] == "toc remove"
-        assert observation["result"] == "success"
-        assert "## Table Of Contents" not in updated_content
-        assert "- 1. Introduction" not in updated_content
-        assert "## 1. Introduction" in updated_content
-        assert "## 2. Technical Design" in updated_content
+        assert result.found is not None
+        assert result.found is True
+        assert "## Table Of Contents" not in result.content
+        assert "- 1. Introduction" not in result.content
+        assert "## 1. Introduction" in result.content
+        assert "## 2. Technical Design" in result.content
 
     def test_remove_no_toc_found(self):
         """Test removing TOC when none exists."""
@@ -135,11 +135,11 @@ More content.
 Content here.
 """
 
-        updated_content, observation = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        assert observation["command"] == "toc remove"
-        assert observation["result"] == "no_toc_found"
-        assert updated_content == content
+        assert result.found is not None
+        assert result.found is False
+        assert result.content == content
 
     def test_validate_toc_valid(self):
         """Test validating a correct TOC."""
@@ -164,10 +164,10 @@ More content.
 
         result = self.toc_manager.validate_toc(content)
 
-        assert result["valid"] is True
-        assert result["has_toc"] is True
-        assert len(result["missing_entries"]) == 0
-        assert len(result["stale_entries"]) == 0
+        assert result.valid is True
+        assert result.has_toc is True
+        assert len(result.missing_entries) == 0
+        assert len(result.stale_entries) == 0
 
     def test_validate_toc_missing_entries(self):
         """Test validating TOC with missing entries."""
@@ -188,9 +188,9 @@ Missing from TOC.
 
         result = self.toc_manager.validate_toc(content)
 
-        assert result["valid"] is False
-        assert result["has_toc"] is True
-        assert "2. Technical Design" in result["missing_entries"]
+        assert result.valid is False
+        assert result.has_toc is True
+        assert "2. Technical Design" in result.missing_entries
 
     def test_validate_toc_stale_entries(self):
         """Test validating TOC with stale entries."""
@@ -208,9 +208,9 @@ Content.
 
         result = self.toc_manager.validate_toc(content)
 
-        assert result["valid"] is False
-        assert result["has_toc"] is True
-        assert "2. Old Section" in result["stale_entries"]
+        assert result.valid is False
+        assert result.has_toc is True
+        assert "2. Old Section" in result.stale_entries
 
     def test_validate_no_toc(self):
         """Test validating document with no TOC."""
@@ -223,9 +223,9 @@ Content.
 
         result = self.toc_manager.validate_toc(content)
 
-        assert result["valid"] is True
-        assert result["has_toc"] is False
-        assert len(result["issues"]) == 0
+        assert result.valid is True
+        assert result.has_toc is False
+        assert len(result.missing_entries + result.stale_entries) == 0
 
     # Additional comprehensive test cases
 
@@ -233,12 +233,12 @@ Content.
         """Test updating TOC in an empty document."""
         content = ""
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        assert observation["entries"] == 0
-        assert "## Table Of Contents" in updated_content
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        assert result.entries == 0
+        assert "## Table Of Contents" in result.content
 
     def test_update_document_with_only_title(self):
         """Test updating TOC in document with only h1 title."""
@@ -247,14 +247,14 @@ Content.
 Some introductory text.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        assert observation["entries"] == 0
-        assert "## Table Of Contents" in updated_content
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        assert result.entries == 0
+        assert "## Table Of Contents" in result.content
         # TOC should be inserted after title
-        lines = updated_content.split("\n")
+        lines = result.content.split("\n")
         title_index = next(i for i, line in enumerate(lines) if line.startswith("# My Document"))
         toc_index = next(
             i for i, line in enumerate(lines) if line.startswith("## Table Of Contents")
@@ -272,13 +272,13 @@ Content here.
 More content.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        assert observation["entries"] == 2
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        assert result.entries == 2
         # TOC should be inserted at beginning
-        assert updated_content.startswith("## Table Of Contents")
+        assert result.content.startswith("## Table Of Contents")
 
     def test_update_unnumbered_sections(self):
         """Test updating TOC with unnumbered sections."""
@@ -299,15 +299,15 @@ More content.
 Final thoughts.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        assert "- Introduction" in updated_content
-        assert "- Technical Design" in updated_content
-        assert "- Conclusion" in updated_content
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        assert "- Introduction" in result.content
+        assert "- Technical Design" in result.content
+        assert "- Conclusion" in result.content
         # Unnumbered subsections should be skipped
-        assert "Overview" not in updated_content.split("## Introduction")[0]
+        assert "Overview" not in result.content.split("## Introduction")[0]
 
     def test_update_mixed_numbered_unnumbered(self):
         """Test updating TOC with mix of numbered and unnumbered sections."""
@@ -336,11 +336,11 @@ Unnumbered subsection.
 Final section.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        toc_section = updated_content.split("## 1. Introduction")[0]
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        toc_section = result.content.split("## 1. Introduction")[0]
         assert "- 1. Introduction" in toc_section
         assert "- Background" in toc_section
         assert "- 2. Technical Design" in toc_section
@@ -367,11 +367,11 @@ Content here.
 """
 
         # Test with depth=6 to include all levels
-        updated_content, observation = self.toc_manager.update(content, depth=6)
+        result = self.toc_manager.update(content, depth=6)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        toc_section = updated_content.split("## 1. Section")[0]
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        toc_section = result.content.split("## 1. Section")[0]
         assert "- 1. Section" in toc_section
         assert "  - 1.1 Subsection" in toc_section
         assert "    - 1.1.1 Sub-subsection" in toc_section
@@ -403,11 +403,11 @@ Content with slash.
 Content with unicode.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "created"
-        toc_section = updated_content.split("## 1. Introduction")[0]
+        assert result.action in ["created", "updated"]
+        assert result.action == "created"
+        toc_section = result.content.split("## 1. Introduction")[0]
         assert "- 1. Introduction & Overview" in toc_section
         assert "- 2. API's & SDK's" in toc_section
         assert '  - 2.1 "Quoted" Subsection' in toc_section
@@ -428,18 +428,18 @@ Content.
 """
 
         # Test depth=1 (should include nothing since we start at level 2)
-        updated_content, observation = self.toc_manager.update(content, depth=1)
-        assert observation["entries"] == 0
+        result = self.toc_manager.update(content, depth=1)
+        assert result.entries == 0
 
         # Test depth=2 (only ## headings)
-        updated_content, observation = self.toc_manager.update(content, depth=2)
-        assert observation["entries"] == 1
-        assert "- 1. Section" in updated_content
-        assert "1.1 Subsection" not in updated_content.split("## 1. Section")[0]
+        result = self.toc_manager.update(content, depth=2)
+        assert result.entries == 1
+        assert "- 1. Section" in result.content
+        assert "1.1 Subsection" not in result.content.split("## 1. Section")[0]
 
         # Test depth=6 (maximum markdown level)
-        updated_content, observation = self.toc_manager.update(content, depth=6)
-        assert observation["entries"] == 3
+        result = self.toc_manager.update(content, depth=6)
+        assert result.entries == 3
 
     def test_update_different_depth_than_original(self):
         """Test updating TOC with different depth than original."""
@@ -464,11 +464,11 @@ More content.
 """
 
         # Update with depth=4 (should include more levels than original)
-        updated_content, observation = self.toc_manager.update(content, depth=4)
+        result = self.toc_manager.update(content, depth=4)
 
-        assert observation["command"] == "toc update"
-        assert observation["action"] == "updated"
-        toc_section = updated_content.split("## 1. Section")[0]
+        assert result.action in ["created", "updated"]
+        assert result.action == "updated"
+        toc_section = result.content.split("## 1. Section")[0]
         assert "- 1. Section" in toc_section
         assert "  - 1.1 Subsection" in toc_section
         assert "    - 1.1.1 Sub-subsection" in toc_section
@@ -491,13 +491,13 @@ More content.
 Content here.
 """
 
-        updated_content, observation = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        assert observation["command"] == "toc remove"
-        assert observation["result"] == "success"
-        assert "## Table Of Contents" not in updated_content
+        assert result.found is not None
+        assert result.found is True
+        assert "## Table Of Contents" not in result.content
         # Should clean up extra blank lines
-        lines = updated_content.split("\n")
+        lines = result.content.split("\n")
         # Should not have more than one consecutive blank line
         consecutive_blanks = 0
         max_consecutive = 0
@@ -521,12 +521,12 @@ Content here.
 Content here.
 """
 
-        updated_content, observation = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        assert observation["command"] == "toc remove"
-        assert observation["result"] == "success"
-        assert "## Table Of Contents" not in updated_content
-        assert updated_content.startswith("## 1. Introduction")
+        assert result.found is not None
+        assert result.found is True
+        assert "## Table Of Contents" not in result.content
+        assert result.content.startswith("## 1. Introduction")
 
     def test_remove_toc_at_document_end(self):
         """Test removing TOC at the very end of document."""
@@ -541,12 +541,12 @@ Content here.
 - 1. Introduction
 """
 
-        updated_content, observation = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        assert observation["command"] == "toc remove"
-        assert observation["result"] == "success"
-        assert "## Table Of Contents" not in updated_content
-        assert updated_content.endswith("Content here.")
+        assert result.found is not None
+        assert result.found is True
+        assert "## Table Of Contents" not in result.content
+        assert result.content.endswith("Content here.")
 
     def test_validate_toc_case_insensitive(self):
         """Test validating TOC with different case variations."""
@@ -569,8 +569,8 @@ More content.
         result = self.toc_manager.validate_toc(content)
 
         # Should recognize "table of contents" as TOC section
-        assert result["has_toc"] is True
-        assert result["valid"] is True
+        assert result.has_toc is True
+        assert result.valid is True
 
     def test_validate_toc_with_both_missing_and_stale(self):
         """Test validating TOC with both missing and stale entries."""
@@ -597,12 +597,12 @@ Final content.
 
         result = self.toc_manager.validate_toc(content)
 
-        assert result["valid"] is False
-        assert result["has_toc"] is True
-        assert "2. New Section" in result["missing_entries"]
-        assert "3. Final Section" in result["missing_entries"]
-        assert "2. Old Section" in result["stale_entries"]
-        assert "3. Another Old Section" in result["stale_entries"]
+        assert result.valid is False
+        assert result.has_toc is True
+        assert "2. New Section" in result.missing_entries
+        assert "3. Final Section" in result.missing_entries
+        assert "2. Old Section" in result.stale_entries
+        assert "3. Another Old Section" in result.stale_entries
 
     def test_full_workflow_integration(self):
         """Test full workflow: create → update → validate → remove."""
@@ -619,14 +619,15 @@ More content.
 """
 
         # Step 1: Create TOC
-        content, obs1 = self.toc_manager.update(content, depth=3)
-        assert obs1["action"] == "created"
-        assert "## Table Of Contents" in content
+        result1 = self.toc_manager.update(content, depth=3)
+        assert result1.action == "created"
+        assert "## Table Of Contents" in result1.content
+        content = result1.content
 
         # Step 2: Validate TOC
         validation = self.toc_manager.validate_toc(content)
-        assert validation["valid"] is True
-        assert validation["has_toc"] is True
+        assert validation.valid is True
+        assert validation.has_toc is True
 
         # Step 3: Add new section to document (simulating content change)
         content = content.replace(
@@ -640,27 +641,28 @@ Implementation details.""",
 
         # Step 4: Validate should now show missing entry
         validation = self.toc_manager.validate_toc(content)
-        assert validation["valid"] is False
-        assert "3. Implementation" in validation["missing_entries"]
+        assert validation.valid is False
+        assert "3. Implementation" in validation.missing_entries
 
         # Step 5: Update TOC
-        content, obs2 = self.toc_manager.update(content, depth=3)
-        assert obs2["action"] == "updated"
-        assert "- 3. Implementation" in content
+        result2 = self.toc_manager.update(content, depth=3)
+        assert result2.action == "updated"
+        assert "- 3. Implementation" in result2.content
+        content = result2.content
 
         # Step 6: Validate should now be valid again
         validation = self.toc_manager.validate_toc(content)
-        assert validation["valid"] is True
+        assert validation.valid is True
 
         # Step 7: Remove TOC
-        content, obs3 = self.toc_manager.remove(content)
-        assert obs3["result"] == "success"
-        assert "## Table Of Contents" not in content
+        result3 = self.toc_manager.remove(content)
+        assert result3.found is True
+        assert "## Table Of Contents" not in result3.content
 
         # Step 8: Validate should show no TOC
-        validation = self.toc_manager.validate_toc(content)
-        assert validation["has_toc"] is False
-        assert validation["valid"] is True
+        validation = self.toc_manager.validate_toc(result3.content)
+        assert validation.has_toc is False
+        assert validation.valid is True
 
     def test_update_preserves_document_structure(self):
         """Test that updating TOC preserves the rest of document structure."""
@@ -701,21 +703,21 @@ code_block = "preserved"
 Final thoughts.
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["action"] == "updated"
+        assert result.action == "updated"
 
         # Check that all original content is preserved
-        assert "Some introduction text." in updated_content
-        assert "**bold** and *italic*" in updated_content
-        assert 'code_block = "preserved"' in updated_content
-        assert "> This is a blockquote" in updated_content
-        assert "- List item 1" in updated_content
-        assert "| Column 1 | Column 2 |" in updated_content
-        assert "Final thoughts." in updated_content
+        assert "Some introduction text." in result.content
+        assert "**bold** and *italic*" in result.content
+        assert 'code_block = "preserved"' in result.content
+        assert "> This is a blockquote" in result.content
+        assert "- List item 1" in result.content
+        assert "| Column 1 | Column 2 |" in result.content
+        assert "Final thoughts." in result.content
 
         # Check that TOC was updated correctly
-        toc_section = updated_content.split("## 1. Introduction")[0]
+        toc_section = result.content.split("## 1. Introduction")[0]
         assert "- 1. Introduction" in toc_section
         assert "- 2. Technical Design" in toc_section
         assert "  - 2.1 Overview" in toc_section
@@ -748,10 +750,10 @@ Third overview (another subsection).
 Fourth overview (different main section).
 """
 
-        updated_content, observation = self.toc_manager.update(content, depth=3)
+        result = self.toc_manager.update(content, depth=3)
 
-        assert observation["action"] == "created"
-        toc_section = updated_content.split("## 1. Overview")[0]
+        assert result.action == "created"
+        toc_section = result.content.split("## 1. Overview")[0]
 
         # All sections should be included, even with duplicate titles
         assert "- 1. Overview" in toc_section

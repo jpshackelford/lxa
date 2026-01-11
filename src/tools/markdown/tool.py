@@ -405,27 +405,27 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self, action: MarkdownAction, content: str, file_path: Path
     ) -> MarkdownObservation:
         """Generate or update the table of contents."""
-        updated_content, toc_data = self.toc_manager.update(content, depth=action.depth)
+        result = self.toc_manager.update(content, depth=action.depth)
 
         # Write back to file
-        file_path.write_text(updated_content, encoding="utf-8")
+        file_path.write_text(result.content, encoding="utf-8")
 
         return MarkdownObservation(
             command=action.command,
             file=action.file,
             result="success",
-            toc_action=toc_data["action"],
-            toc_entries=toc_data["entries"],
-            toc_depth=toc_data["depth"],
+            toc_action=result.action,
+            toc_entries=result.entries,
+            toc_depth=result.depth,
         )
 
     def _toc_remove(
         self, action: MarkdownAction, content: str, file_path: Path
     ) -> MarkdownObservation:
         """Remove the table of contents."""
-        updated_content, toc_data = self.toc_manager.remove(content)
+        result = self.toc_manager.remove(content)
 
-        if toc_data["result"] == "no_toc_found":
+        if not result.found:
             return MarkdownObservation(
                 command=action.command,
                 file=action.file,
@@ -434,7 +434,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             )
 
         # Write back to file
-        file_path.write_text(updated_content, encoding="utf-8")
+        file_path.write_text(result.content, encoding="utf-8")
 
         return MarkdownObservation(
             command=action.command,

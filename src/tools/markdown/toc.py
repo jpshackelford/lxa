@@ -1,12 +1,44 @@
 """Table of Contents management for markdown documents."""
 
+from dataclasses import dataclass
+from typing import Literal
+
 from .parser import MarkdownParser, Section
+
+
+@dataclass
+class TocUpdateResult:
+    """Result of a TOC update operation."""
+
+    content: str
+    action: Literal["created", "updated"]
+    entries: int
+    depth: int
+
+
+@dataclass
+class TocRemoveResult:
+    """Result of a TOC remove operation."""
+
+    content: str
+    success: bool
+    found: bool
+
+
+@dataclass
+class TocValidationResult:
+    """Result of a TOC validation operation."""
+
+    valid: bool
+    has_toc: bool
+    missing_entries: list[str]
+    stale_entries: list[str]
 
 
 class TocManager:
     """Manages table of contents generation, updating, and removal."""
 
-    def update(self, content: str, depth: int = 3) -> tuple[str, dict]:
+    def update(self, content: str, depth: int = 3) -> TocUpdateResult:
         """Generate or update the table of contents.
 
         Args:
@@ -14,7 +46,7 @@ class TocManager:
             depth: Maximum heading depth to include (default 3 for ##, ###, ####)
 
         Returns:
-            Tuple of (updated_content, observation_data)
+            TocUpdateResult with updated content and metadata.
         """
         parser = MarkdownParser()
         lines = content.split("\n")
@@ -36,7 +68,7 @@ class TocManager:
                 + [""]  # Blank line after TOC
                 + lines[toc_section.end_line :]  # Rest of document
             )
-            action = "updated"
+            action: Literal["created", "updated"] = "updated"
         else:
             # Insert new TOC after document title
             insert_pos = self._find_toc_insert_position(lines)
@@ -51,23 +83,21 @@ class TocManager:
 
         updated_content = "\n".join(new_lines)
 
-        observation = {
-            "command": "toc update",
-            "depth": depth,
-            "action": action,
-            "entries": len(toc_lines),
-        }
+        return TocUpdateResult(
+            content=updated_content,
+            action=action,
+            entries=len(toc_lines),
+            depth=depth,
+        )
 
-        return updated_content, observation
-
-    def remove(self, content: str) -> tuple[str, dict]:
+    def remove(self, content: str) -> TocRemoveResult:
         """Remove the table of contents section.
 
         Args:
             content: The markdown content
 
         Returns:
-            Tuple of (updated_content, observation_data)
+            TocRemoveResult with updated content and status.
         """
         parser = MarkdownParser()
         lines = content.split("\n")
@@ -77,8 +107,7 @@ class TocManager:
         toc_section = parser.get_toc_section()
 
         if not toc_section:
-            observation = {"command": "toc remove", "result": "no_toc_found"}
-            return content, observation
+            return TocRemoveResult(content=content, success=True, found=False)
 
         # Remove TOC section and surrounding blank lines
         start_line = toc_section.start_line
@@ -94,9 +123,7 @@ class TocManager:
         new_lines = lines[:start_line] + lines[end_line:]
         updated_content = "\n".join(new_lines)
 
-        observation = {"command": "toc remove", "result": "success"}
-
-        return updated_content, observation
+        return TocRemoveResult(content=updated_content, success=True, found=True)
 
     def _generate_toc_lines(self, sections: list[Section], max_depth: int) -> list[str]:
         """Generate table of contents lines.
@@ -169,14 +196,14 @@ class TocManager:
         # If no title found, insert at beginning
         return 0
 
-    def validate_toc(self, content: str) -> dict:
+    def validate_toc(self, content: str) -> TocValidationResult:
         """Validate that TOC matches current document structure.
 
         Args:
             content: The markdown content
 
         Returns:
-            Validation results
+            TocValidationResult with validation status and any discrepancies.
         """
         parser = MarkdownParser()
         parser.parse_content(content)
@@ -184,7 +211,9 @@ class TocManager:
         toc_section = parser.get_toc_section()
 
         if not toc_section:
-            return {"valid": True, "has_toc": False, "issues": []}
+            return TocValidationResult(
+                valid=True, has_toc=False, missing_entries=[], stale_entries=[]
+            )
 
         # Extract current TOC entries
         lines = content.split("\n")
@@ -211,10 +240,9 @@ class TocManager:
 
         is_valid = len(missing_entries) == 0 and len(stale_entries) == 0
 
-        return {
-            "valid": is_valid,
-            "has_toc": True,
-            "missing_entries": missing_entries,
-            "stale_entries": stale_entries,
-            "issues": missing_entries + stale_entries,
-        }
+        return TocValidationResult(
+            valid=is_valid,
+            has_toc=True,
+            missing_entries=missing_entries,
+            stale_entries=stale_entries,
+        )
