@@ -179,7 +179,6 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             workspace_dir: Path to the workspace directory.
         """
         self.workspace_dir = workspace_dir
-        self.parser = MarkdownParser()
         self.numberer = SectionNumberer()
         self.toc_manager = TocManager()
 
@@ -270,7 +269,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def _validate_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Validate document structure."""
-        result = self.parser.parse_content(content)
+        parser = MarkdownParser()
+        result = parser.parse_content(content)
         validation = self.numberer.validate(result.sections, result.toc_section)
 
         # Convert issues to dict format for observation
@@ -299,12 +299,13 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self, action: MarkdownAction, content: str, file_path: Path
     ) -> MarkdownObservation:
         """Renumber document sections."""
-        result = self.parser.parse_content(content)
+        parser = MarkdownParser()
+        result = parser.parse_content(content)
         renumber_result = self.numberer.renumber(result.sections, result.toc_section)
 
         if renumber_result["result"] == "success":
             # Reconstruct the document with updated numbering
-            updated_content = self._reconstruct_document(content)
+            updated_content = self._reconstruct_document(content, parser)
 
             # Write back to file
             file_path.write_text(updated_content, encoding="utf-8")
@@ -327,7 +328,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
     def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Parse document and return structure information."""
-        result = self.parser.parse_content(content)
+        parser = MarkdownParser()
+        result = parser.parse_content(content)
 
         # Build section structure for observation
         section_structure: list[dict[str, str | int]] = []
@@ -340,7 +342,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             result="success",
             document_title=result.document_title,
             toc_section_found=result.toc_section is not None,
-            total_sections=len(self.parser.get_all_sections()),
+            total_sections=len(parser.get_all_sections()),
             section_structure=section_structure,
         )
 
@@ -361,19 +363,27 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         for child in section.children:
             self._add_section_to_structure(child, structure_list)
 
-    def _reconstruct_document(self, original_content: str) -> str:
-        """Reconstruct document with updated section numbering."""
+    def _reconstruct_document(self, original_content: str, parser: MarkdownParser) -> str:
+        """Reconstruct document with updated section numbering.
+
+        Args:
+            original_content: The original document content.
+            parser: The parser that was used to parse the content (contains section data).
+
+        Returns:
+            The document with updated section numbers.
+        """
         lines = original_content.splitlines()
 
-        # Get all sections flattened from the last parse result
-        all_sections = self.parser.get_all_sections()
+        # Get all sections flattened from the parse result
+        all_sections = parser.get_all_sections()
 
         # Update heading lines with new numbers
         for section in all_sections:
             if section.start_line < len(lines):
                 line = lines[section.start_line]
                 # Extract the heading level (number of #)
-                heading_match = self.parser.HEADING_PATTERN.match(line.strip())
+                heading_match = parser.HEADING_PATTERN.match(line.strip())
                 if heading_match:
                     hashes, _ = heading_match.groups()
                     level_prefix = hashes + " "
