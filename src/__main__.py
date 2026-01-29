@@ -1,11 +1,15 @@
 """CLI entry point for LXA (Long Execution Agent).
 
 Usage:
+    python -m src design                     # Create a design document interactively
+    python -m src design --from context.md   # Start with context from a file
     python -m src implement                  # Start from .pr/design.md (default)
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
 
 Or via the installed command:
+    lxa design                               # Create design doc interactively
+    lxa design --from exploration.md         # Start with context from a file
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
     lxa implement --design-path custom.md    # Uses custom path
@@ -30,6 +34,11 @@ from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
+from src.agents.design_agent import (
+    EnvironmentCheckResult,
+    create_design_agent,
+    run_environment_checks,
+)
 from src.agents.orchestrator import (
     PreflightResult,
     create_orchestrator_agent,
@@ -81,6 +90,21 @@ def print_preflight_result(result: PreflightResult) -> None:
         console.print(f"[green]✓[/] Remote: {result.remote_url}")
     else:
         console.print(f"[red]✗[/] Pre-flight check failed: {result.error}")
+
+
+def print_environment_result(result: EnvironmentCheckResult) -> None:
+    """Print environment check result with formatting."""
+    if result.is_git_repo:
+        console.print("[green]✓[/] Git repository verified")
+        console.print(f"[green]✓[/] Branch: {result.current_branch}")
+        if result.is_on_main:
+            console.print("[yellow]![/] On main branch - will create feature branch")
+        if result.design_dir_exists:
+            console.print("[green]✓[/] doc/design/ directory exists")
+        else:
+            console.print("[yellow]![/] doc/design/ will be created")
+    else:
+        console.print(f"[red]✗[/] Environment check failed: {result.error}")
 
 
 def run_orchestrator(design_doc: Path, workspace: Path) -> int:
@@ -223,6 +247,74 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
+def run_design(workspace: Path, context_file: Path | None = None) -> int:
+    """Run the design composition agent.
+
+    Args:
+        workspace: Path to the workspace (git repository root)
+        context_file: Optional path to exploration/context file
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    console.print(Panel("[bold blue]LXA - Design Composition[/]", expand=False))
+    console.print()
+
+    # Run environment checks
+    console.print("[bold]Environment checks[/]")
+    result = run_environment_checks(workspace)
+    print_environment_result(result)
+
+    if not result.success:
+        return 1
+
+    console.print()
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print()
+
+    # Create design agent
+    context_file_str = str(context_file.relative_to(workspace)) if context_file else None
+    agent = create_design_agent(llm, context_file=context_file_str)
+
+    console.print("[bold cyan]Starting design composition agent...[/]")
+    console.print()
+
+    # Create conversation
+    conversation = Conversation(
+        agent=agent,
+        workspace=workspace,
+        persistence_dir=CONVERSATIONS_DIR,
+    )
+
+    console.print(f"[dim]Conversation ID: {conversation.id}[/]")
+    console.print()
+
+    # Build initial message
+    initial_message = "I'd like to create a design document."
+
+    if context_file:
+        initial_message = f"""\
+I'd like to create a design document.
+
+Please read the context file at {context_file_str} for background on what we're
+designing. Extract the problem statement, proposed approach, and any technical
+details from this file.
+
+After reading the context, let me know if you need any additional information
+before drafting the design document.
+"""
+
+    conversation.send_message(initial_message)
+    conversation.run()
+
+    console.print()
+    console.print("[bold green]Design composition complete.[/]")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -238,10 +330,12 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  lxa implement                         Start from .pr/design.md (default)
-  lxa implement --keep-design           Start from doc/design/design.md
-  lxa implement -d my-feature.md        Start from custom path
-  lxa reconcile .pr/design.md           Update design doc with code refs
+  lxa design                             Start design composition interactively
+  lxa design --from exploration.md       Start with context from a file
+  lxa implement                          Start from .pr/design.md (default)
+  lxa implement --keep-design            Start from doc/design/design.md
+  lxa implement -d my-feature.md         Start from custom path
+  lxa reconcile .pr/design.md            Update design doc with code refs
 
 Configuration:
   Create .lxa/config.toml in your repo to customize paths:
@@ -255,6 +349,27 @@ Configuration:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Design subcommand
+    design_parser = subparsers.add_parser(
+        "design",
+        help="Create a design document with agent assistance",
+    )
+    design_parser.add_argument(
+        "--from",
+        "-f",
+        dest="context_file",
+        type=Path,
+        default=None,
+        help="Path to exploration/context file for background",
+    )
+    design_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to git root)",
+    )
 
     # Implement subcommand
     implement_parser = subparsers.add_parser(
@@ -314,6 +429,12 @@ Configuration:
     )
 
     args = parser.parse_args(argv)
+
+    # Handle design command
+    if args.command == "design":
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+        context_file = args.context_file.resolve() if args.context_file else None
+        return run_design(workspace, context_file)
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
