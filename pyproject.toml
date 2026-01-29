@@ -8,6 +8,8 @@ dependencies = [
     "openhands-tools>=1.7.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
+    "mdformat>=0.7",
+    "pymarkdownlnt>=0.9",
 ]
 
 [project.optional-dependencies]

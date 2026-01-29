@@ -1060,3 +1060,199 @@ This is the methods section.
         assert "Demoted" in str(text)
         assert "2 Methods" in str(text)
         assert "level 3" in str(text)
+
+
+class TestFormattingCommands:
+    """Tests for the formatting commands (rewrap, lint, fix)."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        import tempfile
+
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.executor = MarkdownExecutor(self.temp_dir)
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_test_file(self, content: str, filename: str = "test.md") -> Path:
+        """Create a test file with the given content."""
+        test_file = self.temp_dir / filename
+        test_file.write_text(content)
+        return test_file
+
+    def test_rewrap_long_lines(self):
+        """Test rewrapping a document with long lines."""
+        content = """# Title
+
+This is a very very very very very very very very very very very very long line that needs to be wrapped to fit within the default line width.
+
+## Section
+
+Short line.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="rewrap", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "rewrap"
+        assert observation.result == "success"
+        assert observation.was_modified is True
+        assert observation.line_width == 80
+
+        # Verify file was actually modified
+        updated_content = (self.temp_dir / "test.md").read_text()
+        # Long line should be wrapped
+        for line in updated_content.split("\n"):
+            if not line.startswith("#"):
+                assert len(line) <= 80
+
+    def test_rewrap_custom_width(self):
+        """Test rewrapping with custom width."""
+        content = """# Title
+
+This is a moderately long line.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="rewrap", file="test.md", width=40)
+        observation = self.executor.execute(action)
+
+        assert observation.result == "success"
+        assert observation.line_width == 40
+
+    def test_rewrap_no_change_needed(self):
+        """Test rewrapping when no changes are needed."""
+        content = """# Title
+
+Short line.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="rewrap", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "success"
+        # was_modified could be True or False depending on mdformat normalization
+
+    def test_lint_finds_issues(self):
+        """Test linting a document with issues."""
+        content = "# Title\n\nTrailing spaces   \n\n\n\nMultiple blanks.\n"
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="lint", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "lint"
+        assert observation.result == "warning"
+        assert observation.lint_issues is not None
+        assert len(observation.lint_issues) >= 2
+
+        # Check issue structure
+        issue = observation.lint_issues[0]
+        assert "line" in issue
+        assert "rule_id" in issue
+        assert "message" in issue
+
+    def test_lint_clean_document(self):
+        """Test linting a clean document."""
+        content = """# Title
+
+This is a clean paragraph.
+
+## Section
+
+Another paragraph.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="lint", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "lint"
+        assert observation.result == "success"
+        assert observation.lint_issues is None
+
+    def test_fix_auto_fixes_issues(self):
+        """Test auto-fixing markdown issues."""
+        content = "# Title\n\nTrailing spaces   \n\n\n\nMultiple blanks.\n"
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="fix", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.command == "fix"
+        assert observation.result == "success"
+        assert observation.was_modified is True
+        assert observation.issues_fixed is not None
+        assert observation.issues_fixed > 0
+
+        # Verify file was actually fixed
+        updated_content = (self.temp_dir / "test.md").read_text()
+        assert "   \n" not in updated_content  # Trailing spaces removed
+        assert "\n\n\n" not in updated_content  # Multiple blanks fixed
+
+    def test_fix_clean_document(self):
+        """Test fixing a clean document."""
+        content = """# Title
+
+Clean paragraph.
+"""
+        self._create_test_file(content)
+
+        action = MarkdownAction(command="fix", file="test.md")
+        observation = self.executor.execute(action)
+
+        assert observation.result == "success"
+        assert observation.issues_fixed == 0
+
+    def test_action_visualization_formatting(self):
+        """Test action visualization for formatting commands."""
+        action = MarkdownAction(command="rewrap", file="test.md")
+        text = action.visualize
+        assert "Rewrap" in str(text)
+
+        action = MarkdownAction(command="lint", file="test.md")
+        text = action.visualize
+        assert "Lint" in str(text)
+
+        action = MarkdownAction(command="fix", file="test.md")
+        text = action.visualize
+        assert "Fix" in str(text)
+
+    def test_observation_visualization_formatting(self):
+        """Test observation visualization for formatting commands."""
+        obs = MarkdownObservation(
+            command="rewrap",
+            file="test.md",
+            result="success",
+            was_modified=True,
+            line_width=80,
+        )
+        text = obs.visualize
+        assert "80" in str(text)
+
+        obs = MarkdownObservation(
+            command="lint",
+            file="test.md",
+            result="warning",
+            lint_issues=[{"line": 1, "rule_id": "MD009", "message": "Trailing spaces"}],
+        )
+        text = obs.visualize
+        assert "1 issues" in str(text)
+
+        obs = MarkdownObservation(
+            command="fix",
+            file="test.md",
+            result="success",
+            was_modified=True,
+            issues_fixed=3,
+            issues_remaining=1,
+        )
+        text = obs.visualize
+        assert "Fixed 3" in str(text)
+        assert "1 remaining" in str(text)
