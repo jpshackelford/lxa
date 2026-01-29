@@ -1,9 +1,9 @@
 """Section numbering validation and management for markdown documents."""
 
+import re
 from dataclasses import dataclass
-from typing import Any
 
-from .parser import Section
+from .parser import MarkdownParser, Section
 
 
 @dataclass
@@ -36,6 +36,16 @@ class ValidationResult:
     valid: bool
     issues: list[NumberingIssue]
     recommendations: list[str]
+
+
+@dataclass
+class RenumberResult:
+    """Result of renumbering operation."""
+
+    content: str
+    sections_renumbered: int
+    was_modified: bool
+    toc_skipped: bool
 
 
 class SectionNumberer:
@@ -110,9 +120,12 @@ class SectionNumberer:
 
     def renumber(
         self, sections: list[Section], toc_section: Section | None = None
-    ) -> dict[str, Any]:
-        """
-        Renumber all sections sequentially, skipping TOC.
+    ) -> dict[str, object]:
+        """Renumber all sections sequentially, skipping TOC.
+
+        This is the low-level API that operates on Section objects.
+        For most use cases, prefer renumber_content() which handles
+        the full parse → renumber → reconstruct flow.
 
         Args:
             sections: List of sections to renumber
@@ -140,6 +153,82 @@ class SectionNumberer:
             "sections_before": sections_before,
             "sections_after": sections_after,
         }
+
+    def renumber_content(self, content: str) -> RenumberResult:
+        """Renumber all sections in a document and return the updated content.
+
+        This is the primary method for renumbering - it handles parsing,
+        renumbering, and reconstructing the document in one operation.
+
+        Args:
+            content: The markdown document content.
+
+        Returns:
+            RenumberResult with updated content and statistics.
+        """
+        parser = MarkdownParser()
+        result = parser.parse_content(content)
+
+        self.toc_section = result.toc_section
+        all_sections = self._get_numbered_sections(result.sections)
+
+        # Normalize numbering (updates Section objects in place)
+        self.normalize(result.sections)
+
+        # Reconstruct document with updated headings
+        updated_content = self._reconstruct_document(content, parser.get_all_sections())
+
+        return RenumberResult(
+            content=updated_content,
+            sections_renumbered=len(all_sections),
+            was_modified=updated_content != content,
+            toc_skipped=result.toc_section is not None,
+        )
+
+    def format_heading(self, section: Section) -> str:
+        """Format a section heading with proper number formatting.
+
+        Level 2 sections get a trailing period (e.g., "## 1. Title")
+        Level 3+ sections don't (e.g., "### 1.1 Title")
+
+        Args:
+            section: The section to format.
+
+        Returns:
+            The formatted heading line.
+        """
+        hashes = "#" * section.level
+        if section.number:
+            if section.level == 2:
+                return f"{hashes} {section.number}. {section.title}"
+            else:
+                return f"{hashes} {section.number} {section.title}"
+        return f"{hashes} {section.title}"
+
+    def _reconstruct_document(self, content: str, sections: list[Section]) -> str:
+        """Reconstruct document with updated section numbering.
+
+        Args:
+            content: The original document content.
+            sections: All sections with updated numbering.
+
+        Returns:
+            The document with updated section numbers.
+        """
+        lines = content.splitlines()
+        heading_pattern = re.compile(r"^(#{1,6})\s+(.+)$")
+
+        for section in sections:
+            if section.start_line < len(lines):
+                line = lines[section.start_line]
+                if heading_pattern.match(line.strip()):
+                    lines[section.start_line] = self.format_heading(section)
+
+        result = "\n".join(lines)
+        # Preserve trailing newline if original had one
+        if content.endswith("\n") and not result.endswith("\n"):
+            result += "\n"
+        return result
 
     def _get_numbered_sections(self, sections: list[Section]) -> list[Section]:
         """Get all sections that should be numbered, excluding TOC."""
