@@ -581,11 +581,11 @@ All tasks require:
 
 #### 4.5.1 Checklist
 
-- [ ] src/tools/markdown/formatter.py - `MarkdownFormatter` with rewrap, lint,
+- [x] src/tools/markdown/formatter.py - `MarkdownFormatter` with rewrap, lint,
       fix
-- [ ] tests/tools/markdown/test_formatter.py - Tests for rewrap boundaries,
+- [x] tests/tools/markdown/test_formatter.py - Tests for rewrap boundaries,
       lint detection, auto-fix
-- [ ] src/tools/markdown/tool.py - rewrap command
-- [ ] src/tools/markdown/tool.py - lint command
-- [ ] src/tools/markdown/tool.py - fix command
-- [ ] tests/tools/markdown/test_tool.py - Tests for formatting commands
+- [x] src/tools/markdown/tool.py - rewrap command
+- [x] src/tools/markdown/tool.py - lint command
+- [x] src/tools/markdown/tool.py - fix command
+- [x] tests/tools/markdown/test_tool.py - Tests for formatting commands

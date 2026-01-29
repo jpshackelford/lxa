@@ -16,6 +16,7 @@ from openhands.sdk.tool import (
 from pydantic import Field
 from rich.text import Text
 
+from .formatter import MarkdownFormatter
 from .numbering import SectionNumberer
 from .operations import SectionOperations
 from .parser import MarkdownParser, Section
@@ -34,6 +35,7 @@ This tool provides commands for:
 - Parsing and analyzing document structure
 - Managing table of contents (generate, update, remove)
 - Section operations (move, insert, delete, promote, demote)
+- Formatting (rewrap paragraphs, lint, auto-fix issues)
 
 The tool helps maintain consistent markdown document structure and numbering.
 """.strip()
@@ -51,6 +53,9 @@ ACTION_DISPLAY: dict[str, tuple[str, str, str]] = {
     "delete": ("🗑️ ", "red", "Delete Section '{section}'"),
     "promote": ("⬆️ ", "blue", "Promote Section '{section}'"),
     "demote": ("⬇️ ", "yellow", "Demote Section '{section}'"),
+    "rewrap": ("📏 ", "cyan", "Rewrap Paragraphs"),
+    "lint": ("🔎 ", "yellow", "Lint Document"),
+    "fix": ("🔧 ", "green", "Fix Lint Issues"),
 }
 
 
@@ -68,17 +73,24 @@ class MarkdownAction(Action):
         "delete",
         "promote",
         "demote",
+        "rewrap",
+        "lint",
+        "fix",
     ] = Field(
         description=(
             "Command to execute: 'validate' checks structure, 'renumber' fixes numbering, "
             "'parse' shows structure, 'toc_update' generates/updates TOC, 'toc_remove' removes TOC, "
             "'move' moves a section, 'insert' inserts a new section, 'delete' removes a section, "
-            "'promote' increases heading level (### → ##), 'demote' decreases heading level (## → ###)"
+            "'promote' increases heading level (### → ##), 'demote' decreases heading level (## → ###), "
+            "'rewrap' normalizes line lengths, 'lint' checks for issues, 'fix' auto-fixes issues"
         )
     )
     file: str = Field(description="Path to the markdown file to process")
     depth: int = Field(
         default=3, description="Maximum heading depth for TOC (default 3, used with toc_update)"
+    )
+    width: int = Field(
+        default=80, description="Line width for rewrap (default 80, used with rewrap)"
     )
     # Section operation parameters
     section: str | None = Field(
@@ -125,6 +137,9 @@ class MarkdownObservation(Observation):
         "delete",
         "promote",
         "demote",
+        "rewrap",
+        "lint",
+        "fix",
     ] = Field(description="The command that was executed.")
     file: str = Field(description="Path to the markdown file that was processed.")
     result: str = Field(description="Result of the operation: 'success', 'error', or 'warning'.")
@@ -178,6 +193,19 @@ class MarkdownObservation(Observation):
     )
     reminder: str | None = Field(
         default=None, description="Reminder to renumber after structural changes."
+    )
+
+    # Formatting fields
+    was_modified: bool | None = Field(
+        default=None, description="Whether the document was modified."
+    )
+    line_width: int | None = Field(default=None, description="Line width used for rewrap.")
+    lint_issues: list[dict[str, str | int]] | None = Field(
+        default=None, description="List of lint issues found."
+    )
+    issues_fixed: int | None = Field(default=None, description="Number of issues auto-fixed.")
+    issues_remaining: int | None = Field(
+        default=None, description="Number of issues that couldn't be auto-fixed."
     )
 
     @property
@@ -260,6 +288,26 @@ class MarkdownObservation(Observation):
             if self.children_affected:
                 text.append(f" ({self.children_affected} children)", style="dim")
 
+        elif self.command == "rewrap":
+            if self.was_modified:
+                text.append(f"Rewrapped to {self.line_width} characters", style="cyan")
+            else:
+                text.append("No changes needed", style="dim")
+
+        elif self.command == "lint":
+            if self.lint_issues:
+                text.append(f"Found {len(self.lint_issues)} issues", style="yellow")
+            else:
+                text.append("No issues found", style="green")
+
+        elif self.command == "fix":
+            if self.issues_fixed:
+                text.append(f"Fixed {self.issues_fixed} issues", style="green")
+            else:
+                text.append("No issues to fix", style="dim")
+            if self.issues_remaining:
+                text.append(f" ({self.issues_remaining} remaining)", style="yellow")
+
         return text
 
 
@@ -276,6 +324,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self.numberer = SectionNumberer()
         self.toc_manager = TocManager()
         self.section_ops = SectionOperations()
+        self.formatter = MarkdownFormatter()
 
     def __call__(self, action: MarkdownAction, conversation=None) -> MarkdownObservation:  # noqa: ARG002
         """Execute a markdown action.
@@ -336,6 +385,7 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             read_only_handlers = {
                 "validate": self._validate_document,
                 "parse": self._parse_document,
+                "lint": self._lint_document,
             }
             mutating_handlers = {
                 "renumber": self._renumber_document,
@@ -346,6 +396,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                 "delete": self._delete_section,
                 "promote": self._promote_section,
                 "demote": self._demote_section,
+                "rewrap": self._rewrap_document,
+                "fix": self._fix_document,
             }
 
             if handler := read_only_handlers.get(action.command):
@@ -775,6 +827,67 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             new_level=result.new_level,
             children_affected=result.children_demoted,
             reminder=result.reminder,
+        )
+
+    def _rewrap_document(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Rewrap paragraphs to specified line width."""
+        result = self.formatter.rewrap(content, action.width)
+
+        if result.was_modified:
+            file_path.write_text(result.content, encoding="utf-8")
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            was_modified=result.was_modified,
+            line_width=action.width,
+        )
+
+    def _lint_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
+        """Lint document and report issues."""
+        result = self.formatter.lint(content)
+
+        issues_list = [
+            {
+                "line": issue.line,
+                "column": issue.column,
+                "rule_id": issue.rule_id,
+                "rule_name": issue.rule_name,
+                "message": issue.message,
+            }
+            for issue in result.issues
+        ]
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="warning" if result.has_issues else "success",
+            lint_issues=issues_list if issues_list else None,
+        )
+
+    def _fix_document(
+        self, action: MarkdownAction, content: str, file_path: Path
+    ) -> MarkdownObservation:
+        """Auto-fix markdown issues."""
+        result = self.formatter.fix(content)
+
+        if result.was_fixed:
+            file_path.write_text(result.content, encoding="utf-8")
+
+        # Count how many issues were fixed by comparing before/after
+        lint_before = self.formatter.lint(content)
+        issues_fixed = len(lint_before.issues) - len(result.issues_remaining)
+
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            was_modified=result.was_fixed,
+            issues_fixed=issues_fixed if issues_fixed > 0 else 0,
+            issues_remaining=len(result.issues_remaining) if result.issues_remaining else None,
         )
 
 
