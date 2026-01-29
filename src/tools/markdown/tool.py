@@ -475,32 +475,18 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         self, action: MarkdownAction, content: str, file_path: Path
     ) -> MarkdownObservation:
         """Renumber document sections."""
-        parser = MarkdownParser()
-        result = parser.parse_content(content)
-        renumber_result = self.numberer.renumber(result.sections, result.toc_section)
+        result = self.numberer.renumber_content(content)
 
-        if renumber_result["result"] == "success":
-            # Reconstruct the document with updated numbering
-            updated_content = self._reconstruct_document(content, parser)
+        if result.was_modified:
+            file_path.write_text(result.content, encoding="utf-8")
 
-            # Write back to file
-            file_path.write_text(updated_content, encoding="utf-8")
-
-            return MarkdownObservation(
-                command=action.command,
-                file=action.file,
-                result="success",
-                sections_renumbered=renumber_result["sections_renumbered"],
-                toc_skipped=renumber_result["toc_skipped"],
-            )
-        else:
-            return MarkdownObservation.from_text(
-                text=renumber_result.get("error", "Unknown error during renumbering"),
-                is_error=True,
-                command=action.command,
-                file=action.file,
-                result="error",
-            )
+        return MarkdownObservation(
+            command=action.command,
+            file=action.file,
+            result="success",
+            sections_renumbered=result.sections_renumbered,
+            toc_skipped=result.toc_skipped,
+        )
 
     def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
         """Parse document and return structure information."""
@@ -538,44 +524,6 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
         for child in section.children:
             self._add_section_to_structure(child, structure_list)
-
-    def _reconstruct_document(self, original_content: str, parser: MarkdownParser) -> str:
-        """Reconstruct document with updated section numbering.
-
-        Args:
-            original_content: The original document content.
-            parser: The parser that was used to parse the content (contains section data).
-
-        Returns:
-            The document with updated section numbers.
-        """
-        lines = original_content.splitlines()
-
-        # Get all sections flattened from the parse result
-        all_sections = parser.get_all_sections()
-
-        # Update heading lines with new numbers
-        for section in all_sections:
-            if section.start_line < len(lines):
-                line = lines[section.start_line]
-                # Extract the heading level (number of #)
-                heading_match = parser.HEADING_PATTERN.match(line.strip())
-                if heading_match:
-                    hashes, _ = heading_match.groups()
-                    level_prefix = hashes + " "
-
-                    if section.number:
-                        # Level 2 sections get a period, level 3+ don't
-                        if section.level == 2:
-                            new_heading = f"{level_prefix}{section.number}. {section.title}"
-                        else:
-                            new_heading = f"{level_prefix}{section.number} {section.title}"
-                    else:
-                        new_heading = f"{level_prefix}{section.title}"
-
-                    lines[section.start_line] = new_heading
-
-        return "\n".join(lines)
 
     def _toc_update(
         self, action: MarkdownAction, content: str, file_path: Path
@@ -932,14 +880,10 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
         fix_result = self.formatter.fix(current_content)
         current_content = fix_result.content
 
-        # Step 3: Renumber sections (parse → renumber → reconstruct)
-        parser = MarkdownParser()
-        parse_result = parser.parse_content(current_content)
-        renumber_result = self.numberer.renumber(parse_result.sections, parse_result.toc_section)
-        sections_renumbered = 0
-        if renumber_result["result"] == "success":
-            current_content = self._reconstruct_document(current_content, parser)
-            sections_renumbered = renumber_result["sections_renumbered"]
+        # Step 3: Renumber sections
+        renumber_result = self.numberer.renumber_content(current_content)
+        current_content = renumber_result.content
+        sections_renumbered = renumber_result.sections_renumbered
 
         # Step 4: Update TOC only if one already exists
         toc_validation = self.toc_manager.validate_toc(current_content)
