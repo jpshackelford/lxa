@@ -1,0 +1,96 @@
+# PR Artifacts Cleanup Workflow
+#
+# Automatically removes the .pr/ folder when a PR is approved.
+# This keeps the main branch clean of transient development artifacts
+# (design docs, journals, etc.) that are only needed during PR review.
+#
+# Based on: https://github.com/OpenHands/software-agent-sdk/.github/workflows/pr-artifacts.yml
+
+name: PR Artifacts
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+# Prevent concurrent runs on the same PR
+concurrency:
+  group: pr-artifacts-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cleanup-pr-folder:
+    # Only run when PR is approved
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.OPENHANDS_APP_ID }}
+          private-key: ${{ secrets.OPENHANDS_APP_PRIVATE_KEY }}
+        continue-on-error: true
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check if .pr folder exists
+        id: check-pr-folder
+        run: |
+          if [ -d ".pr" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "📁 .pr folder found"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "📁 No .pr folder found"
+          fi
+
+      - name: Remove .pr folder
+        if: steps.check-pr-folder.outputs.exists == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git rm -rf .pr
+          git commit -m "chore: remove .pr folder after approval
+
+          Automatically cleaned up by PR Artifacts workflow.
+          The .pr folder contains transient development artifacts
+          that are no longer needed after PR approval."
+
+          git push
+
+      - name: Add comment to PR
+        if: steps.check-pr-folder.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            // Check if we've already commented (avoid duplicates)
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number
+            });
+
+            const marker = '<!-- pr-artifacts-cleanup -->';
+            const alreadyCommented = comments.data.some(c => c.body.includes(marker));
+
+            if (!alreadyCommented) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `${marker}\n🧹 **PR Artifacts Cleaned Up**\n\nThe \`.pr/\` folder has been automatically removed after approval. This folder contained transient development artifacts (design docs, journals, etc.) that are no longer needed.`
+              });
+            }
