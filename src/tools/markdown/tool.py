@@ -38,6 +38,21 @@ This tool provides commands for:
 The tool helps maintain consistent markdown document structure and numbering.
 """.strip()
 
+# Command visualization metadata: (icon, style, label_template)
+# label_template can use {section} or {heading} placeholders
+ACTION_DISPLAY: dict[str, tuple[str, str, str]] = {
+    "validate": ("🔍 ", "blue", "Validate Document Structure"),
+    "renumber": ("🔢 ", "green", "Renumber Sections"),
+    "parse": ("📄 ", "yellow", "Parse Document Structure"),
+    "toc_update": ("📑 ", "cyan", "Update Table of Contents"),
+    "toc_remove": ("🗑️ ", "red", "Remove Table of Contents"),
+    "move": ("↔️ ", "magenta", "Move Section '{section}'"),
+    "insert": ("➕ ", "green", "Insert Section '{heading}'"),
+    "delete": ("🗑️ ", "red", "Delete Section '{section}'"),
+    "promote": ("⬆️ ", "blue", "Promote Section '{section}'"),
+    "demote": ("⬇️ ", "yellow", "Demote Section '{section}'"),
+}
+
 
 class MarkdownAction(Action):
     """Action for the markdown document tool."""
@@ -88,37 +103,10 @@ class MarkdownAction(Action):
     def visualize(self) -> Text:
         """Return Rich Text representation of this action."""
         content = Text()
-        if self.command == "validate":
-            content.append("🔍 ", style="blue")
-            content.append("Validate Document Structure", style="blue")
-        elif self.command == "renumber":
-            content.append("🔢 ", style="green")
-            content.append("Renumber Sections", style="green")
-        elif self.command == "parse":
-            content.append("📄 ", style="yellow")
-            content.append("Parse Document Structure", style="yellow")
-        elif self.command == "toc_update":
-            content.append("📑 ", style="cyan")
-            content.append("Update Table of Contents", style="cyan")
-        elif self.command == "toc_remove":
-            content.append("🗑️ ", style="red")
-            content.append("Remove Table of Contents", style="red")
-        elif self.command == "move":
-            content.append("↔️ ", style="magenta")
-            content.append(f"Move Section '{self.section}'", style="magenta")
-        elif self.command == "insert":
-            content.append("➕ ", style="green")
-            content.append(f"Insert Section '{self.heading}'", style="green")
-        elif self.command == "delete":
-            content.append("🗑️ ", style="red")
-            content.append(f"Delete Section '{self.section}'", style="red")
-        elif self.command == "promote":
-            content.append("⬆️ ", style="blue")
-            content.append(f"Promote Section '{self.section}'", style="blue")
-        elif self.command == "demote":
-            content.append("⬇️ ", style="yellow")
-            content.append(f"Demote Section '{self.section}'", style="yellow")
-
+        icon, style, label_template = ACTION_DISPLAY[self.command]
+        label = label_template.format(section=self.section, heading=self.heading)
+        content.append(icon, style=style)
+        content.append(label, style=style)
         content.append(f" - {self.file}", style="white")
         return content
 
@@ -344,36 +332,35 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
                     result="error",
                 )
 
-            if action.command == "validate":
-                return self._validate_document(action, content)
-            elif action.command == "renumber":
-                return self._renumber_document(action, content, file_path)
-            elif action.command == "parse":
-                return self._parse_document(action, content)
-            elif action.command == "toc_update":
-                return self._toc_update(action, content, file_path)
-            elif action.command == "toc_remove":
-                return self._toc_remove(action, content, file_path)
-            elif action.command == "move":
-                return self._move_section(action, content, file_path)
-            elif action.command == "insert":
-                return self._insert_section(action, content, file_path)
-            elif action.command == "delete":
-                return self._delete_section(action, content, file_path)
-            elif action.command == "promote":
-                return self._promote_section(action, content, file_path)
-            elif action.command == "demote":
-                return self._demote_section(action, content, file_path)
-            else:
-                # For unknown commands, use "validate" as the command in observation
-                # but include the actual unknown command in the error message
-                return MarkdownObservation.from_text(
-                    text=f"Unknown command: {action.command}",
-                    is_error=True,
-                    command="validate",  # Use valid command for observation
-                    file=action.file,
-                    result="error",
-                )
+            # Command handlers: read-only commands vs. commands that modify files
+            read_only_handlers = {
+                "validate": self._validate_document,
+                "parse": self._parse_document,
+            }
+            mutating_handlers = {
+                "renumber": self._renumber_document,
+                "toc_update": self._toc_update,
+                "toc_remove": self._toc_remove,
+                "move": self._move_section,
+                "insert": self._insert_section,
+                "delete": self._delete_section,
+                "promote": self._promote_section,
+                "demote": self._demote_section,
+            }
+
+            if handler := read_only_handlers.get(action.command):
+                return handler(action, content)
+            if handler := mutating_handlers.get(action.command):
+                return handler(action, content, file_path)
+
+            # Unknown command (shouldn't happen with Literal type, but defensive)
+            return MarkdownObservation.from_text(
+                text=f"Unknown command: {action.command}",
+                is_error=True,
+                command="validate",
+                file=action.file,
+                result="error",
+            )
 
         except Exception as e:
             return MarkdownObservation.from_text(
