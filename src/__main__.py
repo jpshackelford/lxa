@@ -1,12 +1,15 @@
 """CLI entry point for LXA (Long Execution Agent).
 
 Usage:
-    python -m src implement doc/design.md    # Start implementation
-    python -m src reconcile doc/design.md    # Run reconciliation (post-merge)
+    python -m src implement                  # Start from .pr/design.md (default)
+    python -m src implement .pr/design.md    # Start implementation
+    python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
 
 Or via the installed command:
-    lxa implement doc/design/feature.md
-    lxa reconcile doc/design/feature.md
+    lxa implement                            # Uses .pr/design.md
+    lxa implement --keep-design              # Uses doc/design/<feature>.md
+    lxa implement --design-path custom.md    # Uses custom path
+    lxa reconcile .pr/design.md              # Update design doc with code refs
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from src.agents.orchestrator import (
     create_orchestrator_agent,
     run_preflight_checks,
 )
+from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.skills.reconcile import reconcile_design_doc
 
 # Load environment variables
@@ -234,8 +238,19 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  lxa implement doc/design/feature.md   Start implementation from design doc
-  lxa reconcile doc/design/feature.md   Update design doc with code refs
+  lxa implement                         Start from .pr/design.md (default)
+  lxa implement --keep-design           Start from doc/design/design.md
+  lxa implement -d my-feature.md        Start from custom path
+  lxa reconcile .pr/design.md           Update design doc with code refs
+
+Configuration:
+  Create .lxa/config.toml in your repo to customize paths:
+    [paths]
+    pr_artifacts = ".pr"
+    design_docs = "doc/design"
+
+    [defaults]
+    keep_design = false
 """,
     )
 
@@ -249,7 +264,9 @@ Examples:
     implement_parser.add_argument(
         "design_doc",
         type=Path,
-        help="Path to the design document",
+        nargs="?",
+        default=None,
+        help=f"Path to the design document (default: {DEFAULT_DESIGN_PATH})",
     )
     implement_parser.add_argument(
         "--workspace",
@@ -257,6 +274,19 @@ Examples:
         type=Path,
         default=None,
         help="Workspace directory (defaults to git root)",
+    )
+    implement_parser.add_argument(
+        "--keep-design",
+        "-k",
+        action="store_true",
+        help="Use persistent design doc location (doc/design/) instead of .pr/",
+    )
+    implement_parser.add_argument(
+        "--design-path",
+        "-d",
+        type=Path,
+        default=None,
+        help="Custom path for the design document",
     )
 
     # Reconcile subcommand
@@ -285,13 +315,27 @@ Examples:
 
     args = parser.parse_args(argv)
 
-    design_doc = args.design_doc.resolve()
-    workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
-
+    # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
+        design_doc = args.design_doc.resolve()
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
         return run_reconcile(design_doc, workspace, dry_run=args.dry_run)
 
-    # implement command
+    # Handle implement command with config-based path resolution
+    # When design_doc is provided, derive workspace from it (backward compatible)
+    # When not provided, use cwd to find workspace, then derive design path from config
+    if args.design_path:
+        design_doc = args.design_path.resolve()
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
+    elif args.design_doc:
+        design_doc = args.design_doc.resolve()
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
+    else:
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+        config = load_config(workspace)
+        design_path = config.get_design_path(keep_design=args.keep_design)
+        design_doc = workspace / design_path
+
     return run_orchestrator(design_doc, workspace)
 
 

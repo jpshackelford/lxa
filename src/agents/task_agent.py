@@ -52,7 +52,7 @@ Report completion with "TASK COMPLETE: <summary>" or "TASK FAILED: <reason>"
 def create_task_agent(
     llm: LLM,
     *,
-    journal_path: str = "doc/journal.md",
+    journal_path: str = ".pr/journal.md",
 ) -> Agent:
     """Create a Task Agent for completing a single implementation task.
 
@@ -64,7 +64,8 @@ def create_task_agent(
 
     Args:
         llm: Language model to use for the agent
-        journal_path: Path to journal file relative to workspace
+        journal_path: Path to journal file relative to workspace.
+            Defaults to .pr/journal.md (transient PR artifacts folder).
 
     Returns:
         Configured Agent instance

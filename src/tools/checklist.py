@@ -467,13 +467,14 @@ class ImplementationChecklistTool(ToolDefinition[ChecklistAction, ChecklistObser
 
     @classmethod
     def create(
-        cls, conv_state: ConversationState, design_doc_path: str = "doc/design.md"
+        cls, conv_state: ConversationState, design_doc_path: str = ".pr/design.md"
     ) -> Sequence[ImplementationChecklistTool]:
         """Create the implementation checklist tool.
 
         Args:
             conv_state: Conversation state with workspace info.
             design_doc_path: Path to the design document relative to workspace.
+                Defaults to .pr/design.md (transient PR artifacts folder).
         """
         workspace_dir = Path(conv_state.workspace.working_dir)
         full_design_doc_path = workspace_dir / design_doc_path

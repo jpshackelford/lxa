@@ -248,8 +248,8 @@ Example delegation:
 "Complete task: [task description]
 
 Context:
-- Design document: doc/design/feature.md
-- Journal file: doc/design/journal.md
+- Design document: .pr/design.md
+- Journal file: .pr/journal.md
 
 After completing the task, write a journal entry documenting files read,
 files modified, and any lessons learned (especially gotchas and pitfalls)."
@@ -279,7 +279,7 @@ Example PR body structure:
 Implements [milestone name] from the design document. This milestone adds [brief description].
 
 ## Design Document
-See `doc/design/feature.md` section 5.1
+See `.pr/design.md` section 5.1
 
 ## Changes
 - `src/tools/foo.py` - New FooTool with status, next, complete commands
@@ -306,7 +306,7 @@ COMPLETION:
 def create_orchestrator_agent(
     llm: LLM,
     *,
-    design_doc_path: str = "doc/design.md",
+    design_doc_path: str = ".pr/design.md",
     platform: GitPlatform = GitPlatform.GITHUB,
 ) -> Agent:
     """Create an Orchestrator Agent for coordinating milestone execution.
@@ -318,7 +318,8 @@ def create_orchestrator_agent(
 
     Args:
         llm: Language model to use for the agent
-        design_doc_path: Path to design doc relative to workspace
+        design_doc_path: Path to design doc relative to workspace.
+            Defaults to .pr/design.md (transient PR artifacts folder).
         platform: Git platform for PR operations
 
     Returns:
