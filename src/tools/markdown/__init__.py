@@ -1,6 +1,6 @@
 """Markdown document tool for structural editing and formatting."""
 
-from .numbering import NumberingIssue, SectionNumberer, ValidationResult
+from .numbering import NumberingIssue, RenumberResult, SectionNumberer, ValidationResult
 from .parser import MarkdownParser, ParseResult, Section
 from .toc import (
     TocAction,
@@ -17,6 +17,7 @@ __all__ = [
     "Section",
     "SectionNumberer",
     "NumberingIssue",
+    "RenumberResult",
     "ValidationResult",
     "MarkdownDocumentTool",
     "MarkdownAction",

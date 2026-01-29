@@ -1,6 +1,11 @@
 """Tests for section numbering functionality."""
 
-from src.tools.markdown.numbering import NumberingIssue, SectionNumberer, ValidationResult
+from src.tools.markdown.numbering import (
+    NumberingIssue,
+    RenumberResult,
+    SectionNumberer,
+    ValidationResult,
+)
 from src.tools.markdown.parser import Section
 
 
@@ -254,6 +259,75 @@ class TestSectionNumberer:
 
         renumber_result = self.numberer.renumber([])
         assert renumber_result["sections_renumbered"] == 0
+
+    def test_renumber_content_basic(self):
+        """Test renumber_content with a simple document."""
+        content = """# My Document
+
+## 3. First Section
+
+Some content.
+
+## 5. Second Section
+
+More content.
+"""
+        result = self.numberer.renumber_content(content)
+
+        assert isinstance(result, RenumberResult)
+        assert result.was_modified is True
+        assert result.sections_renumbered == 2
+        assert result.toc_skipped is False
+        assert "## 1. First Section" in result.content
+        assert "## 2. Second Section" in result.content
+
+    def test_renumber_content_with_nested_sections(self):
+        """Test renumber_content preserves nested hierarchy."""
+        content = """# Document
+
+## 1. Section One
+
+### 1.5 Subsection
+
+## 3. Section Two
+"""
+        result = self.numberer.renumber_content(content)
+
+        assert result.was_modified is True
+        assert "## 1. Section One" in result.content
+        assert "### 1.1 Subsection" in result.content
+        assert "## 2. Section Two" in result.content
+
+    def test_renumber_content_no_changes_needed(self):
+        """Test renumber_content when numbering is already correct."""
+        content = """# Document
+
+## 1. First
+
+## 2. Second
+"""
+        result = self.numberer.renumber_content(content)
+
+        assert result.was_modified is False
+        assert result.content == content
+
+    def test_format_heading_level_2_with_period(self):
+        """Test that level 2 headings get a trailing period."""
+        section = Section(level=2, number="1", title="Introduction", start_line=0, end_line=5)
+        formatted = self.numberer.format_heading(section)
+        assert formatted == "## 1. Introduction"
+
+    def test_format_heading_level_3_without_period(self):
+        """Test that level 3+ headings don't get a trailing period."""
+        section = Section(level=3, number="1.1", title="Subsection", start_line=0, end_line=5)
+        formatted = self.numberer.format_heading(section)
+        assert formatted == "### 1.1 Subsection"
+
+    def test_format_heading_no_number(self):
+        """Test formatting heading without a number."""
+        section = Section(level=2, number=None, title="Unnumbered", start_line=0, end_line=5)
+        formatted = self.numberer.format_heading(section)
+        assert formatted == "## Unnumbered"
 
 
 class TestNumberingIssue:
