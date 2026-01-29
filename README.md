@@ -34,4 +34,16 @@ make test-cov
 
 ## Documentation
 
-See [doc/design.md](doc/design.md) for the design document.
+### Design Documents
+
+| Document | Description |
+|----------|-------------|
+| [Implementation Agent](doc/design/implementation-agent-design.md) | Orchestrator and Task Agent architecture |
+| [Design Composition Agent](doc/design/design-composition-agent.md) | Agent for composing design documents |
+| [Markdown Tool](doc/design/markdown-tool.md) | Structural editing tool for markdown |
+
+### Reference
+
+| Document | Description |
+|----------|-------------|
+| [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
