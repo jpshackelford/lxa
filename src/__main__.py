@@ -1,14 +1,18 @@
 """CLI entry point for LXA (Long Execution Agent).
 
 Usage:
-    python -m src design                     # Create a design document interactively
+    python -m src design                     # Create design doc at .pr/design.md
+    python -m src design --keep-design       # Create at doc/design/design.md
+    python -m src design -k -n widget        # Create at doc/design/widget.md
     python -m src design --from context.md   # Start with context from a file
     python -m src implement                  # Start from .pr/design.md (default)
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
 
 Or via the installed command:
-    lxa design                               # Create design doc interactively
+    lxa design                               # Create design doc at .pr/design.md
+    lxa design --keep-design                 # Create at doc/design/design.md
+    lxa design -k --feature-name widget      # Create at doc/design/widget.md
     lxa design --from exploration.md         # Start with context from a file
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
@@ -247,11 +251,16 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-def run_design(workspace: Path, context_file: Path | None = None) -> int:
+def run_design(
+    workspace: Path,
+    design_doc: Path,
+    context_file: Path | None = None,
+) -> int:
     """Run the design composition agent.
 
     Args:
         workspace: Path to the workspace (git repository root)
+        design_doc: Path where the design document will be created
         context_file: Optional path to exploration/context file
 
     Returns:
@@ -269,6 +278,10 @@ def run_design(workspace: Path, context_file: Path | None = None) -> int:
         return 1
 
     console.print()
+
+    # Show target design doc path
+    design_doc_relative = design_doc.relative_to(workspace)
+    console.print(f"[dim]Design doc target: {design_doc_relative}[/]")
 
     # Get LLM
     llm = get_llm()
@@ -292,12 +305,18 @@ def run_design(workspace: Path, context_file: Path | None = None) -> int:
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
 
-    # Build initial message
-    initial_message = "I'd like to create a design document."
+    # Build initial message with target path
+    initial_message = f"""\
+I'd like to create a design document.
+
+Target path for the design document: {design_doc_relative}
+"""
 
     if context_file:
         initial_message = f"""\
 I'd like to create a design document.
+
+Target path for the design document: {design_doc_relative}
 
 Please read the context file at {context_file_str} for background on what we're
 designing. Extract the problem statement, proposed approach, and any technical
@@ -330,7 +349,9 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  lxa design                             Start design composition interactively
+  lxa design                             Create design doc at .pr/design.md
+  lxa design --keep-design               Create at doc/design/design.md
+  lxa design -k -n widget-system         Create at doc/design/widget-system.md
   lxa design --from exploration.md       Start with context from a file
   lxa implement                          Start from .pr/design.md (default)
   lxa implement --keep-design            Start from doc/design/design.md
@@ -369,6 +390,26 @@ Configuration:
         type=Path,
         default=None,
         help="Workspace directory (defaults to git root)",
+    )
+    design_parser.add_argument(
+        "--keep-design",
+        "-k",
+        action="store_true",
+        help="Use persistent design doc location (doc/design/) instead of .pr/",
+    )
+    design_parser.add_argument(
+        "--design-path",
+        "-d",
+        type=Path,
+        default=None,
+        help="Custom path for the design document",
+    )
+    design_parser.add_argument(
+        "--feature-name",
+        "-n",
+        type=str,
+        default=None,
+        help="Feature name for the design doc (e.g., 'widget-system')",
     )
 
     # Implement subcommand
@@ -434,7 +475,19 @@ Configuration:
     if args.command == "design":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
         context_file = args.context_file.resolve() if args.context_file else None
-        return run_design(workspace, context_file)
+
+        # Resolve design doc path using same logic as implement
+        if args.design_path:
+            design_doc = args.design_path.resolve()
+        else:
+            config = load_config(workspace)
+            design_path = config.get_design_path(
+                keep_design=args.keep_design,
+                feature_name=args.feature_name,
+            )
+            design_doc = workspace / design_path
+
+        return run_design(workspace, design_doc, context_file)
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
