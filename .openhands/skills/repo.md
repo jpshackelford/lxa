@@ -43,6 +43,8 @@ LXA (Language eXtension Agent) is a system for building AI agents with specializ
   - `validate`: Check document structure and numbering
   - `renumber`: Fix section numbering automatically
   - `parse`: Analyze and display document structure
+  - `toc_update`: Generate or update table of contents
+  - `toc_remove`: Remove table of contents
 - **Features**:
   - Rich text visualization for actions and observations
   - Comprehensive error handling and validation
@@ -50,6 +52,26 @@ LXA (Language eXtension Agent) is a system for building AI agents with specializ
   - Detailed result reporting with structured data
 - **Testing**: 19 comprehensive test cases in `tests/tools/markdown/test_tool.py`
 - **Integration**: 5 integration test cases in `tests/tools/markdown/test_integration.py`
+
+### Milestone 4: Section Operations ✅ COMPLETED
+- **Location**: `src/tools/markdown/operations.py`
+- **Classes**:
+  - `SectionOperations`: Performs structural operations on markdown sections
+  - `OperationResult` dataclasses: MoveResult, InsertResult, DeleteResult, PromoteResult, DemoteResult
+- **Commands**:
+  - `move`: Move section (with children) to new position
+  - `insert`: Insert new empty section
+  - `delete`: Delete section and children
+  - `promote`: Promote section (### → ##)
+  - `demote`: Demote section (## → ###)
+- **Features**:
+  - Proper handling of section hierarchies and children
+  - Reminder messages to run 'renumber' after structural changes
+  - Comprehensive error handling for invalid operations
+  - Line-based document manipulation preserving content
+- **Testing**: 37 tests in `tests/tools/markdown/test_operations.py`
+- **Tool Tests**: 20 tests for commands in `tests/tools/markdown/test_tool.py`
+- **Quality**: All tests passing, linting clean, type checking passed
 
 ### Key Implementation Details
 - **Section Numbering**: Supports both "1. Title" and "1.1 Title" formats
@@ -62,10 +84,12 @@ LXA (Language eXtension Agent) is a system for building AI agents with specializ
 - **Validation Logic**: Returns warnings for numbering issues, errors for system problems
 
 ### Complete Test Suite ✅ ALL PASSING
-- **Total Tests**: 62 test cases across all components
+- **Total Tests**: 275 test cases across entire project (149 for markdown tools)
 - **Parser Tests**: 20 tests covering all parsing functionality
 - **Numbering Tests**: 23 tests covering validation, normalization, and renumbering
-- **Tool Tests**: 19 tests covering all tool commands and error cases
+- **TOC Tests**: 26 tests covering TOC generation, update, remove, and validation
+- **Operations Tests**: 37 tests covering move, insert, delete, promote, demote
+- **Tool Tests**: 38 tests covering all tool commands and error cases
 - **Integration Tests**: 5 tests covering end-to-end workflows
 - **Coverage**: All major code paths and edge cases tested
 - **Quality**: No mocking used - all tests exercise real functionality
