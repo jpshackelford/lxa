@@ -38,6 +38,7 @@ COMMAND_HANDLERS = {
     "renumber": "numbering",
     "rewrap": "formatting",
     "fix": "formatting",
+    "cleanup": "tool",
 }
 
 
@@ -150,6 +151,53 @@ def run_command(command: str, content: str, params: dict) -> str:
         formatter = MarkdownFormatter()
         result = formatter.fix(content)
         return result.content
+
+    elif command == "cleanup":
+        # Cleanup: rewrap + fix + renumber + toc update (if exists)
+        formatter = MarkdownFormatter()
+        numberer = SectionNumberer()
+        toc_manager = TocManager()
+        parser = MarkdownParser()
+
+        width = params.get("width", 80)
+        depth = params.get("depth", 3)
+
+        # Step 1: Rewrap
+        result = formatter.rewrap(content, width)
+        current = result.content
+
+        # Step 2: Fix lint issues
+        result = formatter.fix(current)
+        current = result.content
+
+        # Step 3: Renumber sections (parse → renumber → reconstruct)
+        parse_result = parser.parse_content(current)
+        renumber_result = numberer.renumber(parse_result.sections, parse_result.toc_section)
+        if renumber_result["result"] == "success":
+            # Reconstruct document with updated numbering (matching tool.py logic)
+            lines = current.split("\n")
+            all_sections = parser.get_all_sections()
+            for s in all_sections:
+                if s.start_line < len(lines):
+                    old_heading = lines[s.start_line]
+                    hash_part = old_heading.split(" ")[0]
+                    if s.number:
+                        # Level 2 sections get a period, level 3+ don't
+                        if s.level == 2:
+                            lines[s.start_line] = f"{hash_part} {s.number}. {s.title}"
+                        else:
+                            lines[s.start_line] = f"{hash_part} {s.number} {s.title}"
+                    else:
+                        lines[s.start_line] = f"{hash_part} {s.title}"
+            current = "\n".join(lines)
+
+        # Step 4: Update TOC only if one exists
+        toc_validation = toc_manager.validate_toc(current)
+        if toc_validation.has_toc:
+            result = toc_manager.update_toc(current, depth=depth)
+            current = result.content
+
+        return current
 
     else:
         raise ValueError(f"Unknown command: {command}")
