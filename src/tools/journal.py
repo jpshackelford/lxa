@@ -1,10 +1,13 @@
 """JournalTool - Append structured entries to the project journal.
 
-The journal (doc/journal.md) serves as persistent memory across task agent
+The journal (.pr/journal.md) serves as persistent memory across task agent
 boundaries. Each task agent appends an entry summarizing:
 - Files read and what was learned from each
 - Files modified/created
 - Lessons learned: gotchas and pitfalls encountered (NOT accomplishments)
+
+The journal is stored in .pr/ by default (transient PR artifacts folder that
+is deleted after merge).
 """
 
 from __future__ import annotations
@@ -246,7 +249,7 @@ class JournalExecutor(ToolExecutor[JournalAction, JournalObservation]):
         )
 
 
-JOURNAL_DESCRIPTION = """Manages the project journal (doc/journal.md) for persistent memory across task boundaries.
+JOURNAL_DESCRIPTION = """Manages the project journal (.pr/journal.md) for persistent memory across task boundaries.
 
 Commands:
 - read: Read journal contents. Creates an empty journal if none exists. Use this
@@ -269,6 +272,9 @@ Good examples:
 - "Pydantic v2 uses model_validate() not parse_obj() - caused import error"
 - "Must call from_text() on Observation subclasses or SDK prompt caching crashes"
 - "pytest not in test dependencies - had to add to pyproject.toml"
+
+Note: The journal is stored in .pr/ by default - a transient folder that is
+automatically deleted when the PR is approved.
 """
 
 
@@ -283,13 +289,14 @@ class JournalTool(ToolDefinition[JournalAction, JournalObservation]):
     def create(
         cls,
         conv_state: ConversationState,
-        journal_path: str = "doc/journal.md",
+        journal_path: str = ".pr/journal.md",
     ) -> Sequence[JournalTool]:
         """Create the JournalTool instance.
 
         Args:
             conv_state: Conversation state with workspace info
-            journal_path: Path to journal file relative to workspace
+            journal_path: Path to journal file relative to workspace.
+                Defaults to .pr/journal.md (transient PR artifacts folder).
         """
         workspace = Path(conv_state.workspace.working_dir)
         full_path = workspace / journal_path
