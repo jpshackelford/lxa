@@ -809,9 +809,11 @@ class TestRunIteration:
         ]
 
         # Patch Conversation to return our mock
-        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
-            with patch("src.ralph.runner.create_orchestrator_agent"):
-                result = runner._run_iteration()
+        with (
+            patch("src.ralph.runner.Conversation", return_value=mock_conversation),
+            patch("src.ralph.runner.create_orchestrator_agent"),
+        ):
+            result = runner._run_iteration()
 
         assert result.success is True
         assert result.iteration == 1
@@ -845,9 +847,11 @@ class TestRunIteration:
             ),
         ]
 
-        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
-            with patch("src.ralph.runner.create_orchestrator_agent"):
-                result = runner._run_iteration()
+        with (
+            patch("src.ralph.runner.Conversation", return_value=mock_conversation),
+            patch("src.ralph.runner.create_orchestrator_agent"),
+        ):
+            result = runner._run_iteration()
 
         assert result.success is True
         assert result.completion_detected is True
@@ -865,9 +869,11 @@ class TestRunIteration:
         runner._iteration = 2
 
         # Patch Conversation to raise an error
-        with patch("src.ralph.runner.Conversation", side_effect=RuntimeError("API timeout")):
-            with patch("src.ralph.runner.create_orchestrator_agent"):
-                result = runner._run_iteration()
+        with (
+            patch("src.ralph.runner.Conversation", side_effect=RuntimeError("API timeout")),
+            patch("src.ralph.runner.create_orchestrator_agent"),
+        ):
+            result = runner._run_iteration()
 
         assert result.success is False
         assert result.iteration == 2
@@ -898,9 +904,11 @@ class TestRunIteration:
             ),
         ]
 
-        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
-            with patch("src.ralph.runner.create_orchestrator_agent"):
-                runner._run_iteration()
+        with (
+            patch("src.ralph.runner.Conversation", return_value=mock_conversation),
+            patch("src.ralph.runner.create_orchestrator_agent"),
+        ):
+            runner._run_iteration()
 
         # Verify conversation was used correctly
         mock_conversation.send_message.assert_called_once()

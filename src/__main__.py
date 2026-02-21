@@ -38,15 +38,13 @@ from src.agents.orchestrator import (
     run_preflight_checks,
 )
 from src.config import DEFAULT_DESIGN_PATH, load_config
+from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
 from src.skills.reconcile import reconcile_design_doc
 
 # Load environment variables
 load_dotenv()
 
 console = Console()
-
-# Import conversation directory from ralph module (single source of truth)
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
 
 CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
 

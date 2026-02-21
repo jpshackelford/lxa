@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -337,11 +338,11 @@ Critical rules:
 """
 
     @staticmethod
-    def _extract_text_from_content(content: str | list) -> list[str]:
+    def _extract_text_from_content(content: str | list | Sequence) -> list[str]:
         """Extract text strings from message content.
 
         Args:
-            content: Either a string or list of content blocks
+            content: Either a string, list of content blocks, or Sequence of content blocks
 
         Returns:
             List of extracted text strings
