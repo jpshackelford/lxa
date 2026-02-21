@@ -327,6 +327,29 @@ Critical rules:
 - If CI fails after local checks passed, fix the discrepancy in local checks
 """
 
+    @staticmethod
+    def _extract_text_from_content(content: str | list) -> list[str]:
+        """Extract text strings from message content.
+
+        Args:
+            content: Either a string or list of content blocks
+
+        Returns:
+            List of extracted text strings
+        """
+        if isinstance(content, str):
+            return [content]
+
+        texts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                texts.append(block)
+                continue
+            text = getattr(block, "text", None)
+            if text is not None:
+                texts.append(text)
+        return texts
+
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events.
 
@@ -345,26 +368,13 @@ Critical rules:
         from openhands.sdk.event import MessageEvent
 
         try:
-            events = conversation.state.events
             text_parts: list[str] = []
-
-            for event in events:
-                if isinstance(event, MessageEvent) and event.source == "agent":
-                    # Extract text from message content
-                    message = event.llm_message
-                    if message and message.content:
-                        # content can be str or list of content blocks
-                        if isinstance(message.content, str):
-                            text_parts.append(message.content)
-                        elif isinstance(message.content, list):
-                            for block in message.content:
-                                # Use getattr for safer attribute access on content blocks
-                                text = getattr(block, "text", None)
-                                if text is not None:
-                                    text_parts.append(text)
-                                elif isinstance(block, str):
-                                    text_parts.append(block)
-
+            for event in conversation.state.events:
+                if not isinstance(event, MessageEvent) or event.source != "agent":
+                    continue
+                message = event.llm_message
+                if message and message.content:
+                    text_parts.extend(self._extract_text_from_content(message.content))
             return "\n".join(text_parts)
         except Exception as e:
             raise RuntimeError(f"Failed to extract conversation output: {e}") from e

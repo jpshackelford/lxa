@@ -101,6 +101,47 @@ class TestTruncateToLineBoundary:
                 assert line in ["AAAAAAAAAA", "BBBBBBBBBB", "CCCCCCCCCC", "DDDDDDDDDD"]
 
 
+class TestExtractTextFromContent:
+    """Tests for the _extract_text_from_content helper."""
+
+    def test_extracts_from_string(self) -> None:
+        """String content returns as single-item list."""
+        result = RalphLoopRunner._extract_text_from_content("hello world")
+        assert result == ["hello world"]
+
+    def test_extracts_from_string_list(self) -> None:
+        """List of strings returns all strings."""
+        result = RalphLoopRunner._extract_text_from_content(["one", "two", "three"])
+        assert result == ["one", "two", "three"]
+
+    def test_extracts_from_text_content_blocks(self) -> None:
+        """List of objects with .text attribute extracts text."""
+        from openhands.sdk.llm import TextContent
+
+        blocks = [TextContent(text="first"), TextContent(text="second")]
+        result = RalphLoopRunner._extract_text_from_content(blocks)
+        assert result == ["first", "second"]
+
+    def test_handles_mixed_content(self) -> None:
+        """Mixed strings and objects are all extracted."""
+        from openhands.sdk.llm import TextContent
+
+        blocks = ["plain string", TextContent(text="from block")]
+        result = RalphLoopRunner._extract_text_from_content(blocks)
+        assert result == ["plain string", "from block"]
+
+    def test_skips_blocks_without_text(self) -> None:
+        """Objects without .text attribute are skipped."""
+        blocks = [MagicMock(spec=[]), MagicMock(text="has text")]
+        result = RalphLoopRunner._extract_text_from_content(blocks)
+        assert result == ["has text"]
+
+    def test_empty_list_returns_empty(self) -> None:
+        """Empty list returns empty list."""
+        result = RalphLoopRunner._extract_text_from_content([])
+        assert result == []
+
+
 class TestRalphLoopRunner:
     """Tests for RalphLoopRunner."""
 
