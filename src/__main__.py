@@ -223,6 +223,57 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
+def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 20) -> int:
+    """Run the Ralph Loop for continuous autonomous execution.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+        max_iterations: Maximum iterations before stopping
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from src.agents.orchestrator import run_preflight_checks
+    from src.ralph.runner import RalphLoopRunner
+
+    console.print(Panel("[bold blue]LXA - Ralph Loop Mode[/]", expand=False))
+    console.print()
+
+    # Validate design doc exists
+    if not design_doc.exists():
+        console.print(f"[red]Error:[/] Design document not found: {design_doc}")
+        return 1
+
+    # Run pre-flight checks
+    console.print("[bold]Pre-flight checks[/]")
+    result = run_preflight_checks(workspace)
+    print_preflight_result(result)
+
+    if not result.success:
+        return 1
+
+    console.print()
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print()
+
+    # Create and run the Ralph Loop
+    runner = RalphLoopRunner(
+        llm=llm,
+        design_doc_path=design_doc,
+        workspace=workspace,
+        platform=result.platform,
+        max_iterations=max_iterations,
+    )
+
+    loop_result = runner.run()
+
+    return 0 if loop_result.completed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -288,6 +339,17 @@ Configuration:
         default=None,
         help="Custom path for the design document",
     )
+    implement_parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Run in Ralph Loop mode (continuous until completion)",
+    )
+    implement_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=20,
+        help="Maximum iterations in loop mode (default: 20)",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -336,7 +398,11 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
-    return run_orchestrator(design_doc, workspace)
+    # Run in loop mode or single execution
+    if args.loop:
+        return run_ralph_loop(design_doc, workspace, max_iterations=args.max_iterations)
+    else:
+        return run_orchestrator(design_doc, workspace)
 
 
 def find_git_root(start_path: Path) -> Path:
