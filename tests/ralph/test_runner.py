@@ -216,6 +216,51 @@ class TestRalphLoopRunner:
         )
         assert runner.max_iterations == 5
 
+    def test_runner_can_be_reused(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that runner state resets between runs."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=3,
+        )
+
+        # First run: max iterations
+        def mock_run_iteration_never_complete() -> IterationResult:
+            return IterationResult(
+                iteration=runner._iteration,
+                success=True,
+                output="working",
+                completion_detected=False,
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration_never_complete):
+            result1 = runner.run()
+
+        assert result1.completed is False
+        assert result1.iterations_run == 3
+
+        # Second run: should start fresh, not continue from iteration 3
+        run_count = 0
+
+        def mock_run_iteration_complete_on_2() -> IterationResult:
+            nonlocal run_count
+            run_count += 1
+            return IterationResult(
+                iteration=run_count,
+                success=True,
+                output="ALL_MILESTONES_COMPLETE" if run_count == 2 else "working",
+                completion_detected=run_count == 2,
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration_complete_on_2):
+            result2 = runner.run()
+
+        assert result2.completed is True
+        assert result2.iterations_run == 2  # Started fresh, not 5
+
 
 class TestLoopBehavior:
     """Tests for actual loop execution behavior."""
@@ -250,6 +295,56 @@ class TestLoopBehavior:
         assert result.completed is True
         assert result.iterations_run == 2
         assert "Completion signal detected" in result.stop_reason
+
+    def test_loop_stops_on_design_doc_completion(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that loop stops when design doc shows all complete, even without signal."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=10,
+        )
+
+        iteration_count = 0
+
+        def mock_run_iteration() -> IterationResult:
+            nonlocal iteration_count
+            iteration_count += 1
+            # On iteration 2, mark all tasks complete in design doc
+            if iteration_count == 2:
+                # Update design doc to have all tasks complete
+                design_doc.write_text(
+                    """\
+# Sample Design Doc
+
+## 5. Implementation Plan
+
+### 5.1 First Feature (M1)
+
+**Goal**: Implement the first feature.
+
+#### 5.1.1 Checklist
+
+- [x] src/feature.py - Implement FeatureClass
+- [x] tests/test_feature.py - Add tests
+"""
+                )
+            # Agent doesn't output completion signal
+            return IterationResult(
+                iteration=iteration_count,
+                success=True,
+                output="Task done",
+                completion_detected=False,
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration):
+            result = runner.run()
+
+        assert result.completed is True
+        assert result.iterations_run == 2
+        assert "All milestones complete" in result.stop_reason
 
     def test_loop_stops_after_max_iterations(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path

@@ -90,9 +90,16 @@ class RalphLoopRunner:
     def run(self) -> LoopResult:
         """Run the Ralph Loop until completion or limits reached.
 
+        This method can be called multiple times on the same instance.
+        State is reset at the start of each run.
+
         Returns:
             LoopResult with completion status and statistics
         """
+        # Reset state for this run (allows reuse of runner instance)
+        self._iteration = 0
+        self._consecutive_failures = 0
+
         started_at = datetime.now()
         self._print_start_banner()
 
@@ -145,9 +152,17 @@ class RalphLoopRunner:
                     return False, stop_reason
             else:
                 self._consecutive_failures = 0
+
+                # Primary: check for completion signal in agent output
                 if result.completion_detected:
                     console.print("[green]✓[/] Completion signal detected")
                     return True, "Completion signal detected"
+
+                # Secondary: verify completion by checking design doc state
+                # This catches cases where agent completed work but didn't output signal
+                if self._check_already_complete():
+                    console.print("[green]✓[/] All milestones complete (verified from design doc)")
+                    return True, "All milestones complete"
 
             console.print()
 
