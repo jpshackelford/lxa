@@ -83,8 +83,14 @@ Developer creates design doc (manually or via `lxa design`) with:
 Developer starts the orchestrator:
 
 ```bash
-# Start implementation from the design document
+# Single iteration mode (works on current milestone)
 lxa implement doc/design/feature-name.md
+
+# Ralph Loop mode (continuous until all milestones complete)
+lxa implement doc/design/feature-name.md --loop
+
+# With custom iteration limit
+lxa implement doc/design/feature-name.md --loop --max-iterations 50
 ```
 
 The orchestrator:
@@ -95,9 +101,24 @@ The orchestrator:
 4. Task agent commits work, orchestrator updates checklist
 5. After first commit, creates a draft PR linking to design doc
 6. When milestone complete, comments on PR "Ready for review"
-7. Waits for human to merge and signal next milestone
+7. Outputs `ALL_MILESTONES_COMPLETE` when all tasks in all milestones are done
+8. In single mode: waits for human to merge before next milestone
+9. In loop mode: continues automatically until completion or safety limits
 
-### 2.4 Reconciliation Phase (Human-triggered)
+### 2.4 Ralph Loop Mode
+
+The Ralph Loop provides continuous autonomous execution:
+
+- **Fresh context per iteration**: Each iteration starts a new conversation to
+  prevent context rot
+- **Context injection**: Design document and recent journal entries are injected
+  at each iteration start
+- **Dual completion detection**: Stops when `ALL_MILESTONES_COMPLETE` signal is
+  detected in output OR when all checkboxes in design doc are checked
+- **Safety limits**: Stops after max iterations (default: 20) or consecutive
+  failures (default: 3)
+
+### 2.5 Reconciliation Phase (Human-triggered)
 
 After PR merge, developer can invoke:
 
@@ -479,11 +500,48 @@ The observation includes structured data for programmatic use:
   "next_task": {
     "description": "src/tools/checklist.py - next command",
     "files": ["src/tools/checklist.py", "tests/tools/test_checklist.py"]
-  }
+  },
+  "all_milestones_complete": false
 }
 ```
 
-### 4.5 Reconciliation Skill
+The `all_milestones_complete` field is `true` when all tasks in all milestones
+are checked. This enables the Ralph Loop to detect completion without inferring
+it from other fields.
+
+### 4.5 Ralph Loop
+
+The Ralph Loop (`src/ralph/runner.py`) provides continuous autonomous execution
+by running agent iterations until completion or safety limits are reached.
+
+**Key Features**:
+
+- **Fresh conversation per iteration**: Prevents context rot by starting each
+  iteration with a new conversation
+- **Context injection**: Design document content and truncated journal entries
+  are injected at the start of each iteration
+- **Dual completion detection**: Checks both agent output for
+  `ALL_MILESTONES_COMPLETE` signal and design doc state
+- **Configurable safety limits**: `max_iterations` (default: 20) and
+  `max_consecutive_failures` (default: 3)
+- **Runner reusability**: Single runner instance can be used across multiple
+  runs
+
+**Completion Detection**:
+
+The orchestrator outputs `ALL_MILESTONES_COMPLETE` on its own line when all
+milestones are done. The Ralph Loop detects this signal to stop iteration.
+Additionally, the loop checks the design document directly via the checklist
+tool's `all_milestones_complete` field.
+
+**CLI Integration**:
+
+```bash
+lxa implement --loop                    # Default 20 iterations
+lxa implement --loop --max-iterations 50
+```
+
+### 4.6 Reconciliation Skill
 
 Post-merge skill that updates the design document to reference implemented code.
 

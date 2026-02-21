@@ -70,9 +70,13 @@ Mark the Calculator class task as complete
   "milestone_title": "3.1 Core Calculator (M1)",
   "tasks": [...],
   "tasks_complete": 0,
-  "tasks_remaining": 3
+  "tasks_remaining": 3,
+  "all_milestones_complete": false
 }
 ```
+
+The `all_milestones_complete` field is `true` when all tasks in all milestones
+are checked. This is used by the Ralph Loop to detect completion.
 
 ## Interactive Testing
 
