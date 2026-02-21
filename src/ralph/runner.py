@@ -7,7 +7,7 @@ or safety limits are reached. Each iteration gets fresh context.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -30,11 +30,9 @@ class LoopResult:
 
     completed: bool
     iterations_run: int
-    max_iterations: int
     stop_reason: str
     started_at: datetime
     ended_at: datetime
-    milestones_completed: list[str] = field(default_factory=list)
 
 
 @dataclass

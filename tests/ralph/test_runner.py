@@ -237,7 +237,6 @@ class TestLoopResult:
         result = LoopResult(
             completed=True,
             iterations_run=3,
-            max_iterations=20,
             stop_reason="Completion signal detected",
             started_at=datetime.now(),
             ended_at=datetime.now(),
@@ -252,7 +251,6 @@ class TestLoopResult:
         result = LoopResult(
             completed=False,
             iterations_run=20,
-            max_iterations=20,
             stop_reason="Max iterations reached",
             started_at=datetime.now(),
             ended_at=datetime.now(),
