@@ -45,9 +45,10 @@ load_dotenv()
 
 console = Console()
 
-# Persistence directory for conversation history (same as OpenHands CLI)
-PERSISTENCE_DIR = os.path.expanduser("~/.openhands")
-CONVERSATIONS_DIR = os.path.join(PERSISTENCE_DIR, "conversations")
+# Import conversation directory from ralph module (single source of truth)
+from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
+
+CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
 
 
 def get_llm():
@@ -95,9 +96,15 @@ class ExecutionContext:
     workspace: Path
 
 
+class ExecutionSetupError(Exception):
+    """Raised when execution setup fails (validation, pre-flight checks, etc.)."""
+
+    pass
+
+
 def prepare_execution(
     design_doc: Path, workspace: Path, *, mode_name: str
-) -> ExecutionContext | int:
+) -> ExecutionContext:
     """Prepare execution context with validation and pre-flight checks.
 
     Args:
@@ -106,7 +113,10 @@ def prepare_execution(
         mode_name: Display name for the mode banner (e.g., "Implementation", "Ralph Loop Mode")
 
     Returns:
-        ExecutionContext if successful, or exit code (int) if validation failed
+        ExecutionContext if successful
+
+    Raises:
+        ExecutionSetupError: If validation or pre-flight checks fail
     """
     console.print(Panel(f"[bold blue]LXA - {mode_name}[/]", expand=False))
     console.print()
@@ -114,7 +124,7 @@ def prepare_execution(
     # Validate design doc exists
     if not design_doc.exists():
         console.print(f"[red]Error:[/] Design document not found: {design_doc}")
-        return 1
+        raise ExecutionSetupError(f"Design document not found: {design_doc}")
 
     # Run pre-flight checks
     console.print("[bold]Pre-flight checks[/]")
@@ -122,7 +132,7 @@ def prepare_execution(
     print_preflight_result(result)
 
     if not result.success:
-        return 1
+        raise ExecutionSetupError(result.error or "Pre-flight checks failed")
 
     console.print()
 
@@ -149,9 +159,10 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    ctx = prepare_execution(design_doc, workspace, mode_name="Implementation")
-    if isinstance(ctx, int):
-        return ctx
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Implementation")
+    except ExecutionSetupError:
+        return 1
 
     # Create orchestrator agent
     design_doc_relative = ctx.design_doc.relative_to(ctx.workspace)
@@ -273,9 +284,10 @@ def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 2
     """
     from src.ralph.runner import RalphLoopRunner
 
-    ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
-    if isinstance(ctx, int):
-        return ctx
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
+    except ExecutionSetupError:
+        return 1
 
     runner = RalphLoopRunner(
         llm=ctx.llm,

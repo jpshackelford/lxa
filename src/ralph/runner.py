@@ -6,6 +6,7 @@ or safety limits are reached. Each iteration gets fresh context.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,9 +21,13 @@ from src.agents.orchestrator import GitPlatform, create_orchestrator_agent
 from src.tools.checklist import ChecklistParser
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 # Completion signal that orchestrator outputs when all milestones are done
 COMPLETION_SIGNAL = "ALL_MILESTONES_COMPLETE"
+
+# Default persistence directory for conversation history (same as OpenHands CLI)
+DEFAULT_CONVERSATIONS_DIR = os.path.expanduser("~/.openhands/conversations")
 
 
 @dataclass
@@ -64,7 +69,9 @@ class RalphLoopRunner:
         workspace: Path,
         platform: GitPlatform = GitPlatform.GITHUB,
         max_iterations: int = 20,
+        max_consecutive_failures: int = 3,
         completion_signal: str = COMPLETION_SIGNAL,
+        conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
     ):
         """Initialize the Ralph Loop runner.
 
@@ -74,18 +81,21 @@ class RalphLoopRunner:
             workspace: Workspace directory (git root)
             platform: Git platform for PR operations
             max_iterations: Maximum iterations before stopping
+            max_consecutive_failures: Stop after this many consecutive failures
             completion_signal: String that signals completion in agent output
+            conversations_dir: Directory for conversation persistence
         """
         self.llm = llm
         self.design_doc_path = design_doc_path
         self.workspace = workspace
         self.platform = platform
         self.max_iterations = max_iterations
+        self.max_consecutive_failures = max_consecutive_failures
         self.completion_signal = completion_signal
+        self.conversations_dir = conversations_dir
 
         self._iteration = 0
         self._consecutive_failures = 0
-        self._max_consecutive_failures = 3
 
     def run(self) -> LoopResult:
         """Run the Ralph Loop until completion or limits reached.
@@ -179,7 +189,7 @@ class RalphLoopRunner:
         self._consecutive_failures += 1
         console.print(f"[red]✗[/] Iteration failed: {result.error}")
 
-        if self._consecutive_failures >= self._max_consecutive_failures:
+        if self._consecutive_failures >= self.max_consecutive_failures:
             stop_reason = f"Too many consecutive failures ({self._consecutive_failures})"
             console.print(f"[red]Stopping:[/] {stop_reason}")
             return stop_reason
@@ -233,12 +243,11 @@ class RalphLoopRunner:
             )
 
             # Create conversation
-            persistence_dir = os.path.expanduser("~/.openhands/conversations")
             conversation = Conversation(
                 agent=agent,
                 workspace=self.workspace,
                 visualizer=DelegationVisualizer(name=f"Ralph-{self._iteration}"),
-                persistence_dir=persistence_dir,
+                persistence_dir=self.conversations_dir,
             )
 
             console.print(f"[dim]Conversation ID: {conversation.id}[/]")
@@ -377,19 +386,29 @@ Critical rules:
                     text_parts.extend(self._extract_text_from_content(message.content))
             return "\n".join(text_parts)
         except Exception as e:
-            raise RuntimeError(f"Failed to extract conversation output: {e}") from e
+            event_count = len(getattr(conversation.state, "events", []))
+            conv_id = getattr(conversation, "id", "unknown")
+            raise RuntimeError(
+                f"Failed to extract conversation output "
+                f"(conversation={conv_id}, events={event_count}): {e}"
+            ) from e
 
     def _check_already_complete(self) -> bool:
         """Check if all milestones are already complete.
 
         Returns:
-            True if all milestones are complete
+            True if all milestones are complete, False if incomplete or on error
         """
         try:
             parser = ChecklistParser(self.design_doc_path)
             milestones = parser.parse_milestones()
             return all(m.tasks_remaining == 0 for m in milestones)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Failed to check milestone completion for %s: %s",
+                self.design_doc_path,
+                e,
+            )
             return False
 
     @staticmethod

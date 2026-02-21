@@ -765,3 +765,148 @@ class TestGetConversationOutput:
 
         output = runner._get_conversation_output(mock_conversation)
         assert "Agent output" in output
+
+
+class TestRunIteration:
+    """Integration tests for _run_iteration method.
+
+    These tests verify the real code path while mocking only external dependencies
+    (Conversation execution), not the method itself.
+    """
+
+    def test_successful_iteration_extracts_output(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that _run_iteration extracts output from successful conversation."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner._iteration = 1
+
+        # Create mock conversation that returns real SDK event types
+        mock_conversation = MagicMock()
+        mock_conversation.id = "test-conv-123"
+        mock_conversation.state.events = [
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text="Working on task...")],
+                ),
+            ),
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text="Task completed!")],
+                ),
+            ),
+        ]
+
+        # Patch Conversation to return our mock
+        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
+            with patch("src.ralph.runner.create_orchestrator_agent"):
+                result = runner._run_iteration()
+
+        assert result.success is True
+        assert result.iteration == 1
+        assert "Working on task" in result.output
+        assert "Task completed" in result.output
+        assert result.completion_detected is False
+
+    def test_iteration_detects_completion_signal(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that _run_iteration detects completion signal in output."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner._iteration = 5
+
+        mock_conversation = MagicMock()
+        mock_conversation.id = "test-conv-456"
+        mock_conversation.state.events = [
+            MessageEvent(
+                source="agent",
+                llm_message=Message(
+                    role="assistant",
+                    content=[TextContent(text="All done! ALL_MILESTONES_COMPLETE")],
+                ),
+            ),
+        ]
+
+        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
+            with patch("src.ralph.runner.create_orchestrator_agent"):
+                result = runner._run_iteration()
+
+        assert result.success is True
+        assert result.completion_detected is True
+        assert "ALL_MILESTONES_COMPLETE" in result.output
+
+    def test_iteration_handles_exception(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that _run_iteration returns failure result on exception."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner._iteration = 2
+
+        # Patch Conversation to raise an error
+        with patch("src.ralph.runner.Conversation", side_effect=RuntimeError("API timeout")):
+            with patch("src.ralph.runner.create_orchestrator_agent"):
+                result = runner._run_iteration()
+
+        assert result.success is False
+        assert result.iteration == 2
+        assert "API timeout" in result.error
+        assert result.completion_detected is False
+
+    def test_iteration_sends_context_message(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that _run_iteration sends context message and runs conversation."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=10,
+        )
+        runner._iteration = 3
+
+        mock_conversation = MagicMock()
+        mock_conversation.id = "test-conv"
+        mock_conversation.state.events = [
+            MessageEvent(
+                source="agent",
+                llm_message=Message(role="assistant", content=[TextContent(text="Done")]),
+            ),
+        ]
+
+        with patch("src.ralph.runner.Conversation", return_value=mock_conversation):
+            with patch("src.ralph.runner.create_orchestrator_agent"):
+                runner._run_iteration()
+
+        # Verify conversation was used correctly
+        mock_conversation.send_message.assert_called_once()
+        mock_conversation.run.assert_called_once()
+
+        # Verify context message contains expected info
+        call_args = mock_conversation.send_message.call_args[0][0]
+        assert "iteration 3 of 10" in call_args
+        assert "Continuing" in call_args  # Not first iteration
