@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 # Set default log level to WARNING before importing SDK (reduces verbose output)
@@ -25,17 +26,19 @@ if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
 from dotenv import load_dotenv
-from openhands.sdk import Conversation
+from openhands.sdk import LLM, Conversation
 from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
 from src.agents.orchestrator import (
+    GitPlatform,
     PreflightResult,
     create_orchestrator_agent,
     run_preflight_checks,
 )
 from src.config import DEFAULT_DESIGN_PATH, load_config
+from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
 from src.skills.reconcile import reconcile_design_doc
 
 # Load environment variables
@@ -43,9 +46,7 @@ load_dotenv()
 
 console = Console()
 
-# Persistence directory for conversation history (same as OpenHands CLI)
-PERSISTENCE_DIR = os.path.expanduser("~/.openhands")
-CONVERSATIONS_DIR = os.path.join(PERSISTENCE_DIR, "conversations")
+CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
 
 
 def get_llm():
@@ -83,6 +84,67 @@ def print_preflight_result(result: PreflightResult) -> None:
         console.print(f"[red]✗[/] Pre-flight check failed: {result.error}")
 
 
+@dataclass
+class ExecutionContext:
+    """Shared context for orchestrator execution modes."""
+
+    llm: LLM
+    platform: GitPlatform
+    design_doc: Path
+    workspace: Path
+
+
+class ExecutionSetupError(Exception):
+    """Raised when execution setup fails (validation, pre-flight checks, etc.)."""
+
+    pass
+
+
+def prepare_execution(design_doc: Path, workspace: Path, *, mode_name: str) -> ExecutionContext:
+    """Prepare execution context with validation and pre-flight checks.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+        mode_name: Display name for the mode banner (e.g., "Implementation", "Ralph Loop Mode")
+
+    Returns:
+        ExecutionContext if successful
+
+    Raises:
+        ExecutionSetupError: If validation or pre-flight checks fail
+    """
+    console.print(Panel(f"[bold blue]LXA - {mode_name}[/]", expand=False))
+    console.print()
+
+    # Validate design doc exists
+    if not design_doc.exists():
+        console.print(f"[red]Error:[/] Design document not found: {design_doc}")
+        raise ExecutionSetupError(f"Design document not found: {design_doc}")
+
+    # Run pre-flight checks
+    console.print("[bold]Pre-flight checks[/]")
+    result = run_preflight_checks(workspace)
+    print_preflight_result(result)
+
+    if not result.success:
+        raise ExecutionSetupError(result.error or "Pre-flight checks failed")
+
+    console.print()
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print()
+
+    return ExecutionContext(
+        llm=llm,
+        platform=result.platform,
+        design_doc=design_doc,
+        workspace=workspace,
+    )
+
+
 def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     """Run the orchestrator agent.
 
@@ -93,35 +155,17 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    console.print(Panel("[bold blue]LXA - Implementation[/]", expand=False))
-    console.print()
-
-    # Validate design doc exists
-    if not design_doc.exists():
-        console.print(f"[red]Error:[/] Design document not found: {design_doc}")
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Implementation")
+    except ExecutionSetupError:
         return 1
-
-    # Run pre-flight checks
-    console.print("[bold]Pre-flight checks[/]")
-    result = run_preflight_checks(workspace)
-    print_preflight_result(result)
-
-    if not result.success:
-        return 1
-
-    console.print()
-
-    # Get LLM
-    llm = get_llm()
-    console.print(f"[dim]Model: {llm.model}[/]")
-    console.print()
 
     # Create orchestrator agent
-    design_doc_relative = design_doc.relative_to(workspace)
+    design_doc_relative = ctx.design_doc.relative_to(ctx.workspace)
     agent = create_orchestrator_agent(
-        llm,
+        ctx.llm,
         design_doc_path=str(design_doc_relative),
-        platform=result.platform,
+        platform=ctx.platform,
     )
 
     console.print("[bold cyan]Starting orchestrator...[/]")
@@ -131,7 +175,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     # and persistence to ~/.openhands/conversations for history
     conversation = Conversation(
         agent=agent,
-        workspace=workspace,
+        workspace=ctx.workspace,
         visualizer=DelegationVisualizer(name="Orchestrator"),
         persistence_dir=CONVERSATIONS_DIR,
     )
@@ -223,6 +267,36 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
+def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 20) -> int:
+    """Run the Ralph Loop for continuous autonomous execution.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+        max_iterations: Maximum iterations before stopping
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from src.ralph.runner import RalphLoopRunner
+
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
+    except ExecutionSetupError:
+        return 1
+
+    runner = RalphLoopRunner(
+        llm=ctx.llm,
+        design_doc_path=ctx.design_doc,
+        workspace=ctx.workspace,
+        platform=ctx.platform,
+        max_iterations=max_iterations,
+    )
+
+    loop_result = runner.run()
+    return 0 if loop_result.completed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -288,6 +362,17 @@ Configuration:
         default=None,
         help="Custom path for the design document",
     )
+    implement_parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Run in Ralph Loop mode (continuous until completion)",
+    )
+    implement_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=20,
+        help="Maximum iterations in loop mode (default: 20)",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -336,7 +421,11 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
-    return run_orchestrator(design_doc, workspace)
+    # Run in loop mode or single execution
+    if args.loop:
+        return run_ralph_loop(design_doc, workspace, max_iterations=args.max_iterations)
+    else:
+        return run_orchestrator(design_doc, workspace)
 
 
 def find_git_root(start_path: Path) -> Path:
