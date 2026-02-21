@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from openhands.sdk import LLM, Conversation
 from openhands.sdk.conversation.base import BaseConversation
@@ -349,16 +350,24 @@ Critical rules:
         """
         if isinstance(content, str):
             return [content]
+        return [
+            block if isinstance(block, str) else getattr(block, "text", "")
+            for block in content
+            if isinstance(block, str) or hasattr(block, "text")
+        ]
 
-        texts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                texts.append(block)
-                continue
-            text = getattr(block, "text", None)
-            if text is not None:
-                texts.append(text)
-        return texts
+    def _is_agent_message(self, event: Any) -> bool:
+        """Check if an event is an agent message.
+
+        Args:
+            event: The event to check
+
+        Returns:
+            True if the event is a MessageEvent from the agent
+        """
+        from openhands.sdk.event import MessageEvent
+
+        return isinstance(event, MessageEvent) and event.source == "agent"
 
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events.
@@ -375,18 +384,17 @@ Critical rules:
         Raises:
             RuntimeError: If conversation output cannot be extracted
         """
-        from openhands.sdk.event import MessageEvent
-
         try:
             text_parts: list[str] = []
             for event in conversation.state.events:
-                if not isinstance(event, MessageEvent) or event.source != "agent":
+                if not self._is_agent_message(event):
                     continue
                 message = event.llm_message
                 if message and message.content:
                     text_parts.extend(self._extract_text_from_content(message.content))
             return "\n".join(text_parts)
         except Exception as e:
+            # Defensive access: avoid failing while generating error context
             event_count = len(getattr(conversation.state, "events", []))
             conv_id = getattr(conversation, "id", "unknown")
             raise RuntimeError(
