@@ -95,10 +95,25 @@ class RalphLoopRunner:
             LoopResult with completion status and statistics
         """
         started_at = datetime.now()
-        stop_reason = ""
-        completed = False
-        milestones_completed: list[str] = []
+        self._print_start_banner()
 
+        # Check if already complete before starting
+        if self._check_already_complete():
+            console.print("[green]✓[/] All milestones already complete!")
+            return self._build_result(
+                completed=True, stop_reason="Already complete", started_at=started_at
+            )
+
+        # Run the loop
+        completed, stop_reason = self._execute_loop()
+
+        self._print_summary(completed, stop_reason, started_at)
+        return self._build_result(
+            completed=completed, stop_reason=stop_reason, started_at=started_at
+        )
+
+    def _print_start_banner(self) -> None:
+        """Print the loop start banner."""
         console.print(
             Panel(
                 f"[bold blue]Ralph Loop[/]\n"
@@ -110,55 +125,55 @@ class RalphLoopRunner:
         )
         console.print()
 
-        # Check if already complete before starting
-        if self._check_already_complete():
-            console.print("[green]✓[/] All milestones already complete!")
-            return LoopResult(
-                completed=True,
-                iterations_run=0,
-                max_iterations=self.max_iterations,
-                stop_reason="Already complete",
-                started_at=started_at,
-                ended_at=datetime.now(),
-            )
+    def _execute_loop(self) -> tuple[bool, str]:
+        """Execute the main iteration loop.
 
+        Returns:
+            Tuple of (completed, stop_reason)
+        """
         while self._iteration < self.max_iterations:
             self._iteration += 1
-
             console.print(
                 f"[bold cyan]━━━ Iteration {self._iteration}/{self.max_iterations} ━━━[/]"
             )
             console.print()
 
-            # Run single iteration
             result = self._run_iteration()
 
             if not result.success:
-                self._consecutive_failures += 1
-                console.print(f"[red]✗[/] Iteration failed: {result.error}")
-
-                if self._consecutive_failures >= self._max_consecutive_failures:
-                    stop_reason = f"Too many consecutive failures ({self._consecutive_failures})"
-                    console.print(f"[red]Stopping:[/] {stop_reason}")
-                    break
+                stop_reason = self._handle_failure(result)
+                if stop_reason:
+                    return False, stop_reason
             else:
                 self._consecutive_failures = 0
-
                 if result.completion_detected:
-                    completed = True
-                    stop_reason = "Completion signal detected"
-                    console.print(f"[green]✓[/] {stop_reason}")
-                    break
+                    console.print("[green]✓[/] Completion signal detected")
+                    return True, "Completion signal detected"
 
             console.print()
 
-        if not stop_reason:
-            stop_reason = f"Max iterations ({self.max_iterations}) reached"
-            console.print(f"[yellow]Stopping:[/] {stop_reason}")
+        stop_reason = f"Max iterations ({self.max_iterations}) reached"
+        console.print(f"[yellow]Stopping:[/] {stop_reason}")
+        return False, stop_reason
 
-        ended_at = datetime.now()
-        duration = ended_at - started_at
+    def _handle_failure(self, result: IterationResult) -> str | None:
+        """Handle a failed iteration.
 
+        Returns:
+            Stop reason if should stop, None to continue
+        """
+        self._consecutive_failures += 1
+        console.print(f"[red]✗[/] Iteration failed: {result.error}")
+
+        if self._consecutive_failures >= self._max_consecutive_failures:
+            stop_reason = f"Too many consecutive failures ({self._consecutive_failures})"
+            console.print(f"[red]Stopping:[/] {stop_reason}")
+            return stop_reason
+        return None
+
+    def _print_summary(self, completed: bool, stop_reason: str, started_at: datetime) -> None:
+        """Print the final summary panel."""
+        duration = datetime.now() - started_at
         console.print()
         console.print(
             Panel(
@@ -171,14 +186,16 @@ class RalphLoopRunner:
             )
         )
 
+    def _build_result(
+        self, *, completed: bool, stop_reason: str, started_at: datetime
+    ) -> LoopResult:
+        """Build a LoopResult from current state."""
         return LoopResult(
             completed=completed,
             iterations_run=self._iteration,
-            max_iterations=self.max_iterations,
             stop_reason=stop_reason,
             started_at=started_at,
-            ended_at=ended_at,
-            milestones_completed=milestones_completed,
+            ended_at=datetime.now(),
         )
 
     def _run_iteration(self) -> IterationResult:
