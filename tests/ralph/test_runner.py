@@ -319,12 +319,25 @@ class TestLoopBehavior:
 
         # Pattern: fail, fail, success, fail, fail, complete
         iteration_results = [
-            IterationResult(iteration=1, success=False, output="", completion_detected=False, error="err"),
-            IterationResult(iteration=2, success=False, output="", completion_detected=False, error="err"),
+            IterationResult(
+                iteration=1, success=False, output="", completion_detected=False, error="err"
+            ),
+            IterationResult(
+                iteration=2, success=False, output="", completion_detected=False, error="err"
+            ),
             IterationResult(iteration=3, success=True, output="worked", completion_detected=False),
-            IterationResult(iteration=4, success=False, output="", completion_detected=False, error="err"),
-            IterationResult(iteration=5, success=False, output="", completion_detected=False, error="err"),
-            IterationResult(iteration=6, success=True, output="ALL_MILESTONES_COMPLETE", completion_detected=True),
+            IterationResult(
+                iteration=4, success=False, output="", completion_detected=False, error="err"
+            ),
+            IterationResult(
+                iteration=5, success=False, output="", completion_detected=False, error="err"
+            ),
+            IterationResult(
+                iteration=6,
+                success=True,
+                output="ALL_MILESTONES_COMPLETE",
+                completion_detected=True,
+            ),
         ]
         result_iter = iter(iteration_results)
 

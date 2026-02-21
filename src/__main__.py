@@ -26,12 +26,13 @@ if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
 from dotenv import load_dotenv
-from openhands.sdk import Conversation
+from openhands.sdk import LLM, Conversation
 from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
 from src.agents.orchestrator import (
+    GitPlatform,
     PreflightResult,
     create_orchestrator_agent,
     run_preflight_checks,
@@ -88,8 +89,8 @@ def print_preflight_result(result: PreflightResult) -> None:
 class ExecutionContext:
     """Shared context for orchestrator execution modes."""
 
-    llm: object  # LLM instance
-    platform: object  # GitPlatform
+    llm: LLM
+    platform: GitPlatform
     design_doc: Path
     workspace: Path
 

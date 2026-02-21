@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from openhands.sdk import Conversation, LLM
+from openhands.sdk import LLM, Conversation
+from openhands.sdk.conversation.base import BaseConversation
 from rich.console import Console
 from rich.panel import Panel
 
@@ -311,7 +312,7 @@ Critical rules:
 - If CI fails after local checks passed, fix the discrepancy in local checks
 """
 
-    def _get_conversation_output(self, conversation: Conversation) -> str:
+    def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events.
 
         Uses the SDK's documented API: conversation.state.events contains
@@ -342,8 +343,10 @@ Critical rules:
                             text_parts.append(message.content)
                         elif isinstance(message.content, list):
                             for block in message.content:
-                                if hasattr(block, "text"):
-                                    text_parts.append(block.text)
+                                # Use getattr for safer attribute access on content blocks
+                                text = getattr(block, "text", None)
+                                if text is not None:
+                                    text_parts.append(text)
                                 elif isinstance(block, str):
                                     text_parts.append(block)
 
