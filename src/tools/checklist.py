@@ -244,6 +244,10 @@ class ChecklistObservation(Observation):
         default=None, description="Task that was just marked complete."
     )
     updated_line: int | None = Field(default=None, description="Line number that was updated.")
+    all_milestones_complete: bool = Field(
+        default=False,
+        description="True when all tasks in all milestones are complete.",
+    )
 
     @property
     def visualize(self) -> Text:
@@ -347,7 +351,12 @@ class ChecklistExecutor(ToolExecutor[ChecklistAction, ChecklistObservation]):
                 text="All milestones complete!",
                 command="status",
                 design_doc=str(self.design_doc_path),
+                all_milestones_complete=True,
             )
+
+        # Check if all milestones are complete
+        all_milestones = self.parser.parse_milestones()
+        all_complete = all(m.tasks_remaining == 0 for m in all_milestones)
 
         tasks_data = [
             {"description": t.description, "complete": t.complete} for t in milestone.tasks
@@ -364,6 +373,7 @@ class ChecklistExecutor(ToolExecutor[ChecklistAction, ChecklistObservation]):
             tasks=tasks_data,
             tasks_complete=milestone.tasks_complete,
             tasks_remaining=milestone.tasks_remaining,
+            all_milestones_complete=all_complete,
         )
 
     def _handle_next(self) -> ChecklistObservation:

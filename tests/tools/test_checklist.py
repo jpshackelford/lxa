@@ -242,6 +242,27 @@ class TestChecklistExecutor:
 
         assert not obs.is_error
         assert obs.milestone_index is None
+        assert obs.all_milestones_complete is True
+
+    def test_status_not_all_complete(self, design_doc: Path) -> None:
+        """Test all_milestones_complete is False when tasks remain."""
+        executor = ChecklistExecutor(design_doc)
+        action = ChecklistAction(command="status")
+
+        obs = executor(action)
+
+        assert not obs.is_error
+        assert obs.all_milestones_complete is False
+
+    def test_status_partial_complete(self, partial_doc: Path) -> None:
+        """Test all_milestones_complete is False when some tasks remain."""
+        executor = ChecklistExecutor(partial_doc)
+        action = ChecklistAction(command="status")
+
+        obs = executor(action)
+
+        assert not obs.is_error
+        assert obs.all_milestones_complete is False
 
     def test_next_command(self, design_doc: Path) -> None:
         """Test next command returns next task."""
