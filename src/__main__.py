@@ -100,9 +100,7 @@ class ExecutionSetupError(Exception):
     pass
 
 
-def prepare_execution(
-    design_doc: Path, workspace: Path, *, mode_name: str
-) -> ExecutionContext:
+def prepare_execution(design_doc: Path, workspace: Path, *, mode_name: str) -> ExecutionContext:
     """Prepare execution context with validation and pre-flight checks.
 
     Args:
