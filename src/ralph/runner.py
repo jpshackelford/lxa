@@ -12,7 +12,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeGuard
+
+if TYPE_CHECKING:
+    from openhands.sdk.event import MessageEvent
 
 from openhands.sdk import LLM, Conversation
 from openhands.sdk.conversation.base import BaseConversation
@@ -356,7 +359,7 @@ Critical rules:
             if isinstance(block, str) or hasattr(block, "text")
         ]
 
-    def _is_agent_message(self, event: Any) -> bool:
+    def _is_agent_message(self, event: Any) -> TypeGuard[MessageEvent]:
         """Check if an event is an agent message.
 
         Args:
