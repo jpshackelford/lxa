@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 # Set default log level to WARNING before importing SDK (reduces verbose output)
@@ -83,17 +84,30 @@ def print_preflight_result(result: PreflightResult) -> None:
         console.print(f"[red]✗[/] Pre-flight check failed: {result.error}")
 
 
-def run_orchestrator(design_doc: Path, workspace: Path) -> int:
-    """Run the orchestrator agent.
+@dataclass
+class ExecutionContext:
+    """Shared context for orchestrator execution modes."""
+
+    llm: object  # LLM instance
+    platform: object  # GitPlatform
+    design_doc: Path
+    workspace: Path
+
+
+def prepare_execution(
+    design_doc: Path, workspace: Path, *, mode_name: str
+) -> ExecutionContext | int:
+    """Prepare execution context with validation and pre-flight checks.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
+        mode_name: Display name for the mode banner (e.g., "Implementation", "Ralph Loop Mode")
 
     Returns:
-        Exit code (0 for success, 1 for failure)
+        ExecutionContext if successful, or exit code (int) if validation failed
     """
-    console.print(Panel("[bold blue]LXA - Implementation[/]", expand=False))
+    console.print(Panel(f"[bold blue]LXA - {mode_name}[/]", expand=False))
     console.print()
 
     # Validate design doc exists
@@ -116,12 +130,34 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print(f"[dim]Model: {llm.model}[/]")
     console.print()
 
-    # Create orchestrator agent
-    design_doc_relative = design_doc.relative_to(workspace)
-    agent = create_orchestrator_agent(
-        llm,
-        design_doc_path=str(design_doc_relative),
+    return ExecutionContext(
+        llm=llm,
         platform=result.platform,
+        design_doc=design_doc,
+        workspace=workspace,
+    )
+
+
+def run_orchestrator(design_doc: Path, workspace: Path) -> int:
+    """Run the orchestrator agent.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    ctx = prepare_execution(design_doc, workspace, mode_name="Implementation")
+    if isinstance(ctx, int):
+        return ctx
+
+    # Create orchestrator agent
+    design_doc_relative = ctx.design_doc.relative_to(ctx.workspace)
+    agent = create_orchestrator_agent(
+        ctx.llm,
+        design_doc_path=str(design_doc_relative),
+        platform=ctx.platform,
     )
 
     console.print("[bold cyan]Starting orchestrator...[/]")
@@ -131,7 +167,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     # and persistence to ~/.openhands/conversations for history
     conversation = Conversation(
         agent=agent,
-        workspace=workspace,
+        workspace=ctx.workspace,
         visualizer=DelegationVisualizer(name="Orchestrator"),
         persistence_dir=CONVERSATIONS_DIR,
     )
@@ -234,43 +270,21 @@ def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 2
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    from src.agents.orchestrator import run_preflight_checks
     from src.ralph.runner import RalphLoopRunner
 
-    console.print(Panel("[bold blue]LXA - Ralph Loop Mode[/]", expand=False))
-    console.print()
+    ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
+    if isinstance(ctx, int):
+        return ctx
 
-    # Validate design doc exists
-    if not design_doc.exists():
-        console.print(f"[red]Error:[/] Design document not found: {design_doc}")
-        return 1
-
-    # Run pre-flight checks
-    console.print("[bold]Pre-flight checks[/]")
-    result = run_preflight_checks(workspace)
-    print_preflight_result(result)
-
-    if not result.success:
-        return 1
-
-    console.print()
-
-    # Get LLM
-    llm = get_llm()
-    console.print(f"[dim]Model: {llm.model}[/]")
-    console.print()
-
-    # Create and run the Ralph Loop
     runner = RalphLoopRunner(
-        llm=llm,
-        design_doc_path=design_doc,
-        workspace=workspace,
-        platform=result.platform,
+        llm=ctx.llm,
+        design_doc_path=ctx.design_doc,
+        workspace=ctx.workspace,
+        platform=ctx.platform,
         max_iterations=max_iterations,
     )
 
     loop_result = runner.run()
-
     return 0 if loop_result.completed else 1
 
 
