@@ -128,7 +128,9 @@ class RalphLoopRunner:
         while self._iteration < self.max_iterations:
             self._iteration += 1
 
-            console.print(f"[bold cyan]━━━ Iteration {self._iteration}/{self.max_iterations} ━━━[/]")
+            console.print(
+                f"[bold cyan]━━━ Iteration {self._iteration}/{self.max_iterations} ━━━[/]"
+            )
             console.print()
 
             # Run single iteration
@@ -271,13 +273,13 @@ class RalphLoopRunner:
             recent_journal = f"...\n{content[-2000:]}" if len(content) > 2000 else content
 
         return f"""\
-{'Continuing' if self._iteration > 1 else 'Starting'} autonomous execution (iteration {self._iteration} of {self.max_iterations}).
+{"Continuing" if self._iteration > 1 else "Starting"} autonomous execution (iteration {self._iteration} of {self.max_iterations}).
 
 ## Current State
 {milestone_info}
 
 ## Recent Activity (from journal)
-{recent_journal if recent_journal else 'No prior journal entries.'}
+{recent_journal if recent_journal else "No prior journal entries."}
 
 ## Instructions
 Continue milestone execution:
