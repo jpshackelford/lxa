@@ -281,7 +281,7 @@ class RalphLoopRunner:
         recent_journal = ""
         if journal_full_path.exists():
             content = journal_full_path.read_text()
-            recent_journal = f"...\n{content[-2000:]}" if len(content) > 2000 else content
+            recent_journal = self._truncate_to_line_boundary(content, max_chars=2000)
 
         return f"""\
 {"Continuing" if self._iteration > 1 else "Starting"} autonomous execution (iteration {self._iteration} of {self.max_iterations}).
@@ -363,3 +363,32 @@ Critical rules:
             return all(m.tasks_remaining == 0 for m in milestones)
         except Exception:
             return False
+
+    @staticmethod
+    def _truncate_to_line_boundary(content: str, max_chars: int) -> str:
+        """Truncate content to approximately max_chars, respecting line boundaries.
+
+        Args:
+            content: Text content to truncate
+            max_chars: Approximate maximum characters to keep
+
+        Returns:
+            Truncated content ending at a line boundary, with "..." prefix if truncated
+        """
+        if len(content) <= max_chars:
+            return content
+
+        # Find lines that fit within the limit, working backwards
+        lines = content.split("\n")
+        result_lines: list[str] = []
+        char_count = 0
+
+        for line in reversed(lines):
+            line_len = len(line) + 1  # +1 for newline
+            if char_count + line_len > max_chars and result_lines:
+                break
+            result_lines.append(line)
+            char_count += line_len
+
+        result_lines.reverse()
+        return "...\n" + "\n".join(result_lines)
