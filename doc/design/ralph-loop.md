@@ -2,43 +2,63 @@
 
 ## 1. Introduction
 
-### 1.1 Problem Statement
+### 1.1 Background
+
+This document builds on the learnings captured in
+[ralph-learnings.md](ralph-learnings.md) (PR #16), which analyzes the Ralph
+technique from [ralph-cc-go](https://github.com/raymyers/ralph-cc-go).
+
+The core Ralph insight is **naive persistence**—a simple loop that feeds a
+prompt to an agent, lets it work, and repeats:
+
+```bash
+while :; do cat PROMPT.md | claude-code ; done
+```
+
+This simplicity enables emergence. Progress lives in files and git, not LLM
+memory. Each iteration starts fresh, preventing context rot.
+
+### 1.2 Problem Statement
 
 LXA currently executes in a single-session mode where:
 - The orchestrator runs through one milestone
 - Stops when milestone is complete and PR is ready for review
 - Requires human intervention to merge PR and restart for the next milestone
 
-For large projects with many milestones (like implementing a multi-package monorepo), 
-this requires frequent human restarts, reducing the "autonomous" nature of the agent.
+For large projects with many milestones (like implementing a multi-package
+monorepo), this requires frequent human restarts, reducing the "autonomous"
+nature of the agent.
 
-### 1.2 Proposed Solution
+### 1.3 Proposed Solution
 
-Implement a **Ralph Loop** mode—an autonomous iteration paradigm where:
-1. The agent runs with a defined completion condition
-2. On attempted exit, a stop hook evaluates whether the condition is met
-3. If not complete (and under iteration limit), the agent restarts with context
-4. This continues until completion or safety limits are reached
+Implement **Ralph Loop mode**—embracing Ralph's "stateless resampling" approach:
 
-**User Experience**: Developer starts `lxa implement --loop`, goes to sleep, and wakes 
-up to multiple milestones completed with PRs ready for batch review.
+1. Each iteration is a fresh conversation (prevents context rot)
+2. Progress persists in files: design doc checkboxes, journal, git commits
+3. Loop continues until completion condition or safety limits
+4. Minimal state tracking—just enough for safety, not control
 
-**Technical Approach**:
-- **Iteration Loop**: Wrap conversation execution in a loop with max iterations
-- **Stop Hook**: Check completion condition before allowing exit
-- **Context Injection**: On restart, provide summary of previous iterations
-- **State Persistence**: Track progress in a state file for crash recovery
+**User Experience**: Developer starts `lxa implement --loop`, goes to sleep, and
+wakes up to multiple milestones completed with PRs ready for batch review.
 
-### 1.3 Trade-offs
+**Design Philosophy**: Follow Ralph's simplicity. Don't over-engineer. Let
+emergence happen. The existing lxa artifacts (design doc, journal) already
+provide the persistence layer—we just need the loop.
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Single long conversation | Simpler code, no restart overhead | Context fills up, loses thread |
-| Fresh conversation per iteration | Clean context, follows existing pattern | Restart overhead, needs state passing |
-| **Hybrid (chosen)** | Best of both | Moderate complexity |
+### 1.4 Relationship to Other Proposed Features
 
-The hybrid approach: Fresh conversation per iteration, but with context injection 
-from previous iterations via journal and state file.
+Per ralph-learnings.md, several features are proposed:
+
+| Feature | Relationship to Ralph Loop |
+|---------|---------------------------|
+| Ralph Mode (3.4) | **This document** - implements the loop |
+| Investigation Mode (3.2) | Separate feature, different agent behavior |
+| Progress Files (3.3) | Complements loop for multi-iteration debugging |
+| Context Refresh (3.5) | Built into loop (fresh conversation each iteration) |
+| Task Decomposition (3.1) | Independent—agents can decompose within any mode |
+
+This design focuses solely on the loop mechanics. Other features are separate
+work items.
 
 ## 2. Technical Design
 
@@ -278,47 +298,164 @@ implement_parser.add_argument(
 )
 ```
 
-## 3. Implementation Plan
+## 3. Changes to Existing Code
 
-### 3.1 Milestone 1: State Management (M1)
+Ralph Loop requires modifications to existing lxa components. This section
+explicitly documents what must change.
+
+### 3.1 Orchestrator Prompt Changes
+
+**File**: `src/agents/orchestrator.py`
+
+The orchestrator prompt must output a clear, parseable completion signal when
+all milestones are complete. Currently it only signals milestone completion.
+
+**Current behavior** (line ~299-302):
+```python
+COMPLETION:
+- When milestone is complete, comment "Ready for review" on PR and STOP
+- Report: "MILESTONE COMPLETE: <milestone name> - PR ready for review"
+- Do NOT continue to next milestone until PR is merged
+```
+
+**Required addition**:
+```python
+COMPLETION:
+- When milestone is complete, comment "Ready for review" on PR and STOP
+- Report: "MILESTONE COMPLETE: <milestone name> - PR ready for review"
+- If ALL milestones in the design doc are complete, also output:
+  "ALL_MILESTONES_COMPLETE" on its own line
+- Do NOT continue to next milestone until PR is merged
+```
+
+The loop runner checks for `ALL_MILESTONES_COMPLETE` in agent output to
+determine if the `promise` completion condition is met.
+
+**Alternative**: Instead of prompt changes, the loop runner could parse the
+design doc directly after each iteration. However, checking agent output is more
+reliable since it reflects the agent's own understanding of completion.
+
+### 3.2 ChecklistTool Enhancement
+
+**File**: `src/tools/checklist.py`
+
+The `status` command observation should include an explicit `all_complete` flag.
+
+**Current behavior**: Returns milestone info; caller must infer completion from
+`get_current_milestone() is None`.
+
+**Proposed addition** to `ChecklistObservation`:
+```python
+all_milestones_complete: bool = Field(
+    default=False,
+    description="True when all tasks in all milestones are complete"
+)
+```
+
+**Implementation** in `_handle_status()`:
+```python
+milestones = self.parser.parse_milestones()
+all_complete = all(m.tasks_remaining == 0 for m in milestones)
+
+return ChecklistObservation(
+    ...
+    all_milestones_complete=all_complete,
+)
+```
+
+This allows the completion condition checker to call the tool and get an
+explicit answer rather than parsing the design doc separately.
+
+### 3.3 Journal Iteration Markers (Optional)
+
+**File**: `src/tools/journal.py`
+
+When running in loop mode, the journal could include iteration boundary markers
+to help context builders identify "recent" entries.
+
+**Proposed addition** to `JournalEntry`:
+```python
+iteration: int | None = Field(
+    default=None,
+    description="Loop iteration number (if running in Ralph Loop mode)"
+)
+```
+
+**Format in journal**:
+```markdown
+## --- Iteration 3 Start (2025-01-15 14:30) ---
+
+## Implement FooService (2025-01-15 14:32)
+### Files Read
+- src/services/bar.py - Reviewed existing service pattern
+...
+```
+
+This is **optional**—the loop can work without it. But it improves context
+injection by clearly separating iterations.
+
+### 3.4 Summary of Changes
+
+| Component | Change Type | Required? | Description |
+|-----------|-------------|-----------|-------------|
+| Orchestrator prompt | Modify | **Yes** | Add `ALL_MILESTONES_COMPLETE` signal |
+| ChecklistObservation | Enhance | Recommended | Add `all_milestones_complete` field |
+| JournalEntry | Enhance | Optional | Add `iteration` field for markers |
+| `.lxa/state.json` | **New file** | **Yes** | Iteration tracking state |
+| `src/ralph/` | **New module** | **Yes** | Loop runner, state, completion |
+
+### 3.5 What Stays the Same
+
+These existing structures are sufficient and don't need changes:
+
+- **Design document format**: Checkbox parsing works as-is
+- **Journal entry structure**: `task_name`, `files_read`, `files_modified`,
+  `lessons_learned` are sufficient
+- **Task agent prompts**: No changes needed
+- **DelegateTool**: Works as-is for spawning task agents
+- **TerminalTool**: Works as-is for git operations
+
+## 4. Implementation Plan
+
+### 4.1 Milestone 1: State Management (M1)
 
 **Goal**: Persistent state tracking for loop execution.
 
-- [x] Create `src/ralph/state.py` with `LoopState` dataclass
-- [x] Implement state save/load to `.lxa/state.json`
-- [x] Add state recovery logic (detect existing state, prompt to resume)
-- [x] Tests for state persistence and recovery
+- [ ] Create `src/ralph/state.py` with `LoopState` dataclass
+- [ ] Implement state save/load to `.lxa/state.json`
+- [ ] Add state recovery logic (detect existing state, prompt to resume)
+- [ ] Tests for state persistence and recovery
 
-### 3.2 Milestone 2: Completion Conditions (M2)
+### 4.2 Milestone 2: Completion Conditions (M2)
 
 **Goal**: Pluggable completion condition system.
 
-- [x] Create `src/ralph/completion.py` with `CompletionCondition` protocol
-- [x] Implement `AllTasksComplete` checker
-- [x] Implement `MilestoneComplete` checker
-- [x] Implement `PromiseComplete` checker
-- [x] Tests for each completion condition
+- [ ] Create `src/ralph/completion.py` with `CompletionCondition` protocol
+- [ ] Implement `AllTasksComplete` checker
+- [ ] Implement `MilestoneComplete` checker
+- [ ] Implement `PromiseComplete` checker
+- [ ] Tests for each completion condition
 
-### 3.3 Milestone 3: Iteration Loop (M3)
+### 4.3 Milestone 3: Iteration Loop (M3)
 
 **Goal**: Core loop execution with context building.
 
-- [x] Create `src/ralph/runner.py` with `RalphLoopRunner` class
-- [x] Implement context builder for iteration messages
-- [x] Implement iteration loop with safety checks
-- [x] Integrate with existing orchestrator
-- [x] Tests for loop execution
+- [ ] Create `src/ralph/runner.py` with `RalphLoopRunner` class
+- [ ] Implement context builder for iteration messages
+- [ ] Implement iteration loop with safety checks
+- [ ] Integrate with existing orchestrator
+- [ ] Tests for loop execution
 
-### 3.4 Milestone 4: CLI Integration (M4)
+### 4.4 Milestone 4: CLI Integration (M4)
 
 **Goal**: Command-line interface for Ralph Loop mode.
 
-- [x] Add `--loop` and related arguments to `lxa implement`
-- [x] Wire up to `RalphLoopRunner`
-- [x] Add console output for iteration progress
-- [x] Tests for CLI argument handling
+- [ ] Add `--loop` and related arguments to `lxa implement`
+- [ ] Wire up to `RalphLoopRunner`
+- [ ] Add console output for iteration progress
+- [ ] Tests for CLI argument handling
 
-### 3.5 Milestone 5: Polish & Documentation (M5)
+### 4.5 Milestone 5: Polish & Documentation (M5)
 
 **Goal**: Production readiness.
 
@@ -328,7 +465,7 @@ implement_parser.add_argument(
 - [ ] Add example configurations
 - [ ] End-to-end integration test
 
-## 4. Module Structure
+## 5. Module Structure
 
 ```
 src/
@@ -352,7 +489,7 @@ tests/
 └── ...
 ```
 
-## 5. Example Session
+## 6. Example Session
 
 ```plaintext
 $ lxa implement --loop --max-iterations 10
@@ -410,7 +547,7 @@ Next steps:
 2. Run `lxa implement --loop` again for next milestone
 ```
 
-## 6. Future Enhancements
+## 7. Future Enhancements
 
 1. **Multi-PR Mode**: Don't wait for merge, continue to next milestone immediately
 2. **Parallel Execution**: Multiple sub-agents working on independent milestones
@@ -418,7 +555,7 @@ Next steps:
 4. **Web Dashboard**: Visual progress tracking
 5. **Cost Tracking**: LLM token usage per iteration
 
-## 7. References
+## 8. References
 
 - [Ralph Loop (snarktank/ralph)](https://github.com/snarktank/ralph)
 - [Ralph Wiggum Technique Article](https://medium.com/@davide.ruti/the-ralph-wiggum-technique-operationalizing-iterative-failure-in-autonomous-ai-agents-53d34fd50f97)
