@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -298,7 +298,7 @@ Critical rules:
 - If CI fails after local checks passed, fix the discrepancy in local checks
 """
 
-    def _get_conversation_output(self, conversation: object) -> str:
+    def _get_conversation_output(self, conversation: Any) -> str:
         """Extract output text from conversation.
 
         Args:
