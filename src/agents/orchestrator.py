@@ -299,6 +299,8 @@ See `.pr/design.md` section 5.1
 COMPLETION:
 - When milestone is complete, comment "Ready for review" on PR and STOP
 - Report: "MILESTONE COMPLETE: <milestone name> - PR ready for review"
+- If ALL milestones in the design doc are complete (all checkboxes checked),
+  also output on its own line: ALL_MILESTONES_COMPLETE
 - Do NOT continue to next milestone until PR is merged
 """
 
