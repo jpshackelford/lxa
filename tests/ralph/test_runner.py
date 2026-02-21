@@ -1,7 +1,7 @@
 """Tests for the Ralph Loop Runner."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -70,6 +70,35 @@ def mock_llm() -> MagicMock:
     llm = MagicMock()
     llm.model = "mock-model"
     return llm
+
+
+class TestTruncateToLineBoundary:
+    """Tests for the _truncate_to_line_boundary helper."""
+
+    def test_no_truncation_needed(self) -> None:
+        """Short content should not be truncated."""
+        content = "Line 1\nLine 2\nLine 3"
+        result = RalphLoopRunner._truncate_to_line_boundary(content, max_chars=100)
+        assert result == content
+        assert "..." not in result
+
+    def test_truncates_at_line_boundary(self) -> None:
+        """Truncation should occur at line boundaries, not mid-line."""
+        content = "Line 1\nLine 2 with more content\nLine 3\nLine 4"
+        result = RalphLoopRunner._truncate_to_line_boundary(content, max_chars=20)
+        # Should keep last lines that fit within ~20 chars
+        assert result.startswith("...")
+        # Should not cut mid-word
+        assert "Line" in result or result == "...\nLine 4"
+
+    def test_preserves_complete_lines(self) -> None:
+        """Each line in result should be complete."""
+        content = "AAAAAAAAAA\nBBBBBBBBBB\nCCCCCCCCCC\nDDDDDDDDDD"
+        result = RalphLoopRunner._truncate_to_line_boundary(content, max_chars=25)
+        # Result should have complete lines only
+        for line in result.split("\n"):
+            if line and line != "...":
+                assert line in ["AAAAAAAAAA", "BBBBBBBBBB", "CCCCCCCCCC", "DDDDDDDDDD"]
 
 
 class TestRalphLoopRunner:
@@ -186,6 +215,166 @@ class TestRalphLoopRunner:
             max_iterations=5,
         )
         assert runner.max_iterations == 5
+
+
+class TestLoopBehavior:
+    """Tests for actual loop execution behavior."""
+
+    def test_loop_stops_on_completion_signal(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that loop stops when completion signal is detected."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=10,
+        )
+
+        # Mock _run_iteration to return completion on second iteration
+        iteration_count = 0
+
+        def mock_run_iteration() -> IterationResult:
+            nonlocal iteration_count
+            iteration_count += 1
+            return IterationResult(
+                iteration=iteration_count,
+                success=True,
+                output="ALL_MILESTONES_COMPLETE" if iteration_count >= 2 else "still working",
+                completion_detected=iteration_count >= 2,
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration):
+            result = runner.run()
+
+        assert result.completed is True
+        assert result.iterations_run == 2
+        assert "Completion signal detected" in result.stop_reason
+
+    def test_loop_stops_after_max_iterations(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that loop stops when max iterations reached."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=3,
+        )
+
+        # Mock _run_iteration to never complete
+        def mock_run_iteration() -> IterationResult:
+            return IterationResult(
+                iteration=runner._iteration,
+                success=True,
+                output="still working",
+                completion_detected=False,
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration):
+            result = runner.run()
+
+        assert result.completed is False
+        assert result.iterations_run == 3
+        assert "Max iterations" in result.stop_reason
+
+    def test_loop_stops_after_consecutive_failures(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that loop stops after 3 consecutive failures."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=10,
+        )
+
+        # Mock _run_iteration to always fail
+        def mock_run_iteration() -> IterationResult:
+            return IterationResult(
+                iteration=runner._iteration,
+                success=False,
+                output="",
+                completion_detected=False,
+                error="API timeout",
+            )
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration):
+            result = runner.run()
+
+        assert result.completed is False
+        assert result.iterations_run == 3  # Should stop after 3 failures
+        assert "consecutive failures" in result.stop_reason
+
+    def test_failure_counter_resets_on_success(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that consecutive failure counter resets after a successful iteration."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_iterations=10,
+        )
+
+        # Pattern: fail, fail, success, fail, fail, complete
+        iteration_results = [
+            IterationResult(iteration=1, success=False, output="", completion_detected=False, error="err"),
+            IterationResult(iteration=2, success=False, output="", completion_detected=False, error="err"),
+            IterationResult(iteration=3, success=True, output="worked", completion_detected=False),
+            IterationResult(iteration=4, success=False, output="", completion_detected=False, error="err"),
+            IterationResult(iteration=5, success=False, output="", completion_detected=False, error="err"),
+            IterationResult(iteration=6, success=True, output="ALL_MILESTONES_COMPLETE", completion_detected=True),
+        ]
+        result_iter = iter(iteration_results)
+
+        def mock_run_iteration() -> IterationResult:
+            return next(result_iter)
+
+        with patch.object(runner, "_run_iteration", mock_run_iteration):
+            result = runner.run()
+
+        # Should complete successfully because failures were interspersed with successes
+        assert result.completed is True
+        assert result.iterations_run == 6
+
+    def test_handle_failure_returns_stop_reason_at_threshold(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test _handle_failure returns stop reason when threshold reached."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner._consecutive_failures = 2  # Already had 2 failures
+
+        failed_result = IterationResult(
+            iteration=3, success=False, output="", completion_detected=False, error="error"
+        )
+        stop_reason = runner._handle_failure(failed_result)
+
+        assert stop_reason is not None
+        assert "consecutive failures" in stop_reason
+
+    def test_handle_failure_returns_none_below_threshold(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test _handle_failure returns None when below threshold."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner._consecutive_failures = 0
+
+        failed_result = IterationResult(
+            iteration=1, success=False, output="", completion_detected=False, error="error"
+        )
+        stop_reason = runner._handle_failure(failed_result)
+
+        assert stop_reason is None
+        assert runner._consecutive_failures == 1
 
 
 class TestIterationResult:
