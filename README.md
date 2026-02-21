@@ -13,6 +13,50 @@ uv pip install -e ".[dev]"
 make dev
 ```
 
+## Usage
+
+### Single Iteration Mode
+
+Start the orchestrator for a single milestone:
+
+```bash
+# Start from default location (.pr/design.md)
+lxa implement
+
+# Start from a specific design document
+lxa implement doc/design/feature-name.md
+```
+
+### Ralph Loop Mode (Continuous Execution)
+
+Run the agent continuously until all milestones are complete:
+
+```bash
+# Run until completion (max 20 iterations by default)
+lxa implement --loop
+
+# Custom iteration limit
+lxa implement --loop --max-iterations 50
+
+# With a specific design document
+lxa implement doc/design/feature-name.md --loop
+```
+
+The Ralph Loop:
+- Creates a fresh conversation each iteration to prevent context rot
+- Reads the design document and journal for context injection
+- Detects completion via `ALL_MILESTONES_COMPLETE` signal or design doc state
+- Stops after 3 consecutive failures for safety
+
+### Reconciliation (Post-merge)
+
+Update design documents to reference implemented code:
+
+```bash
+lxa reconcile .pr/design.md --dry-run  # Preview changes
+lxa reconcile .pr/design.md            # Apply changes
+```
+
 ## Development
 
 ```bash

@@ -7,6 +7,34 @@ Demos for the Orchestrator Agent that coordinates milestone execution.
 - `demo_preflight_checks.py` - Pre-flight checks demo (no API key needed)
 - `demo_orchestrator.py` - Full orchestrator demo (requires setup below)
 
+## Execution Modes
+
+### Single Iteration Mode
+
+The default mode runs one iteration, completing the current milestone:
+
+```bash
+lxa implement doc/design/feature-name.md
+```
+
+### Ralph Loop Mode (Continuous Execution)
+
+Run continuously until all milestones are complete:
+
+```bash
+# Default: max 20 iterations
+lxa implement doc/design/feature-name.md --loop
+
+# Custom iteration limit
+lxa implement doc/design/feature-name.md --loop --max-iterations 50
+```
+
+The Ralph Loop:
+- Creates a fresh conversation each iteration (prevents context rot)
+- Injects design doc and journal context at each iteration start
+- Detects completion via `ALL_MILESTONES_COMPLETE` signal or design doc state
+- Stops after max iterations or 3 consecutive failures
+
 ## Quick Start: Pre-flight Checks Demo
 
 This demo requires no setup and shows how environment validation works:
