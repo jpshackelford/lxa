@@ -10,13 +10,10 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
+from openhands.sdk import Conversation, LLM
 from rich.console import Console
 from rich.panel import Panel
-
-if TYPE_CHECKING:
-    from openhands.sdk import LLM
 
 from src.agents.orchestrator import GitPlatform, create_orchestrator_agent
 from src.tools.checklist import ChecklistParser
@@ -190,7 +187,6 @@ class RalphLoopRunner:
         Returns:
             IterationResult with success status and output
         """
-        from openhands.sdk import Conversation
         from openhands.tools.delegate import DelegationVisualizer
 
         try:
@@ -300,29 +296,45 @@ Critical rules:
 - If CI fails after local checks passed, fix the discrepancy in local checks
 """
 
-    def _get_conversation_output(self, conversation: Any) -> str:
-        """Extract output text from conversation.
+    def _get_conversation_output(self, conversation: Conversation) -> str:
+        """Extract text content from conversation events.
+
+        Uses the SDK's documented API: conversation.state.events contains
+        all events, and MessageEvent.llm_message.content holds the text.
 
         Args:
             conversation: The conversation object
 
         Returns:
-            Combined output text from the conversation
+            Combined text content from agent messages
+
+        Raises:
+            RuntimeError: If conversation output cannot be extracted
         """
-        # Try to get the messages/events from conversation
-        # This depends on the SDK's API - adjust as needed
+        from openhands.sdk.event import MessageEvent
+
         try:
-            # Get all events/messages from conversation
-            if hasattr(conversation, "get_messages"):
-                messages = conversation.get_messages()
-                return "\n".join(str(m) for m in messages)
-            elif hasattr(conversation, "events"):
-                return "\n".join(str(e) for e in conversation.events)
-            else:
-                # Fallback - check the design doc directly
-                return ""
-        except Exception:
-            return ""
+            events = conversation.state.events
+            text_parts: list[str] = []
+
+            for event in events:
+                if isinstance(event, MessageEvent) and event.sender == "agent":
+                    # Extract text from message content
+                    message = event.llm_message
+                    if message and message.content:
+                        # content can be str or list of content blocks
+                        if isinstance(message.content, str):
+                            text_parts.append(message.content)
+                        elif isinstance(message.content, list):
+                            for block in message.content:
+                                if hasattr(block, "text"):
+                                    text_parts.append(block.text)
+                                elif isinstance(block, str):
+                                    text_parts.append(block)
+
+            return "\n".join(text_parts)
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract conversation output: {e}") from e
 
     def _check_already_complete(self) -> bool:
         """Check if all milestones are already complete.
