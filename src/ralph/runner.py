@@ -334,7 +334,7 @@ Critical rules:
             text_parts: list[str] = []
 
             for event in events:
-                if isinstance(event, MessageEvent) and event.sender == "agent":
+                if isinstance(event, MessageEvent) and event.source == "agent":
                     # Extract text from message content
                     message = event.llm_message
                     if message and message.content:

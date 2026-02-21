@@ -459,3 +459,173 @@ class TestLoopResult:
         )
         assert not result.completed
         assert "Max iterations" in result.stop_reason
+
+
+class TestGetConversationOutput:
+    """Tests for _get_conversation_output method."""
+
+    def test_extracts_agent_message_text(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test extraction of text from agent MessageEvents."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        # Create mock conversation with agent messages
+        agent_msg = MessageEvent(
+            source="agent",
+            llm_message=Message(
+                role="assistant",
+                content=[TextContent(text="Task completed successfully")],
+            ),
+        )
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = [agent_msg]
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert "Task completed successfully" in output
+
+    def test_filters_out_user_messages(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that user messages are not included in output."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        user_msg = MessageEvent(
+            source="user",
+            llm_message=Message(
+                role="user",
+                content=[TextContent(text="User input here")],
+            ),
+        )
+        agent_msg = MessageEvent(
+            source="agent",
+            llm_message=Message(
+                role="assistant",
+                content=[TextContent(text="Agent response")],
+            ),
+        )
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = [user_msg, agent_msg]
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert "User input here" not in output
+        assert "Agent response" in output
+
+    def test_handles_multiple_content_blocks(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test extraction from messages with multiple text blocks."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        agent_msg = MessageEvent(
+            source="agent",
+            llm_message=Message(
+                role="assistant",
+                content=[
+                    TextContent(text="First part"),
+                    TextContent(text="Second part"),
+                ],
+            ),
+        )
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = [agent_msg]
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert "First part" in output
+        assert "Second part" in output
+
+    def test_detects_completion_signal(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that completion signal is detectable in output."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        agent_msg = MessageEvent(
+            source="agent",
+            llm_message=Message(
+                role="assistant",
+                content=[TextContent(text="All done! ALL_MILESTONES_COMPLETE")],
+            ),
+        )
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = [agent_msg]
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert runner.completion_signal in output
+
+    def test_handles_empty_events(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test handling of conversation with no events."""
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = []
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert output == ""
+
+    def test_handles_non_message_events(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test that non-MessageEvent events are ignored."""
+        from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message, TextContent
+
+        runner = RalphLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        # Mix of event types - only MessageEvent should be processed
+        agent_msg = MessageEvent(
+            source="agent",
+            llm_message=Message(
+                role="assistant",
+                content=[TextContent(text="Agent output")],
+            ),
+        )
+        other_event = MagicMock()  # Some other event type
+
+        mock_conversation = MagicMock()
+        mock_conversation.state.events = [other_event, agent_msg]
+
+        output = runner._get_conversation_output(mock_conversation)
+        assert "Agent output" in output
