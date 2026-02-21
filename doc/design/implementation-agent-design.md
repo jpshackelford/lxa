@@ -115,8 +115,8 @@ The Ralph Loop provides continuous autonomous execution:
   at each iteration start
 - **Dual completion detection**: Stops when `ALL_MILESTONES_COMPLETE` signal is
   detected in output OR when all checkboxes in design doc are checked
-- **Safety limits**: Stops after max iterations (default: 20) or consecutive
-  failures (default: 3)
+- **Safety limits**: Stops after max iterations (default: 20, configurable via
+  `--max-iterations`) or 3 consecutive failures
 
 ### 2.5 Reconciliation Phase (Human-triggered)
 
@@ -522,8 +522,8 @@ by running agent iterations until completion or safety limits are reached.
   are injected at the start of each iteration
 - **Dual completion detection**: Checks both agent output for
   `ALL_MILESTONES_COMPLETE` signal and design doc state
-- **Configurable safety limits**: `max_iterations` (default: 20) and
-  `max_consecutive_failures` (default: 3)
+- **Safety limits**: `max_iterations` (default: 20, configurable via
+  `--max-iterations`) and stops after 3 consecutive failures
 - **Runner reusability**: Single runner instance can be used across multiple
   runs
 

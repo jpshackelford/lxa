@@ -33,7 +33,7 @@ The Ralph Loop:
 - Creates a fresh conversation each iteration (prevents context rot)
 - Injects design doc and journal context at each iteration start
 - Detects completion via `ALL_MILESTONES_COMPLETE` signal or design doc state
-- Stops after max iterations or consecutive failures (default: 3)
+- Stops after max iterations or 3 consecutive failures
 
 ## Quick Start: Pre-flight Checks Demo
 

@@ -46,7 +46,7 @@ The Ralph Loop:
 - Creates a fresh conversation each iteration to prevent context rot
 - Reads the design document and journal for context injection
 - Detects completion via `ALL_MILESTONES_COMPLETE` signal or design doc state
-- Stops after consecutive failures (default: 3) for safety
+- Stops after 3 consecutive failures for safety
 
 ### Reconciliation (Post-merge)
 
