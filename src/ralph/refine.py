@@ -22,6 +22,7 @@ from openhands.tools.terminal import TerminalTool
 from rich.console import Console
 from rich.panel import Panel
 
+from src.ralph.refinement_config import SELF_REVIEW_WORKFLOW, COMMIT_GUIDELINES, CODE_REVIEW_PRINCIPLES
 from src.ralph.github_review import (
     format_threads_for_prompt,
     get_pr_status,
@@ -66,28 +67,15 @@ class RefineResult:
 
 
 # Phase 1: Self-Review prompt
-SELF_REVIEW_PROMPT = """\
-You are a PR Self-Review Agent. Your task is to review and improve PR #{pr_number}
-in repository {repo_slug} before it goes out for external review.
+def get_self_review_prompt() -> str:
+    """Generate the self-review prompt with shared workflow."""
+    return f"""\
+You are a PR Self-Review Agent. Your task is to review and improve PR #{{pr_number}}
+in repository {{repo_slug}} before it goes out for external review.
 
-WORKFLOW:
-1. Check out the PR branch: `gh pr checkout {pr_number} --repo {repo_slug}`
-2. Wait for CI: `gh pr checks {pr_number} --repo {repo_slug} --watch`
-3. If CI fails: fix issues, commit, push, wait for CI again
-4. Review the code changes: `git diff main...HEAD`
-5. Apply code review principles (focus on data structures, simplicity)
-6. Fix any issues you find, commit with clear messages
-7. Push and wait for CI
-8. Output your verdict:
-   - 🟢 Good taste - code is clean, ready for review
-   - 🟡 Acceptable - works, minor improvements possible
-   - 🔴 Needs rework - keep fixing
-9. If 🟢 or 🟡: Mark PR ready with `gh pr ready {pr_number} --repo {repo_slug}`
+{SELF_REVIEW_WORKFLOW}
 
-COMMIT MESSAGES:
-- "Fix: [description]" for bug fixes
-- "Refactor: [description]" for simplification
-- "Test: [description]" for adding tests
+{COMMIT_GUIDELINES}
 
 OUTPUT when done:
 PHASE_COMPLETE: [verdict]
@@ -124,28 +112,8 @@ OUTPUT when done:
 PHASE_COMPLETE: All {thread_count} review threads addressed
 """
 
-CODE_REVIEW_SKILL = """\
-CODE REVIEW PRINCIPLES (Linus Torvalds style):
-
-1. DATA STRUCTURES FIRST
-   - Poor data structure choices create unnecessary complexity
-   - Look for data copying/transformation that could be eliminated
-
-2. SIMPLICITY AND "GOOD TASTE"
-   - Functions with >3 levels of nesting need redesign
-   - Special cases that could be eliminated with better design
-
-3. PRAGMATISM
-   - Is this solving a problem that actually exists?
-   - Are we over-engineering for theoretical edge cases?
-
-4. TESTING
-   - New behavior needs tests that prove it works
-   - Tests should fail if the behavior regresses
-
-5. SKIP STYLE NITS
-   - Formatting, naming conventions = linter territory
-"""
+# Use shared code review principles
+CODE_REVIEW_SKILL = CODE_REVIEW_PRINCIPLES
 
 
 def create_self_review_agent(
@@ -160,7 +128,7 @@ def create_self_review_agent(
         Tool(name=TerminalTool.name),
     ]
 
-    system_prompt = SELF_REVIEW_PROMPT.format(
+    system_prompt = get_self_review_prompt().format(
         pr_number=pr_number,
         repo_slug=repo_slug,
     )

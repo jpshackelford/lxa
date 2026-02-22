@@ -1,4 +1,5 @@
 """Orchestrator Agent - Coordinates milestone execution autonomously.
+from src.ralph.refinement_config import ORCHESTRATOR_REFINEMENT_LOOP
 
 The Orchestrator is a thin, long-lived agent that:
 - Reads the design doc to find the current milestone/task
@@ -420,35 +421,7 @@ def create_orchestrator_agent(
         ),
         Skill(
             name="pr_refinement",
-            content="""\
-When 'refine: true' appears in Refinement Settings, after milestone tasks complete:
-
-REFINEMENT LOOP:
-1. `gh pr checks --watch` - wait for CI to complete
-2. If CI fails → delegate fix, push, restart loop
-3. Read iteration from .pr/refinement-state.json (create with {"iteration": 0} if missing)
-4. Increment iteration, write back: echo '{"iteration": N}' > .pr/refinement-state.json
-5. Delegate code review task: "Review the code changes in this PR using these principles:
-   - Focus on data structures and simplicity over style
-   - Identify critical issues vs improvement opportunities
-   - Output a verdict: 🟢 Good taste, 🟡 Acceptable, or 🔴 Needs rework"
-6. Parse verdict from sub-agent output (look for 🟢, 🟡, or 🔴)
-7. Decide next action:
-   - 🟢 good_taste → STOP refinement
-   - 🔴 needs_rework → delegate fixes from review, push, restart loop
-   - 🟡 acceptable:
-       if allow_merge = "good_taste" → delegate fixes, push, restart loop
-       if allow_merge = "acceptable" AND iteration >= min_iterations → STOP refinement
-       else → delegate fixes, push, restart loop
-   - iteration >= max_iterations → STOP refinement (log warning about limit)
-8. On STOP:
-   - `gh pr ready` to mark PR ready for review
-   - if auto_merge is true: `gh pr merge --squash -t "PR_TITLE" -b "SUMMARY"`
-
-STATE FILE (.pr/refinement-state.json):
-  Read: cat .pr/refinement-state.json
-  Write: echo '{"iteration": 1}' > .pr/refinement-state.json
-""",
+            content=ORCHESTRATOR_REFINEMENT_LOOP,
             trigger=None,
         ),
     ]
