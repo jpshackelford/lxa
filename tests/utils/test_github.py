@@ -12,7 +12,7 @@ class TestParsePrUrl:
         """Test parsing a valid GitHub PR URL."""
         url = "https://github.com/owner/repo/pull/42"
         repo_slug, pr_number = parse_pr_url(url)
-        
+
         assert repo_slug == "owner/repo"
         assert pr_number == 42
 
@@ -20,7 +20,7 @@ class TestParsePrUrl:
         """Test parsing a valid GitHub PR URL with trailing slash."""
         url = "https://github.com/owner/repo/pull/42/"
         repo_slug, pr_number = parse_pr_url(url)
-        
+
         assert repo_slug == "owner/repo"
         assert pr_number == 42
 
@@ -28,7 +28,7 @@ class TestParsePrUrl:
         """Test parsing a valid GitHub PR URL with query parameters."""
         url = "https://github.com/owner/repo/pull/42?tab=files"
         repo_slug, pr_number = parse_pr_url(url)
-        
+
         assert repo_slug == "owner/repo"
         assert pr_number == 42
 
@@ -36,7 +36,7 @@ class TestParsePrUrl:
         """Test parsing PR URL with complex repository names."""
         url = "https://github.com/my-org/my-repo-name/pull/123"
         repo_slug, pr_number = parse_pr_url(url)
-        
+
         assert repo_slug == "my-org/my-repo-name"
         assert pr_number == 123
 
@@ -51,7 +51,7 @@ class TestParsePrUrl:
             "https://github.com/owner/repo/pull/abc",  # Non-numeric PR number
             "",  # Empty string
         ]
-        
+
         for url in invalid_urls:
             with pytest.raises(ValueError, match="Invalid GitHub PR URL format"):
                 parse_pr_url(url)
@@ -67,6 +67,6 @@ class TestParsePrUrl:
         """Test parsing PR with large number."""
         url = "https://github.com/owner/repo/pull/999999"
         repo_slug, pr_number = parse_pr_url(url)
-        
+
         assert repo_slug == "owner/repo"
         assert pr_number == 999999

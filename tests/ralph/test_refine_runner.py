@@ -3,9 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
-
-from src.ralph.refine import RefinePhase, RefineRunner, RefineResult
+from src.ralph.refine import RefinePhase, RefineResult, RefineRunner
 from src.ralph.runner import RefinementConfig
 
 
@@ -31,19 +29,19 @@ class TestRefineResult:
     def test_refine_result_creation(self):
         """Test creating RefineResult with all fields."""
         from datetime import datetime
-        
+
         started = datetime.now()
         ended = datetime.now()
-        
+
         result = RefineResult(
             completed=True,
             phase_run=RefinePhase.SELF_REVIEW,
             threads_resolved=3,
             stop_reason="All threads addressed",
             started_at=started,
-            ended_at=ended
+            ended_at=ended,
         )
-        
+
         assert result.completed is True
         assert result.phase_run == RefinePhase.SELF_REVIEW
         assert result.threads_resolved == 3
@@ -62,10 +60,7 @@ class TestRefineRunner:
         self.pr_number = 42
         self.repo_slug = "owner/repo"
         self.refinement_config = RefinementConfig(
-            auto_merge=False,
-            allow_merge="good_taste",
-            min_iterations=1,
-            max_iterations=5
+            auto_merge=False, allow_merge="good_taste", min_iterations=1, max_iterations=5
         )
 
     def test_init(self):
@@ -76,9 +71,9 @@ class TestRefineRunner:
             pr_number=self.pr_number,
             repo_slug=self.repo_slug,
             refinement_config=self.refinement_config,
-            phase=RefinePhase.AUTO
+            phase=RefinePhase.AUTO,
         )
-        
+
         assert runner.llm == self.mock_llm
         assert runner.workspace == self.workspace
         assert runner.pr_number == self.pr_number
@@ -91,10 +86,9 @@ class TestRefineRunner:
     def test_detect_completion_positive_cases(self):
         """Test completion detection with positive cases."""
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config
+            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
         )
-        
+
         positive_cases = [
             "PHASE_COMPLETE: done",
             "Phase Complete",
@@ -102,46 +96,49 @@ class TestRefineRunner:
             "Task Complete",
             "FINISHED",
             "Done with everything",
-            "Completed successfully"
+            "Completed successfully",
         ]
-        
+
         for case in positive_cases:
             assert runner._detect_completion(case), f"Should detect completion in: {case}"
 
     def test_detect_completion_negative_cases(self):
         """Test completion detection with negative cases."""
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config
+            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
         )
-        
+
         negative_cases = [
             "",
             "Still working on it",
             "In progress",
             "Need more time",
-            "Partial completion"
+            "Partial completion",
         ]
-        
+
         for case in negative_cases:
             assert not runner._detect_completion(case), f"Should not detect completion in: {case}"
 
-    @patch('src.ralph.refine.get_pr_status')
+    @patch("src.ralph.refine.get_pr_status")
     def test_determine_phase_auto_with_threads(self, mock_get_pr_status):
         """Test phase determination when there are unresolved threads."""
         mock_status = Mock()
         mock_status.has_unresolved_threads = True
         mock_get_pr_status.return_value = mock_status
-        
+
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config, phase=RefinePhase.AUTO
+            self.mock_llm,
+            self.workspace,
+            self.pr_number,
+            self.repo_slug,
+            self.refinement_config,
+            phase=RefinePhase.AUTO,
         )
-        
+
         phase = runner._determine_phase()
         assert phase == RefinePhase.RESPOND
 
-    @patch('src.ralph.refine.get_pr_status')
+    @patch("src.ralph.refine.get_pr_status")
     def test_determine_phase_auto_draft_pr(self, mock_get_pr_status):
         """Test phase determination for draft PR."""
         mock_status = Mock()
@@ -149,38 +146,50 @@ class TestRefineRunner:
         mock_status.is_draft = True
         mock_status.review_decision = None
         mock_get_pr_status.return_value = mock_status
-        
+
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config, phase=RefinePhase.AUTO
+            self.mock_llm,
+            self.workspace,
+            self.pr_number,
+            self.repo_slug,
+            self.refinement_config,
+            phase=RefinePhase.AUTO,
         )
-        
+
         phase = runner._determine_phase()
         assert phase == RefinePhase.SELF_REVIEW
 
     def test_determine_phase_explicit(self):
         """Test phase determination when explicitly set."""
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config, phase=RefinePhase.RESPOND
+            self.mock_llm,
+            self.workspace,
+            self.pr_number,
+            self.repo_slug,
+            self.refinement_config,
+            phase=RefinePhase.RESPOND,
         )
-        
+
         phase = runner._determine_phase()
         assert phase == RefinePhase.RESPOND
 
-    @patch('src.ralph.refine.get_unresolved_threads')
-    @patch('src.ralph.refine.Conversation')
-    def test_run_respond_no_threads(self, mock_conversation, mock_get_threads):
+    @patch("src.ralph.refine.get_unresolved_threads")
+    @patch("src.ralph.refine.Conversation")
+    def test_run_respond_no_threads(self, _mock_conversation, mock_get_threads):
         """Test respond phase when no threads exist."""
         mock_get_threads.return_value = []
-        
+
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config, phase=RefinePhase.RESPOND
+            self.mock_llm,
+            self.workspace,
+            self.pr_number,
+            self.repo_slug,
+            self.refinement_config,
+            phase=RefinePhase.RESPOND,
         )
-        
+
         result = runner.run()
-        
+
         assert result.completed is True
         assert result.phase_run == RefinePhase.RESPOND
         assert result.threads_resolved == 0
@@ -189,44 +198,42 @@ class TestRefineRunner:
     def test_get_conversation_output_empty_events(self):
         """Test conversation output extraction with no events."""
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config
+            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
         )
-        
+
         mock_conversation = Mock()
         mock_conversation.state.events = []
-        
+
         output = runner._get_conversation_output(mock_conversation)
         assert output == ""
 
     def test_get_conversation_output_with_agent_messages(self):
         """Test conversation output extraction with agent messages."""
         from openhands.sdk.event import MessageEvent
-        
+
         runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, 
-            self.repo_slug, self.refinement_config
+            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
         )
-        
+
         # Create mock events
         mock_event1 = Mock(spec=MessageEvent)
         mock_event1.source = "agent"
         mock_event1.llm_message = Mock()
         mock_event1.llm_message.content = "First message"
-        
+
         mock_event2 = Mock(spec=MessageEvent)
         mock_event2.source = "agent"
         mock_event2.llm_message = Mock()
         mock_event2.llm_message.content = "Second message"
-        
+
         mock_event3 = Mock(spec=MessageEvent)
         mock_event3.source = "user"  # Should be ignored
         mock_event3.llm_message = Mock()
         mock_event3.llm_message.content = "User message"
-        
+
         mock_conversation = Mock()
         mock_conversation.state.events = [mock_event1, mock_event2, mock_event3]
-        
+
         output = runner._get_conversation_output(mock_conversation)
         # Should return the last agent message
         assert output == "Second message"

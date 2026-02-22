@@ -22,11 +22,17 @@ from openhands.tools.terminal import TerminalTool
 from rich.console import Console
 from rich.panel import Panel
 
-from src.ralph.refinement_config import SELF_REVIEW_WORKFLOW, COMMIT_GUIDELINES, CODE_REVIEW_PRINCIPLES
 from src.ralph.github_review import (
+    CIStatus,
     format_threads_for_prompt,
     get_pr_status,
     get_unresolved_threads,
+    wait_for_ci,
+)
+from src.ralph.refinement_config import (
+    CODE_REVIEW_PRINCIPLES,
+    COMMIT_GUIDELINES,
+    SELF_REVIEW_WORKFLOW,
 )
 from src.ralph.runner import RefinementConfig
 
@@ -80,6 +86,7 @@ in repository {{repo_slug}} before it goes out for external review.
 OUTPUT when done:
 PHASE_COMPLETE: [verdict]
 """
+
 
 # Phase 2: Review Response prompt
 RESPOND_PROMPT = """\
@@ -263,8 +270,64 @@ class RefineRunner:
         # Default to self-review
         return RefinePhase.SELF_REVIEW
 
+    def _wait_for_ci(self, timeout: int = 600) -> tuple[CIStatus, str]:
+        """Wait for CI to complete and return status with context.
+
+        Args:
+            timeout: Maximum seconds to wait for CI
+
+        Returns:
+            Tuple of (CIStatus, context_message for agent)
+        """
+        console.print("[dim]Waiting for CI to complete...[/]")
+        ci_status = wait_for_ci(self.owner, self.repo, self.pr_number, timeout=timeout)
+
+        if ci_status == CIStatus.PASSING:
+            console.print("[green]✓[/] CI is passing")
+            return ci_status, ""
+        elif ci_status == CIStatus.FAILING:
+            console.print("[red]✗[/] CI is failing - agent will attempt to fix")
+            return (
+                ci_status,
+                """
+**CRITICAL: CI IS FAILING**
+
+Before proceeding with the main task, you MUST:
+1. Check what CI check failed: `gh pr checks {pr_number} --repo {repo_slug}`
+2. Get the CI logs to understand the failure
+3. Fix the CI issue first
+4. Commit the fix and push
+5. Wait for CI to pass before continuing
+
+Do NOT proceed with review until CI is green.
+""",
+            )
+        elif ci_status == CIStatus.PENDING:
+            console.print("[yellow]![/] CI timed out waiting - proceeding anyway")
+            return (
+                ci_status,
+                """
+**WARNING: CI is still pending after waiting**
+
+CI checks haven't completed yet. Proceed with caution and check CI status periodically.
+""",
+            )
+        else:
+            console.print("[yellow]?[/] CI status unknown")
+            return (
+                ci_status,
+                """
+**WARNING: CI status could not be determined**
+
+Check CI status manually: `gh pr checks {pr_number} --repo {repo_slug}`
+""",
+            )
+
     def _run_self_review(self, started_at: datetime) -> RefineResult:
         """Run Phase 1: Self-Review."""
+        # Wait for CI before starting
+        ci_status, ci_context = self._wait_for_ci()
+
         agent = create_self_review_agent(
             self.llm,
             self.pr_number,
@@ -282,9 +345,16 @@ class RefineRunner:
         console.print(f"[dim]Conversation ID: {conversation.id}[/]")
         console.print()
 
+        # Include CI context if there are issues
+        ci_instruction = (
+            ci_context.format(pr_number=self.pr_number, repo_slug=self.repo_slug)
+            if ci_context
+            else ""
+        )
+
         initial_message = f"""\
 Run self-review on PR #{self.pr_number}.
-
+{ci_instruction}
 Review the code changes, fix any issues, and mark the PR ready for review when done.
 Output PHASE_COMPLETE when finished.
 """
@@ -315,6 +385,9 @@ Output PHASE_COMPLETE when finished.
 
     def _run_respond(self, started_at: datetime) -> RefineResult:
         """Run Phase 2: Review Response."""
+        # Wait for CI before starting
+        ci_status, ci_context = self._wait_for_ci()
+
         # Get unresolved review threads
         threads = get_unresolved_threads(self.owner, self.repo, self.pr_number)
         thread_count = len(threads)
@@ -354,9 +427,16 @@ Output PHASE_COMPLETE when finished.
         console.print(f"[dim]Conversation ID: {conversation.id}[/]")
         console.print()
 
+        # Include CI context if there are issues
+        ci_instruction = (
+            ci_context.format(pr_number=self.pr_number, repo_slug=self.repo_slug)
+            if ci_context
+            else ""
+        )
+
         initial_message = f"""\
 Address the {thread_count} unresolved review thread(s) on PR #{self.pr_number}.
-
+{ci_instruction}
 For each thread:
 1. Make the requested fix
 2. Commit the change
@@ -423,15 +503,15 @@ Output PHASE_COMPLETE when all threads are addressed.
 
     def _detect_completion(self, output: str) -> bool:
         """Detect if the agent has completed its task.
-        
+
         Looks for various completion indicators with case-insensitive matching.
         """
         if not output:
             return False
-        
+
         # Convert to lowercase for case-insensitive matching
         output_lower = output.lower()
-        
+
         # Look for completion indicators
         completion_patterns = [
             "phase_complete",
@@ -440,15 +520,14 @@ Output PHASE_COMPLETE when all threads are addressed.
             "task_complete",
             "finished",
             "done",
-            "completed successfully"
+            "completed successfully",
         ]
-        
-        return any(pattern in output_lower for pattern in completion_patterns)
 
+        return any(pattern in output_lower for pattern in completion_patterns)
 
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events.
-        
+
         Returns the last agent message content, or empty string if none found.
         Raises an exception if extraction fails to avoid masking real failures.
         """
@@ -457,21 +536,27 @@ Output PHASE_COMPLETE when all threads are addressed.
         # Get all agent messages
         agent_messages = []
         for event in conversation.state.events:
-            if isinstance(event, MessageEvent) and event.source == "agent":
-                if event.llm_message and event.llm_message.content:
-                    content = event.llm_message.content
-                    if isinstance(content, str):
-                        agent_messages.append(content)
-                    else:
-                        # Handle structured content by extracting text
-                        text_parts = []
-                        for block in content:
-                            if isinstance(block, str):
-                                text_parts.append(block)
-                            elif hasattr(block, "text"):
-                                text_parts.append(str(block.text))
-                        if text_parts:
-                            agent_messages.append("\n".join(text_parts))
+            if (
+                isinstance(event, MessageEvent)
+                and event.source == "agent"
+                and event.llm_message
+                and event.llm_message.content
+            ):
+                content = event.llm_message.content
+                if isinstance(content, str):
+                    agent_messages.append(content)
+                else:
+                    # Handle structured content by extracting text
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, str):
+                            text_parts.append(block)
+                        else:
+                            text = getattr(block, "text", None)
+                            if text is not None:
+                                text_parts.append(str(text))
+                    if text_parts:
+                        agent_messages.append("\n".join(text_parts))
 
         # Return the last message (most recent agent output)
         return agent_messages[-1] if agent_messages else ""

@@ -271,8 +271,6 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-
-
 def run_refine(
     pr_url: str,
     workspace: Path,

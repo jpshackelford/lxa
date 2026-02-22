@@ -52,8 +52,9 @@ COMMIT MESSAGES:
 VERDICT_PATTERNS = {
     "good_taste": ["🟢", "good taste", "good_taste"],
     "acceptable": ["🟡", "acceptable"],
-    "needs_rework": ["🔴", "needs rework", "needs_rework"]
+    "needs_rework": ["🔴", "needs rework", "needs_rework"],
 }
+
 
 # Improved orchestrator refinement skill (no LLM state management)
 def get_orchestrator_refinement_skill() -> str:
@@ -74,5 +75,5 @@ REFINEMENT PROCESS:
 6. On STOP: `gh pr ready` to mark PR ready for review
 7. If auto_merge enabled: `gh pr merge --squash`
 
-IMPORTANT: Do NOT manage state via shell commands. State management is handled 
+IMPORTANT: Do NOT manage state via shell commands. State management is handled
 by the Python orchestrator code, not by LLM-generated shell commands."""
