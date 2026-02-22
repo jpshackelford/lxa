@@ -532,6 +532,28 @@ Output PHASE_COMPLETE when all threads are addressed.
             )
         )
 
+    def _extract_text_from_content(self, content) -> str:
+        """Extract text from message content.
+
+        Args:
+            content: Either a string or a list of blocks (strings or objects with text attribute)
+
+        Returns:
+            Extracted text as a string, with multiple parts joined by newlines
+        """
+        if isinstance(content, str):
+            return content
+
+        text_parts = []
+        for block in content:
+            if isinstance(block, str):
+                text_parts.append(block)
+            else:
+                text = getattr(block, "text", None)
+                if text is not None:
+                    text_parts.append(str(text))
+        return "\n".join(text_parts)
+
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events.
 
@@ -550,20 +572,9 @@ Output PHASE_COMPLETE when all threads are addressed.
                 and event.llm_message.content
             ):
                 content = event.llm_message.content
-                if isinstance(content, str):
-                    agent_messages.append(content)
-                else:
-                    # Handle structured content by extracting text
-                    text_parts = []
-                    for block in content:
-                        if isinstance(block, str):
-                            text_parts.append(block)
-                        else:
-                            text = getattr(block, "text", None)
-                            if text is not None:
-                                text_parts.append(str(text))
-                    if text_parts:
-                        agent_messages.append("\n".join(text_parts))
+                text = self._extract_text_from_content(content)
+                if text:
+                    agent_messages.append(text)
 
         # Return the last message (most recent agent output)
         return agent_messages[-1] if agent_messages else ""
