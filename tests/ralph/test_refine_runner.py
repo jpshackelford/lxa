@@ -146,11 +146,18 @@ class TestRefineRunner:
     @patch("src.ralph.refine.get_pr_status")
     def test_determine_phase_auto_draft_pr(self, mock_get_pr_status):
         """Test phase determination for draft PR."""
-        mock_status = Mock()
-        mock_status.has_unresolved_threads = False
-        mock_status.is_draft = True
-        mock_status.review_decision = None
-        mock_get_pr_status.return_value = mock_status
+        from src.ralph.github_review import CIStatus, PRState, PRStatus
+
+        # Use real PRStatus object instead of Mock
+        status = PRStatus(
+            number=self.pr_number,
+            state=PRState.DRAFT,
+            is_draft=True,
+            ci_status=CIStatus.PASSING,
+            has_unresolved_threads=False,
+            review_decision=None,
+        )
+        mock_get_pr_status.return_value = status
 
         runner = RefineRunner(
             self.mock_llm,
