@@ -85,9 +85,7 @@ class TestRefineRunner:
 
     def test_detect_completion_positive_cases(self):
         """Test completion detection with positive cases."""
-        runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
-        )
+        from src.ralph.refine import detect_completion
 
         positive_cases = [
             "PHASE_COMPLETE: done",
@@ -100,13 +98,11 @@ class TestRefineRunner:
         ]
 
         for case in positive_cases:
-            assert runner._detect_completion(case), f"Should detect completion in: {case}"
+            assert detect_completion(case), f"Should detect completion in: {case}"
 
     def test_detect_completion_negative_cases(self):
         """Test completion detection with negative cases."""
-        runner = RefineRunner(
-            self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
-        )
+        from src.ralph.refine import detect_completion
 
         negative_cases = [
             "",
@@ -117,7 +113,7 @@ class TestRefineRunner:
         ]
 
         for case in negative_cases:
-            assert not runner._detect_completion(case), f"Should not detect completion in: {case}"
+            assert not detect_completion(case), f"Should not detect completion in: {case}"
 
     @patch("src.ralph.refine.get_pr_status")
     def test_determine_phase_auto_with_threads(self, mock_get_pr_status):
