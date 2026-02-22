@@ -303,6 +303,7 @@ def run_refine(
     allow_merge: str = "acceptable",
     min_iterations: int = 1,
     max_iterations: int = 5,
+    phase: str = "auto",
 ) -> int:
     """Run the refinement loop on an existing PR.
 
@@ -313,11 +314,12 @@ def run_refine(
         allow_merge: Quality bar for merge ("good_taste" or "acceptable")
         min_iterations: Minimum review iterations before accepting "acceptable"
         max_iterations: Maximum refinement iterations
+        phase: Which phase to run: "auto", "self-review", or "respond"
 
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    from src.ralph.refine import RefinementConfig, RefineRunner
+    from src.ralph.refine import RefinementConfig, RefinePhase, RefineRunner
 
     console.print(Panel("[bold blue]LXA - PR Refinement[/]", expand=False))
     console.print()
@@ -331,6 +333,7 @@ def run_refine(
 
     console.print(f"[dim]Repository: {repo_slug}[/]")
     console.print(f"[dim]PR: #{pr_number}[/]")
+    console.print(f"[dim]Phase: {phase}[/]")
     console.print(f"[dim]Workspace: {workspace}[/]")
     console.print()
 
@@ -343,6 +346,9 @@ def run_refine(
     llm = get_llm()
     console.print(f"[dim]Model: {llm.model}[/]")
     console.print()
+
+    # Convert phase string to enum
+    phase_enum = RefinePhase.from_string(phase)
 
     refinement_config = RefinementConfig(
         enabled=True,
@@ -358,6 +364,7 @@ def run_refine(
         pr_number=pr_number,
         repo_slug=repo_slug,
         refinement_config=refinement_config,
+        phase=phase_enum,
     )
 
     result = runner.run()
@@ -586,6 +593,12 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    refine_parser.add_argument(
+        "--phase",
+        choices=["auto", "self-review", "respond"],
+        default="auto",
+        help="Phase to run: auto (detect), self-review, or respond (default: auto)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -605,6 +618,7 @@ Configuration:
             allow_merge=args.allow_merge,
             min_iterations=args.min_iterations,
             max_iterations=args.max_iterations,
+            phase=args.phase,
         )
 
     # Handle implement command with config-based path resolution
