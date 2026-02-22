@@ -166,17 +166,24 @@ def get_pr_status(owner: str, repo: str, pr_number: int) -> PRStatus | None:
         state = PRState.READY
 
     # Parse CI status
+    # GitHub API returns "status" (QUEUED, IN_PROGRESS, COMPLETED) and
+    # "conclusion" (SUCCESS, FAILURE, CANCELLED, etc.) for each check
     status_checks = data.get("statusCheckRollup", []) or []
     if not status_checks:
         ci_status = CIStatus.UNKNOWN
     else:
-        states = [check.get("state", "").upper() for check in status_checks]
-        if all(s == "SUCCESS" for s in states):
-            ci_status = CIStatus.PASSING
-        elif any(s in ("FAILURE", "ERROR") for s in states):
-            ci_status = CIStatus.FAILING
-        elif any(s in ("PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS") for s in states):
+        conclusions = [check.get("conclusion", "").upper() for check in status_checks]
+        statuses = [check.get("status", "").upper() for check in status_checks]
+
+        # Check if any are still running
+        if any(s in ("QUEUED", "IN_PROGRESS", "WAITING", "PENDING") for s in statuses):
             ci_status = CIStatus.PENDING
+        # Check if any failed (only look at non-empty conclusions)
+        elif any(c in ("FAILURE", "CANCELLED", "TIMED_OUT", "ERROR") for c in conclusions if c):
+            ci_status = CIStatus.FAILING
+        # Check if all completed successfully
+        elif conclusions and all(c == "SUCCESS" for c in conclusions if c):
+            ci_status = CIStatus.PASSING
         else:
             ci_status = CIStatus.UNKNOWN
 
