@@ -326,7 +326,7 @@ Output PHASE_COMPLETE when finished.
             conversation.run()
 
             output = self._get_conversation_output(conversation)
-            completed = "PHASE_COMPLETE" in output
+            completed = self._detect_completion(output)
             stop_reason = "Self-review complete" if completed else "Agent stopped"
 
         except Exception as e:
@@ -403,7 +403,7 @@ Output PHASE_COMPLETE when all threads are addressed.
             conversation.run()
 
             output = self._get_conversation_output(conversation)
-            completed = "PHASE_COMPLETE" in output
+            completed = self._detect_completion(output)
             stop_reason = f"Addressed {thread_count} threads" if completed else "Agent stopped"
 
         except Exception as e:
@@ -452,6 +452,31 @@ Output PHASE_COMPLETE when all threads are addressed.
                 expand=False,
             )
         )
+
+    def _detect_completion(self, output: str) -> bool:
+        """Detect if the agent has completed its task.
+        
+        Looks for various completion indicators with case-insensitive matching.
+        """
+        if not output:
+            return False
+        
+        # Convert to lowercase for case-insensitive matching
+        output_lower = output.lower()
+        
+        # Look for completion indicators
+        completion_patterns = [
+            "phase_complete",
+            "phase complete",
+            "task complete",
+            "task_complete",
+            "finished",
+            "done",
+            "completed successfully"
+        ]
+        
+        return any(pattern in output_lower for pattern in completion_patterns)
+
 
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
         """Extract text content from conversation events."""
