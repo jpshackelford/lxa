@@ -46,10 +46,10 @@ def detect_completion(output: str) -> bool:
     """Detect if the agent has completed its task.
 
     Looks for various completion indicators with case-insensitive matching.
-    
+
     Args:
         output: Agent output text to check for completion signals
-        
+
     Returns:
         True if completion signal detected, False otherwise
     """

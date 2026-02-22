@@ -118,7 +118,7 @@ class TestRefineRunner:
     @patch("src.ralph.refine.get_pr_status")
     def test_determine_phase_auto_with_threads(self, mock_get_pr_status):
         """Test phase determination when there are unresolved threads."""
-        from src.ralph.github_review import PRStatus, PRState, CIStatus
+        from src.ralph.github_review import CIStatus, PRState, PRStatus
 
         # Use real PRStatus object instead of Mock
         status = PRStatus(
