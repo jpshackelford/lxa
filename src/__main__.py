@@ -41,7 +41,7 @@ from src.agents.orchestrator import (
     run_preflight_checks,
 )
 from src.config import DEFAULT_DESIGN_PATH, load_config
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
+from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
 
@@ -352,11 +352,7 @@ def run_ralph_loop(
     workspace: Path,
     *,
     max_iterations: int = 20,
-    refine: bool = False,
-    auto_merge: bool = False,
-    allow_merge: str = "acceptable",
-    min_iterations: int = 1,
-    max_refine_iterations: int = 5,
+    refinement_config: RefinementConfig | None = None,
 ) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
@@ -364,29 +360,19 @@ def run_ralph_loop(
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
-        refine: Whether to run code review refinement loop
-        auto_merge: Whether to squash & merge when refinement passes
-        allow_merge: Quality bar for merge ("good_taste" or "acceptable")
-        min_iterations: Minimum review iterations before accepting "acceptable"
-        max_refine_iterations: Maximum refinement iterations
+        refinement_config: Configuration for code review refinement loop
 
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    from src.ralph.runner import RalphLoopRunner, RefinementConfig
+    from src.ralph.runner import RalphLoopRunner
 
     try:
         ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
     except ExecutionSetupError:
         return 1
 
-    refinement_config = RefinementConfig(
-        enabled=refine,
-        auto_merge=auto_merge,
-        allow_merge=allow_merge,
-        min_iterations=min_iterations,
-        max_iterations=max_refine_iterations,
-    )
+    refinement_config = refinement_config or RefinementConfig()
 
     runner = RalphLoopRunner(
         llm=ctx.llm,
@@ -618,11 +604,13 @@ Configuration:
             design_doc,
             workspace,
             max_iterations=args.max_iterations,
-            refine=args.refine,
-            auto_merge=args.auto_merge,
-            allow_merge=args.allow_merge,
-            min_iterations=args.min_iterations,
-            max_refine_iterations=args.max_refine_iterations,
+            refinement_config=RefinementConfig(
+                enabled=args.refine,
+                auto_merge=args.auto_merge,
+                allow_merge=args.allow_merge,
+                min_iterations=args.min_iterations,
+                max_iterations=args.max_refine_iterations,
+            ),
         )
     else:
         return run_orchestrator(design_doc, workspace)
