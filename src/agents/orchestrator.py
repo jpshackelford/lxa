@@ -1,5 +1,5 @@
 """Orchestrator Agent - Coordinates milestone execution autonomously.
-from src.ralph.refinement_config import ORCHESTRATOR_REFINEMENT_LOOP
+from src.ralph.refinement_config import get_orchestrator_refinement_skill
 
 The Orchestrator is a thin, long-lived agent that:
 - Reads the design doc to find the current milestone/task
@@ -421,7 +421,7 @@ def create_orchestrator_agent(
         ),
         Skill(
             name="pr_refinement",
-            content=ORCHESTRATOR_REFINEMENT_LOOP,
+            content=get_orchestrator_refinement_skill(),
             trigger=None,
         ),
     ]

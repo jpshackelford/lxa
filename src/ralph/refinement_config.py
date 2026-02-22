@@ -47,29 +47,6 @@ COMMIT MESSAGES:
 - "Test: [description]" for adding tests
 - "Address review: [description]" for review responses"""
 
-# Orchestrator refinement loop (for milestone-based refinement)
-ORCHESTRATOR_REFINEMENT_LOOP = f"""\
-When 'refine: true' appears in Refinement Settings, after milestone tasks complete:
-
-REFINEMENT LOOP:
-1. `gh pr checks --watch` - wait for CI to complete
-2. If CI fails → delegate fix, push, restart loop
-3. Delegate code review task using these principles:
-{CODE_REVIEW_PRINCIPLES}
-4. Parse verdict from sub-agent output (look for 🟢, 🟡, or 🔴)
-5. Decide next action:
-   - 🟢 good_taste → STOP refinement
-   - 🔴 needs_rework → delegate fixes from review, push, restart loop
-   - 🟡 acceptable:
-       if allow_merge = "good_taste" → delegate fixes, push, restart loop
-       if allow_merge = "acceptable" AND iteration >= min_iterations → STOP refinement
-       else → delegate fixes, push, restart loop
-   - iteration >= max_iterations → STOP refinement (log warning about limit)
-6. On STOP:
-   - `gh pr ready` to mark PR ready for review
-   - if auto_merge is true: `gh pr merge --squash -t "PR_TITLE" -b "SUMMARY"`
-
-Note: State management should be handled in Python code, not delegated to LLM shell commands."""
 
 # Verdict parsing patterns
 VERDICT_PATTERNS = {
@@ -77,3 +54,25 @@ VERDICT_PATTERNS = {
     "acceptable": ["🟡", "acceptable"],
     "needs_rework": ["🔴", "needs rework", "needs_rework"]
 }
+
+# Improved orchestrator refinement skill (no LLM state management)
+def get_orchestrator_refinement_skill() -> str:
+    """Generate orchestrator refinement skill with proper state management."""
+    return f"""\
+When 'refine: true' appears in Refinement Settings, after milestone tasks complete:
+
+REFINEMENT PROCESS:
+1. `gh pr checks --watch` - wait for CI to complete
+2. If CI fails → delegate fix, push, restart process
+3. Delegate code review task using these principles:
+{CODE_REVIEW_PRINCIPLES}
+4. Parse verdict from sub-agent output (look for 🟢, 🟡, or 🔴)
+5. Decide next action based on verdict and configuration:
+   - 🟢 good_taste → STOP refinement, mark PR ready
+   - 🔴 needs_rework → delegate fixes from review, push, restart
+   - 🟡 acceptable → check allow_merge setting and iteration count
+6. On STOP: `gh pr ready` to mark PR ready for review
+7. If auto_merge enabled: `gh pr merge --squash`
+
+IMPORTANT: Do NOT manage state via shell commands. State management is handled 
+by the Python orchestrator code, not by LLM-generated shell commands."""
