@@ -479,24 +479,31 @@ Output PHASE_COMPLETE when all threads are addressed.
 
 
     def _get_conversation_output(self, conversation: BaseConversation) -> str:
-        """Extract text content from conversation events."""
+        """Extract text content from conversation events.
+        
+        Returns the last agent message content, or empty string if none found.
+        Raises an exception if extraction fails to avoid masking real failures.
+        """
         from openhands.sdk.event import MessageEvent
 
-        try:
-            text_parts: list[str] = []
-            for event in conversation.state.events:
-                if isinstance(event, MessageEvent) and event.source == "agent":
-                    message = event.llm_message
-                    if message and message.content:
-                        if isinstance(message.content, str):
-                            text_parts.append(message.content)
-                        else:
-                            for block in message.content:
-                                if isinstance(block, str):
-                                    text_parts.append(block)
-                                elif hasattr(block, "text"):
-                                    text_parts.append(getattr(block, "text", ""))
-            return "\n".join(text_parts)
-        except Exception as e:
-            logger.warning(f"Failed to extract conversation output: {e}")
-            return ""
+        # Get all agent messages
+        agent_messages = []
+        for event in conversation.state.events:
+            if isinstance(event, MessageEvent) and event.source == "agent":
+                if event.llm_message and event.llm_message.content:
+                    content = event.llm_message.content
+                    if isinstance(content, str):
+                        agent_messages.append(content)
+                    else:
+                        # Handle structured content by extracting text
+                        text_parts = []
+                        for block in content:
+                            if isinstance(block, str):
+                                text_parts.append(block)
+                            elif hasattr(block, "text"):
+                                text_parts.append(str(block.text))
+                        if text_parts:
+                            agent_messages.append("\n".join(text_parts))
+
+        # Return the last message (most recent agent output)
+        return agent_messages[-1] if agent_messages else ""
