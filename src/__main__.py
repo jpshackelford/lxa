@@ -43,6 +43,7 @@ from src.agents.orchestrator import (
 from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
 from src.skills.reconcile import reconcile_design_doc
+from src.utils.github import parse_pr_url
 
 # Load environment variables
 load_dotenv()
@@ -270,29 +271,6 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-def parse_pr_url(pr_url: str) -> tuple[str, int]:
-    """Parse a GitHub PR URL into repo slug and PR number.
-
-    Args:
-        pr_url: GitHub PR URL (e.g., "https://github.com/owner/repo/pull/42")
-
-    Returns:
-        Tuple of (repo_slug, pr_number)
-        repo_slug is "owner/repo" format
-
-    Raises:
-        ValueError: If the URL format is invalid
-    """
-    import re
-
-    url_pattern = r"https?://github\.com/([^/]+/[^/]+)/pull/(\d+)"
-    match = re.match(url_pattern, pr_url)
-    if match:
-        return match.group(1), int(match.group(2))
-
-    raise ValueError(
-        f"Invalid PR URL: {pr_url}\nExpected format: https://github.com/owner/repo/pull/42"
-    )
 
 
 def run_refine(
