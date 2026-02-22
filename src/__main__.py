@@ -4,12 +4,15 @@ Usage:
     python -m src implement                  # Start from .pr/design.md (default)
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
+    python -m src refine 42                  # Refine PR #42
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
     lxa implement --design-path custom.md    # Uses custom path
     lxa reconcile .pr/design.md              # Update design doc with code refs
+    lxa refine 42                            # Refine existing PR
+    lxa refine 42 --auto-merge               # Refine and merge when clean
 """
 
 from __future__ import annotations
@@ -267,6 +270,103 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
+def parse_pr_identifier(pr: str) -> tuple[str | None, int]:
+    """Parse a PR identifier (number or URL) into repo and PR number.
+
+    Args:
+        pr: PR number (e.g., "42") or URL (e.g., "https://github.com/owner/repo/pull/42")
+
+    Returns:
+        Tuple of (repo_slug or None, pr_number)
+        repo_slug is "owner/repo" format, or None if just a number was provided
+    """
+    import re
+
+    # Try to parse as a URL first
+    url_pattern = r"https?://github\.com/([^/]+/[^/]+)/pull/(\d+)"
+    match = re.match(url_pattern, pr)
+    if match:
+        return match.group(1), int(match.group(2))
+
+    # Try to parse as a plain number
+    try:
+        return None, int(pr)
+    except ValueError:
+        pass
+
+    # Invalid format
+    raise ValueError(f"Invalid PR identifier: {pr}. Expected a number or GitHub PR URL.")
+
+
+def run_refine(
+    pr: str,
+    workspace: Path,
+    *,
+    auto_merge: bool = False,
+    allow_merge: str = "acceptable",
+    min_iterations: int = 1,
+    max_iterations: int = 5,
+) -> int:
+    """Run the refinement loop on an existing PR.
+
+    Args:
+        pr: PR number or URL
+        workspace: Path to the workspace (git repository root)
+        auto_merge: Whether to squash & merge when refinement passes
+        allow_merge: Quality bar for merge ("good_taste" or "acceptable")
+        min_iterations: Minimum review iterations before accepting "acceptable"
+        max_iterations: Maximum refinement iterations
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from src.ralph.refine import RefinementConfig, RefineRunner
+
+    console.print(Panel("[bold blue]LXA - PR Refinement[/]", expand=False))
+    console.print()
+
+    # Parse PR identifier
+    try:
+        repo_slug, pr_number = parse_pr_identifier(pr)
+    except ValueError as e:
+        console.print(f"[red]Error:[/] {e}")
+        return 1
+
+    console.print(f"[dim]PR: #{pr_number}[/]")
+    if repo_slug:
+        console.print(f"[dim]Repository: {repo_slug}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    console.print()
+
+    # Verify workspace is a git repo
+    if not (workspace / ".git").exists():
+        console.print(f"[red]Error:[/] Not a git repository: {workspace}")
+        return 1
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print()
+
+    refinement_config = RefinementConfig(
+        enabled=True,
+        auto_merge=auto_merge,
+        allow_merge=allow_merge,
+        min_iterations=min_iterations,
+        max_iterations=max_iterations,
+    )
+
+    runner = RefineRunner(
+        llm=llm,
+        workspace=workspace,
+        pr_number=pr_number,
+        refinement_config=refinement_config,
+    )
+
+    result = runner.run()
+    return 0 if result.completed else 1
+
+
 def run_ralph_loop(
     design_doc: Path,
     workspace: Path,
@@ -450,6 +550,46 @@ Configuration:
         help="Show what would be updated without making changes",
     )
 
+    # Refine subcommand
+    refine_parser = subparsers.add_parser(
+        "refine",
+        help="Refine an existing PR with code review loop",
+    )
+    refine_parser.add_argument(
+        "pr",
+        help="PR number (e.g., 42) or URL (e.g., https://github.com/owner/repo/pull/42)",
+    )
+    refine_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to current git root)",
+    )
+    refine_parser.add_argument(
+        "--auto-merge",
+        action="store_true",
+        help="Squash & merge when refinement passes",
+    )
+    refine_parser.add_argument(
+        "--allow-merge",
+        choices=["good_taste", "acceptable"],
+        default="acceptable",
+        help="Quality bar for merge: good_taste or acceptable (default: acceptable)",
+    )
+    refine_parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="Minimum review iterations before accepting 'acceptable' (default: 1)",
+    )
+    refine_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=5,
+        help="Maximum refinement iterations (default: 5)",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle reconcile command (simple path handling)
@@ -457,6 +597,18 @@ Configuration:
         design_doc = args.design_doc.resolve()
         workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
         return run_reconcile(design_doc, workspace, dry_run=args.dry_run)
+
+    # Handle refine command
+    if args.command == "refine":
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+        return run_refine(
+            pr=args.pr,
+            workspace=workspace,
+            auto_merge=args.auto_merge,
+            allow_merge=args.allow_merge,
+            min_iterations=args.min_iterations,
+            max_iterations=args.max_iterations,
+        )
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
