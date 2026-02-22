@@ -36,6 +36,17 @@ DEFAULT_CONVERSATIONS_DIR = os.path.expanduser("~/.openhands/conversations")
 
 
 @dataclass
+class RefinementConfig:
+    """Configuration for PR refinement loop."""
+
+    enabled: bool = False
+    auto_merge: bool = False
+    allow_merge: str = "acceptable"  # "good_taste" or "acceptable"
+    min_iterations: int = 1
+    max_iterations: int = 5
+
+
+@dataclass
 class LoopResult:
     """Result of a Ralph Loop execution."""
 
@@ -77,6 +88,7 @@ class RalphLoopRunner:
         max_consecutive_failures: int = 3,
         completion_signal: str = COMPLETION_SIGNAL,
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
+        refinement_config: RefinementConfig | None = None,
     ):
         """Initialize the Ralph Loop runner.
 
@@ -89,6 +101,7 @@ class RalphLoopRunner:
             max_consecutive_failures: Stop after this many consecutive failures
             completion_signal: String that signals completion in agent output
             conversations_dir: Directory for conversation persistence
+            refinement_config: Configuration for PR refinement loop
         """
         self.llm = llm
         self.design_doc_path = design_doc_path
@@ -98,6 +111,7 @@ class RalphLoopRunner:
         self.max_consecutive_failures = max_consecutive_failures
         self.completion_signal = completion_signal
         self.conversations_dir = conversations_dir
+        self.refinement_config = refinement_config or RefinementConfig()
 
         self._iteration = 0
         self._consecutive_failures = 0
@@ -135,12 +149,22 @@ class RalphLoopRunner:
 
     def _print_start_banner(self) -> None:
         """Print the loop start banner."""
+        refinement_info = ""
+        if self.refinement_config.enabled:
+            refinement_info = (
+                f"\n[bold green]Refinement:[/] enabled\n"
+                f"  Allow merge: {self.refinement_config.allow_merge}\n"
+                f"  Min iterations: {self.refinement_config.min_iterations}\n"
+                f"  Max iterations: {self.refinement_config.max_iterations}\n"
+                f"  Auto-merge: {self.refinement_config.auto_merge}"
+            )
         console.print(
             Panel(
                 f"[bold blue]Ralph Loop[/]\n"
                 f"Max iterations: {self.max_iterations}\n"
                 f"Design doc: {self.design_doc_path}\n"
-                f"Completion signal: {self.completion_signal}",
+                f"Completion signal: {self.completion_signal}"
+                f"{refinement_info}",
                 expand=False,
             )
         )
@@ -313,6 +337,18 @@ class RalphLoopRunner:
             content = journal_full_path.read_text()
             recent_journal = self._truncate_to_line_boundary(content, max_chars=2000)
 
+        # Build refinement settings section
+        refinement_section = ""
+        if self.refinement_config.enabled:
+            refinement_section = f"""
+## Refinement Settings
+refine: true
+auto_merge: {str(self.refinement_config.auto_merge).lower()}
+allow_merge: {self.refinement_config.allow_merge}
+min_iterations: {self.refinement_config.min_iterations}
+max_iterations: {self.refinement_config.max_iterations}
+"""
+
         return f"""\
 {"Continuing" if self._iteration > 1 else "Starting"} autonomous execution (iteration {self._iteration} of {self.max_iterations}).
 
@@ -321,7 +357,7 @@ class RalphLoopRunner:
 
 ## Recent Activity (from journal)
 {recent_journal if recent_journal else "No prior journal entries."}
-
+{refinement_section}
 ## Instructions
 Continue milestone execution:
 1. Check implementation status using the checklist tool

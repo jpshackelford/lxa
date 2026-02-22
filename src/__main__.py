@@ -267,23 +267,46 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 20) -> int:
+def run_ralph_loop(
+    design_doc: Path,
+    workspace: Path,
+    *,
+    max_iterations: int = 20,
+    refine: bool = False,
+    auto_merge: bool = False,
+    allow_merge: str = "acceptable",
+    min_iterations: int = 1,
+    max_refine_iterations: int = 5,
+) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
+        refine: Whether to run code review refinement loop
+        auto_merge: Whether to squash & merge when refinement passes
+        allow_merge: Quality bar for merge ("good_taste" or "acceptable")
+        min_iterations: Minimum review iterations before accepting "acceptable"
+        max_refine_iterations: Maximum refinement iterations
 
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    from src.ralph.runner import RalphLoopRunner
+    from src.ralph.runner import RalphLoopRunner, RefinementConfig
 
     try:
         ctx = prepare_execution(design_doc, workspace, mode_name="Ralph Loop Mode")
     except ExecutionSetupError:
         return 1
+
+    refinement_config = RefinementConfig(
+        enabled=refine,
+        auto_merge=auto_merge,
+        allow_merge=allow_merge,
+        min_iterations=min_iterations,
+        max_iterations=max_refine_iterations,
+    )
 
     runner = RalphLoopRunner(
         llm=ctx.llm,
@@ -291,6 +314,7 @@ def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 2
         workspace=ctx.workspace,
         platform=ctx.platform,
         max_iterations=max_iterations,
+        refinement_config=refinement_config,
     )
 
     loop_result = runner.run()
@@ -373,6 +397,34 @@ Configuration:
         default=20,
         help="Maximum iterations in loop mode (default: 20)",
     )
+    implement_parser.add_argument(
+        "--refine",
+        action="store_true",
+        help="Run code review refinement loop after tasks complete",
+    )
+    implement_parser.add_argument(
+        "--auto-merge",
+        action="store_true",
+        help="Squash & merge when refinement passes",
+    )
+    implement_parser.add_argument(
+        "--allow-merge",
+        choices=["good_taste", "acceptable"],
+        default="acceptable",
+        help="Quality bar for merge: good_taste or acceptable (default: acceptable)",
+    )
+    implement_parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="Minimum review iterations before accepting 'acceptable' (default: 1)",
+    )
+    implement_parser.add_argument(
+        "--max-refine-iterations",
+        type=int,
+        default=5,
+        help="Maximum refinement iterations (default: 5)",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -423,7 +475,16 @@ Configuration:
 
     # Run in loop mode or single execution
     if args.loop:
-        return run_ralph_loop(design_doc, workspace, max_iterations=args.max_iterations)
+        return run_ralph_loop(
+            design_doc,
+            workspace,
+            max_iterations=args.max_iterations,
+            refine=args.refine,
+            auto_merge=args.auto_merge,
+            allow_merge=args.allow_merge,
+            min_iterations=args.min_iterations,
+            max_refine_iterations=args.max_refine_iterations,
+        )
     else:
         return run_orchestrator(design_doc, workspace)
 
