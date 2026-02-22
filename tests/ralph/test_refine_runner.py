@@ -223,18 +223,16 @@ class TestRefineRunner:
 
         # Create real MessageEvent instances
         event1 = MessageEvent(
-            source="agent",
-            llm_message=Message(role="assistant", content="First message")
+            source="agent", llm_message=Message(role="assistant", content="First message")
         )
 
         event2 = MessageEvent(
-            source="agent",
-            llm_message=Message(role="assistant", content="Second message")
+            source="agent", llm_message=Message(role="assistant", content="Second message")
         )
 
         event3 = MessageEvent(
             source="user",  # Should be ignored
-            llm_message=Message(role="user", content="User message")
+            llm_message=Message(role="user", content="User message"),
         )
 
         mock_conversation = Mock()
