@@ -215,29 +215,30 @@ class TestRefineRunner:
     def test_get_conversation_output_with_agent_messages(self):
         """Test conversation output extraction with agent messages."""
         from openhands.sdk.event import MessageEvent
+        from openhands.sdk.llm import Message
 
         runner = RefineRunner(
             self.mock_llm, self.workspace, self.pr_number, self.repo_slug, self.refinement_config
         )
 
-        # Create mock events
-        mock_event1 = Mock(spec=MessageEvent)
-        mock_event1.source = "agent"
-        mock_event1.llm_message = Mock()
-        mock_event1.llm_message.content = "First message"
+        # Create real MessageEvent instances
+        event1 = MessageEvent(
+            source="agent",
+            llm_message=Message(role="assistant", content="First message")
+        )
 
-        mock_event2 = Mock(spec=MessageEvent)
-        mock_event2.source = "agent"
-        mock_event2.llm_message = Mock()
-        mock_event2.llm_message.content = "Second message"
+        event2 = MessageEvent(
+            source="agent",
+            llm_message=Message(role="assistant", content="Second message")
+        )
 
-        mock_event3 = Mock(spec=MessageEvent)
-        mock_event3.source = "user"  # Should be ignored
-        mock_event3.llm_message = Mock()
-        mock_event3.llm_message.content = "User message"
+        event3 = MessageEvent(
+            source="user",  # Should be ignored
+            llm_message=Message(role="user", content="User message")
+        )
 
         mock_conversation = Mock()
-        mock_conversation.state.events = [mock_event1, mock_event2, mock_event3]
+        mock_conversation.state.events = [event1, event2, event3]
 
         output = runner._get_conversation_output(mock_conversation)
         # Should return the last agent message
