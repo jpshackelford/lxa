@@ -4,15 +4,15 @@ Usage:
     python -m src implement                  # Start from .pr/design.md (default)
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
-    python -m src refine 42                  # Refine PR #42
+    python -m src refine <PR_URL>            # Refine existing PR
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
     lxa implement --design-path custom.md    # Uses custom path
     lxa reconcile .pr/design.md              # Update design doc with code refs
-    lxa refine 42                            # Refine existing PR
-    lxa refine 42 --auto-merge               # Refine and merge when clean
+    lxa refine https://github.com/owner/repo/pull/42              # Refine PR
+    lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
 """
 
 from __future__ import annotations
@@ -270,36 +270,33 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-def parse_pr_identifier(pr: str) -> tuple[str | None, int]:
-    """Parse a PR identifier (number or URL) into repo and PR number.
+def parse_pr_url(pr_url: str) -> tuple[str, int]:
+    """Parse a GitHub PR URL into repo slug and PR number.
 
     Args:
-        pr: PR number (e.g., "42") or URL (e.g., "https://github.com/owner/repo/pull/42")
+        pr_url: GitHub PR URL (e.g., "https://github.com/owner/repo/pull/42")
 
     Returns:
-        Tuple of (repo_slug or None, pr_number)
-        repo_slug is "owner/repo" format, or None if just a number was provided
+        Tuple of (repo_slug, pr_number)
+        repo_slug is "owner/repo" format
+
+    Raises:
+        ValueError: If the URL format is invalid
     """
     import re
 
-    # Try to parse as a URL first
     url_pattern = r"https?://github\.com/([^/]+/[^/]+)/pull/(\d+)"
-    match = re.match(url_pattern, pr)
+    match = re.match(url_pattern, pr_url)
     if match:
         return match.group(1), int(match.group(2))
 
-    # Try to parse as a plain number
-    try:
-        return None, int(pr)
-    except ValueError:
-        pass
-
-    # Invalid format
-    raise ValueError(f"Invalid PR identifier: {pr}. Expected a number or GitHub PR URL.")
+    raise ValueError(
+        f"Invalid PR URL: {pr_url}\nExpected format: https://github.com/owner/repo/pull/42"
+    )
 
 
 def run_refine(
-    pr: str,
+    pr_url: str,
     workspace: Path,
     *,
     auto_merge: bool = False,
@@ -310,7 +307,7 @@ def run_refine(
     """Run the refinement loop on an existing PR.
 
     Args:
-        pr: PR number or URL
+        pr_url: GitHub PR URL (e.g., https://github.com/owner/repo/pull/42)
         workspace: Path to the workspace (git repository root)
         auto_merge: Whether to squash & merge when refinement passes
         allow_merge: Quality bar for merge ("good_taste" or "acceptable")
@@ -325,16 +322,15 @@ def run_refine(
     console.print(Panel("[bold blue]LXA - PR Refinement[/]", expand=False))
     console.print()
 
-    # Parse PR identifier
+    # Parse PR URL
     try:
-        repo_slug, pr_number = parse_pr_identifier(pr)
+        repo_slug, pr_number = parse_pr_url(pr_url)
     except ValueError as e:
         console.print(f"[red]Error:[/] {e}")
         return 1
 
+    console.print(f"[dim]Repository: {repo_slug}[/]")
     console.print(f"[dim]PR: #{pr_number}[/]")
-    if repo_slug:
-        console.print(f"[dim]Repository: {repo_slug}[/]")
     console.print(f"[dim]Workspace: {workspace}[/]")
     console.print()
 
@@ -360,6 +356,7 @@ def run_refine(
         llm=llm,
         workspace=workspace,
         pr_number=pr_number,
+        repo_slug=repo_slug,
         refinement_config=refinement_config,
     )
 
@@ -556,8 +553,8 @@ Configuration:
         help="Refine an existing PR with code review loop",
     )
     refine_parser.add_argument(
-        "pr",
-        help="PR number (e.g., 42) or URL (e.g., https://github.com/owner/repo/pull/42)",
+        "pr_url",
+        help="GitHub PR URL (e.g., https://github.com/owner/repo/pull/42)",
     )
     refine_parser.add_argument(
         "--workspace",
@@ -602,7 +599,7 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
         return run_refine(
-            pr=args.pr,
+            pr_url=args.pr_url,
             workspace=workspace,
             auto_merge=args.auto_merge,
             allow_merge=args.allow_merge,

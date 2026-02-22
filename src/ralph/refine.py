@@ -44,11 +44,11 @@ REFINE_SYSTEM_PROMPT = """\
 You are a PR Refinement Agent responsible for improving code quality through
 iterative code review and fixes.
 
-Your task is to refine PR #{pr_number} until it meets the quality bar.
+Your task is to refine PR #{pr_number} in repository {repo_slug} until it meets the quality bar.
 
 REFINEMENT LOOP:
-1. Check out the PR branch: `gh pr checkout {pr_number}`
-2. Wait for CI to complete: `gh pr checks --watch`
+1. Check out the PR branch: `gh pr checkout {pr_number} --repo {repo_slug}`
+2. Wait for CI to complete: `gh pr checks {pr_number} --repo {repo_slug} --watch`
 3. If CI fails: fix the issues, commit, push, restart loop
 4. Read iteration count from .pr/refinement-state.json (create if missing)
 5. Increment iteration and save back to state file
@@ -98,6 +98,7 @@ REFINEMENT_COMPLETE: [verdict] after [N] iterations
 def create_refine_agent(
     llm: LLM,
     pr_number: int,
+    repo_slug: str,
     refinement_config: RefinementConfig,
 ) -> Agent:
     """Create a PR Refinement Agent.
@@ -105,6 +106,7 @@ def create_refine_agent(
     Args:
         llm: Language model to use
         pr_number: PR number to refine
+        repo_slug: Repository in "owner/repo" format
         refinement_config: Refinement configuration
 
     Returns:
@@ -115,7 +117,7 @@ def create_refine_agent(
         Tool(name=TerminalTool.name),
     ]
 
-    system_prompt = REFINE_SYSTEM_PROMPT.format(pr_number=pr_number)
+    system_prompt = REFINE_SYSTEM_PROMPT.format(pr_number=pr_number, repo_slug=repo_slug)
 
     skills = [
         Skill(
@@ -185,6 +187,7 @@ class RefineRunner:
         llm: LLM,
         workspace: Path,
         pr_number: int,
+        repo_slug: str,
         refinement_config: RefinementConfig,
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
     ):
@@ -194,12 +197,14 @@ class RefineRunner:
             llm: Language model to use
             workspace: Workspace directory (git root)
             pr_number: PR number to refine
+            repo_slug: Repository in "owner/repo" format
             refinement_config: Configuration for refinement behavior
             conversations_dir: Directory for conversation persistence
         """
         self.llm = llm
         self.workspace = workspace
         self.pr_number = pr_number
+        self.repo_slug = repo_slug
         self.refinement_config = refinement_config
         self.conversations_dir = conversations_dir
 
@@ -216,6 +221,7 @@ class RefineRunner:
         agent = create_refine_agent(
             self.llm,
             self.pr_number,
+            self.repo_slug,
             self.refinement_config,
         )
 
@@ -274,6 +280,7 @@ Output REFINEMENT_COMPLETE when done.
         console.print(
             Panel(
                 f"[bold blue]PR Refinement[/]\n"
+                f"Repository: {self.repo_slug}\n"
                 f"PR: #{self.pr_number}\n"
                 f"Allow merge: {self.refinement_config.allow_merge}\n"
                 f"Min iterations: {self.refinement_config.min_iterations}\n"
