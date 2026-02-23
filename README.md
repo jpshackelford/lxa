@@ -48,6 +48,46 @@ The Ralph Loop:
 - Detects completion via `ALL_MILESTONES_COMPLETE` signal or design doc state
 - Stops after 3 consecutive failures for safety
 
+### PR Refinement Mode
+
+Refine an existing PR through automated code review and response:
+
+```bash
+# Run refinement on a PR (auto-detects which phase to run)
+lxa refine https://github.com/owner/repo/pull/42
+
+# Run with automatic merge when refinement passes
+lxa refine https://github.com/owner/repo/pull/42 --auto-merge
+
+# Specify a refinement phase
+lxa refine https://github.com/owner/repo/pull/42 --phase self-review
+lxa refine https://github.com/owner/repo/pull/42 --phase respond
+
+# Configure quality bar and iteration limits
+lxa refine URL --allow-merge good_taste --max-iterations 10
+```
+
+The refinement loop has two phases:
+- **Self-Review**: Agent reviews its own code using "roasted" code review principles,
+  fixes issues iteratively, and marks the PR ready for human review
+- **Respond**: Agent reads external review comments, addresses them systematically,
+  replies to threads with commit SHAs, and marks them resolved
+
+### Integrated Refinement with Loop Mode
+
+Combine implementation and refinement in a single command:
+
+```bash
+# Run until completion, then refine the PR
+lxa implement --loop --refine
+
+# With automatic merge after refinement passes
+lxa implement --loop --refine --auto-merge
+
+# Custom refinement settings
+lxa implement --loop --refine --allow-merge good_taste --max-refine-iterations 10
+```
+
 ### Reconciliation (Post-merge)
 
 Update design documents to reference implemented code:
@@ -91,3 +131,4 @@ make test-cov
 | Document | Description |
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
+| [PR Refinement](doc/reference/pr-refinement.md) | Two-phase code review and refinement loop |

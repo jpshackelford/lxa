@@ -676,3 +676,45 @@ python -m src reconcile doc/design.md            # Apply changes
 
 - [x] src/skills/reconcile.py - Logic to find implementations and update design doc
 - [x] tests/skills/test_reconcile.py - Tests for reconciliation behavior
+
+### 5.6 PR Refinement Loop (M6)
+
+**Goal**: Automated two-phase code review loop that improves PR quality before
+merge.
+
+**Demo**: Run `lxa refine <PR_URL>` on an existing PR, observe self-review or
+review response depending on PR state.
+
+```bash
+# Run refinement on existing PR
+lxa refine https://github.com/owner/repo/pull/42
+
+# With automatic merge when refinement passes
+lxa refine https://github.com/owner/repo/pull/42 --auto-merge
+
+# Integrate with implementation loop
+lxa implement --loop --refine
+```
+
+See [PR Refinement Reference](../reference/pr-refinement.md) for full
+documentation.
+
+#### 5.6.1 Refinement Runner
+
+- [x] src/ralph/refine.py - `RefineRunner` with two-phase execution (self-review,
+      respond)
+- [x] src/ralph/refinement_config.py - Shared code review principles and
+      workflow configuration
+- [x] tests/ralph/test_refine_runner.py - Tests for phase detection and
+      execution
+
+#### 5.6.2 GitHub Review API
+
+- [x] src/ralph/github_review.py - API helpers for fetching, replying to, and
+      resolving review threads via GraphQL
+- [x] tests/utils/test_github.py - Tests for PR URL parsing and API helpers
+
+#### 5.6.3 CLI Integration
+
+- [x] src/__main__.py - `refine` subcommand and `--refine` flag for implement
+- [x] tests/test_cli_refine.py - Tests for refine CLI options
