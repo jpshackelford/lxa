@@ -134,16 +134,18 @@ WORKFLOW:
    a. Understand what the reviewer is asking
    b. Make the fix or improvement
    c. Commit with message: "Address review: [brief description]"
-   d. After committing, use this command to reply and resolve:
-      gh api graphql -f query='mutation {{ addPullRequestReviewThreadReply(input: {{pullRequestReviewThreadId: "[THREAD_ID]", body: "Fixed in [COMMIT_SHA]"}}) {{ comment {{ id }} }} }}'
-      gh api graphql -f query='mutation {{ resolveReviewThread(input: {{threadId: "[THREAD_ID]"}}) {{ thread {{ isResolved }} }} }}'
-4. After addressing all threads, push your commits
+4. Push your commits
 5. Wait for CI to pass
+6. After CI passes, reply to and resolve each thread:
+   For each thread, use these commands with the relevant commit SHA:
+   gh api graphql -f query='mutation {{ addPullRequestReviewThreadReply(input: {{pullRequestReviewThreadId: "[THREAD_ID]", body: "Fixed in [COMMIT_SHA]"}}) {{ comment {{ id }} }} }}'
+   gh api graphql -f query='mutation {{ resolveReviewThread(input: {{threadId: "[THREAD_ID]"}}) {{ thread {{ isResolved }} }} }}'
 
 IMPORTANT:
 - Address ALL unresolved threads, not just some
+- Push changes BEFORE replying to threads
 - Reply to each thread explaining what you did
-- Mark each thread as resolved after fixing
+- Mark each thread as resolved after the fix is pushed
 - Use the exact thread IDs provided above
 
 OUTPUT when done:
