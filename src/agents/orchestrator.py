@@ -327,6 +327,9 @@ def create_orchestrator_agent(
     Returns:
         Configured Agent instance
     """
+    # Lazy import to avoid circular dependency
+    from src.ralph.refinement_config import get_orchestrator_refinement_skill
+
     # Register our custom tool
     register_tool(ImplementationChecklistTool.name, ImplementationChecklistTool)
 
@@ -416,6 +419,11 @@ def create_orchestrator_agent(
                 "reflect current progress. When milestone is complete, add final\n"
                 "testing results and any lessons learned from the journal."
             ),
+            trigger=None,
+        ),
+        Skill(
+            name="pr_refinement",
+            content=get_orchestrator_refinement_skill(),
             trigger=None,
         ),
     ]

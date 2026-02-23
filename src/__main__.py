@@ -4,12 +4,15 @@ Usage:
     python -m src implement                  # Start from .pr/design.md (default)
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
+    python -m src refine <PR_URL>            # Refine existing PR
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
     lxa implement --design-path custom.md    # Uses custom path
     lxa reconcile .pr/design.md              # Update design doc with code refs
+    lxa refine https://github.com/owner/repo/pull/42              # Refine PR
+    lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
 """
 
 from __future__ import annotations
@@ -38,8 +41,9 @@ from src.agents.orchestrator import (
     run_preflight_checks,
 )
 from src.config import DEFAULT_DESIGN_PATH, load_config
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR
+from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
+from src.utils.github import parse_pr_url
 
 # Load environment variables
 load_dotenv()
@@ -267,13 +271,96 @@ def run_reconcile(design_doc: Path, workspace: Path, *, dry_run: bool = False) -
     return 0
 
 
-def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 20) -> int:
+def run_refine(
+    pr_url: str,
+    workspace: Path,
+    *,
+    auto_merge: bool = False,
+    allow_merge: str = "acceptable",
+    min_iterations: int = 1,
+    max_iterations: int = 5,
+    phase: str = "auto",
+) -> int:
+    """Run the refinement loop on an existing PR.
+
+    Args:
+        pr_url: GitHub PR URL (e.g., https://github.com/owner/repo/pull/42)
+        workspace: Path to the workspace (git repository root)
+        auto_merge: Whether to squash & merge when refinement passes
+        allow_merge: Quality bar for merge ("good_taste" or "acceptable")
+        min_iterations: Minimum review iterations before accepting "acceptable"
+        max_iterations: Maximum refinement iterations
+        phase: Which phase to run: "auto", "self-review", or "respond"
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from src.ralph.refine import RefinementConfig, RefinePhase, RefineRunner
+
+    console.print(Panel("[bold blue]LXA - PR Refinement[/]", expand=False))
+    console.print()
+
+    # Parse PR URL
+    try:
+        repo_slug, pr_number = parse_pr_url(pr_url)
+    except ValueError as e:
+        console.print(f"[red]Error:[/] {e}")
+        return 1
+
+    console.print(f"[dim]Repository: {repo_slug}[/]")
+    console.print(f"[dim]PR: #{pr_number}[/]")
+    console.print(f"[dim]Phase: {phase}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    console.print()
+
+    # Verify workspace is a git repo
+    if not (workspace / ".git").exists():
+        console.print(f"[red]Error:[/] Not a git repository: {workspace}")
+        return 1
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print()
+
+    # Convert phase string to enum
+    phase_enum = RefinePhase.from_string(phase)
+
+    refinement_config = RefinementConfig(
+        enabled=True,
+        auto_merge=auto_merge,
+        allow_merge=allow_merge,
+        min_iterations=min_iterations,
+        max_iterations=max_iterations,
+    )
+
+    runner = RefineRunner(
+        llm=llm,
+        workspace=workspace,
+        pr_number=pr_number,
+        repo_slug=repo_slug,
+        refinement_config=refinement_config,
+        phase=phase_enum,
+    )
+
+    result = runner.run()
+    return 0 if result.completed else 1
+
+
+def run_ralph_loop(
+    design_doc: Path,
+    workspace: Path,
+    *,
+    max_iterations: int = 20,
+    refinement_config: RefinementConfig | None = None,
+) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
+        refinement_config: Configuration for code review refinement loop
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -285,12 +372,15 @@ def run_ralph_loop(design_doc: Path, workspace: Path, *, max_iterations: int = 2
     except ExecutionSetupError:
         return 1
 
+    refinement_config = refinement_config or RefinementConfig()
+
     runner = RalphLoopRunner(
         llm=ctx.llm,
         design_doc_path=ctx.design_doc,
         workspace=ctx.workspace,
         platform=ctx.platform,
         max_iterations=max_iterations,
+        refinement_config=refinement_config,
     )
 
     loop_result = runner.run()
@@ -373,6 +463,34 @@ Configuration:
         default=20,
         help="Maximum iterations in loop mode (default: 20)",
     )
+    implement_parser.add_argument(
+        "--refine",
+        action="store_true",
+        help="Run code review refinement loop after tasks complete",
+    )
+    implement_parser.add_argument(
+        "--auto-merge",
+        action="store_true",
+        help="Squash & merge when refinement passes",
+    )
+    implement_parser.add_argument(
+        "--allow-merge",
+        choices=["good_taste", "acceptable"],
+        default="acceptable",
+        help="Quality bar for merge: good_taste or acceptable (default: acceptable)",
+    )
+    implement_parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="Minimum review iterations before accepting 'acceptable' (default: 1)",
+    )
+    implement_parser.add_argument(
+        "--max-refine-iterations",
+        type=int,
+        default=5,
+        help="Maximum refinement iterations (default: 5)",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -398,6 +516,52 @@ Configuration:
         help="Show what would be updated without making changes",
     )
 
+    # Refine subcommand
+    refine_parser = subparsers.add_parser(
+        "refine",
+        help="Refine an existing PR with code review loop",
+    )
+    refine_parser.add_argument(
+        "pr_url",
+        help="GitHub PR URL (e.g., https://github.com/owner/repo/pull/42)",
+    )
+    refine_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to current git root)",
+    )
+    refine_parser.add_argument(
+        "--auto-merge",
+        action="store_true",
+        help="Squash & merge when refinement passes",
+    )
+    refine_parser.add_argument(
+        "--allow-merge",
+        choices=["good_taste", "acceptable"],
+        default="acceptable",
+        help="Quality bar for merge: good_taste or acceptable (default: acceptable)",
+    )
+    refine_parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="Minimum review iterations before accepting 'acceptable' (default: 1)",
+    )
+    refine_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=5,
+        help="Maximum refinement iterations (default: 5)",
+    )
+    refine_parser.add_argument(
+        "--phase",
+        choices=["auto", "self-review", "respond"],
+        default="auto",
+        help="Phase to run: auto (detect), self-review, or respond (default: auto)",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle reconcile command (simple path handling)
@@ -405,6 +569,19 @@ Configuration:
         design_doc = args.design_doc.resolve()
         workspace = args.workspace.resolve() if args.workspace else find_git_root(design_doc.parent)
         return run_reconcile(design_doc, workspace, dry_run=args.dry_run)
+
+    # Handle refine command
+    if args.command == "refine":
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+        return run_refine(
+            pr_url=args.pr_url,
+            workspace=workspace,
+            auto_merge=args.auto_merge,
+            allow_merge=args.allow_merge,
+            min_iterations=args.min_iterations,
+            max_iterations=args.max_iterations,
+            phase=args.phase,
+        )
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -423,7 +600,18 @@ Configuration:
 
     # Run in loop mode or single execution
     if args.loop:
-        return run_ralph_loop(design_doc, workspace, max_iterations=args.max_iterations)
+        return run_ralph_loop(
+            design_doc,
+            workspace,
+            max_iterations=args.max_iterations,
+            refinement_config=RefinementConfig(
+                enabled=args.refine,
+                auto_merge=args.auto_merge,
+                allow_merge=args.allow_merge,
+                min_iterations=args.min_iterations,
+                max_iterations=args.max_refine_iterations,
+            ),
+        )
     else:
         return run_orchestrator(design_doc, workspace)
 
