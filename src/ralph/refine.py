@@ -296,21 +296,20 @@ class RefineRunner:
         console.print()
         console.print("[bold]Preparing squash merge commit message...[/]")
 
-        commit_message = prepare_squash_commit_message(
-            self.llm,
-            self.owner,
-            self.repo,
-            self.pr_number,
-            auto_merge=self.refinement_config.auto_merge,
-        )
-
-        if commit_message:
+        try:
+            commit_message = prepare_squash_commit_message(
+                self.llm,
+                self.owner,
+                self.repo,
+                self.pr_number,
+                auto_merge=self.refinement_config.auto_merge,
+            )
             if self.refinement_config.auto_merge:
                 console.print("[green]✓[/] Auto-merge enabled with commit message")
             else:
                 console.print("[green]✓[/] Commit message posted as PR comment")
-        else:
-            console.print("[yellow]![/] Failed to prepare commit message")
+        except RuntimeError as e:
+            console.print(f"[yellow]![/] Failed to prepare commit message: {e}")
 
     def _determine_phase(self) -> RefinePhase:
         """Determine which phase to run based on PR state."""
