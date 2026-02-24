@@ -1617,7 +1617,6 @@ wheels = [
 
 [[package]]
 name = "lxa"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "mdformat" },

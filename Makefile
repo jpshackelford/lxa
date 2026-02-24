@@ -1,12 +1,14 @@
-.PHONY: help install dev lint format typecheck test test-cov clean all check
+.PHONY: help install install-global uninstall-global dev lint format typecheck test test-cov clean all check
 
 # Default target
 help:
 	@echo "Long Horizon Agent - Development Commands"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make install    Install production dependencies"
-	@echo "  make dev        Install development dependencies"
+	@echo "  make install          Install in local venv (editable)"
+	@echo "  make install-global   Install lxa globally with uv"
+	@echo "  make uninstall-global Uninstall global lxa"
+	@echo "  make dev              Install development dependencies"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint       Run ruff linter"
@@ -22,9 +24,20 @@ help:
 	@echo "  make clean      Remove build artifacts and caches"
 	@echo "  make all        Run all checks and tests"
 
-# Install production dependencies
+# Install in local venv (editable mode for development)
 install:
 	uv pip install -e .
+
+# Install lxa globally using uv tool
+# This makes 'lxa' available system-wide without activating a venv
+install-global:
+	uv tool install --force .
+	@echo ""
+	@echo "lxa installed globally. Run 'lxa --version' to verify."
+
+# Uninstall global lxa
+uninstall-global:
+	uv tool uninstall lxa || true
 
 # Install development dependencies
 dev:

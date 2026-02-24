@@ -396,6 +396,14 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code
     """
+    from src._version import get_full_version_string
+
+    # Handle --version before argparse (argparse requires subcommand otherwise)
+    args_to_check = argv if argv is not None else sys.argv[1:]
+    if "--version" in args_to_check or "-V" in args_to_check:
+        print(get_full_version_string())
+        return 0
+
     parser = argparse.ArgumentParser(
         prog="lxa",
         description="LXA (Long Execution Agent) - Agent-assisted software development",
