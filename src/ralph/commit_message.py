@@ -64,7 +64,7 @@ class PRInfo:
     commits: list[dict[str, str]]
 
 
-def get_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo | None:
+def get_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     """Fetch PR title, body, and commits via gh CLI.
 
     Args:
@@ -73,7 +73,10 @@ def get_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo | None:
         pr_number: PR number
 
     Returns:
-        PRInfo or None if failed
+        PRInfo with PR information
+
+    Raises:
+        RuntimeError: If fetching PR info fails or response is invalid
     """
     success, output = run_gh_command(
         [
@@ -87,14 +90,12 @@ def get_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo | None:
     )
 
     if not success:
-        logger.error(f"Failed to get PR info: {output}")
-        return None
+        raise RuntimeError(f"Failed to get PR info: {output}")
 
     try:
         data = json.loads(output)
-    except json.JSONDecodeError:
-        logger.error(f"Invalid JSON from gh pr view: {output}")
-        return None
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Invalid JSON from gh pr view: {output}") from e
 
     commits = []
     for commit in data.get("commits", []):
@@ -142,6 +143,9 @@ def generate_commit_message(llm: LLM, pr_info: PRInfo) -> str:
 
     Returns:
         Generated commit message
+
+    Raises:
+        RuntimeError: If LLM response has no content or contains unexpected types
     """
     prompt = COMMIT_MESSAGE_PROMPT.format(
         pr_title=pr_info.title,
@@ -153,23 +157,20 @@ def generate_commit_message(llm: LLM, pr_info: PRInfo) -> str:
     messages = [Message(role="user", content=[TextContent(text=prompt)])]
     response = llm.completion(messages=messages)
 
-    # Extract text from response message content
-    if response.message and response.message.content:
-        content = response.message.content
-        if isinstance(content, str):
-            return content
-        # Handle list of content blocks
-        text_parts = []
-        for block in content:
-            if isinstance(block, str):
-                text_parts.append(block)
-            elif isinstance(block, TextContent):
-                text_parts.append(block.text)
-        return "\n".join(text_parts)
-    return ""
+    if not response.message or not response.message.content:
+        raise RuntimeError("No content in LLM response")
+
+    content = response.message.content
+    text_parts = []
+    for block in content:
+        if isinstance(block, TextContent):
+            text_parts.append(block.text)
+        else:
+            raise RuntimeError(f"Unexpected content block type: {type(block)}")
+    return "\n".join(text_parts)
 
 
-def post_commit_message_comment(owner: str, repo: str, pr_number: int, message: str) -> bool:
+def post_commit_message_comment(owner: str, repo: str, pr_number: int, message: str) -> None:
     """Post the commit message as a PR comment.
 
     Args:
@@ -178,8 +179,8 @@ def post_commit_message_comment(owner: str, repo: str, pr_number: int, message: 
         pr_number: PR number
         message: Commit message to post
 
-    Returns:
-        True if successful
+    Raises:
+        RuntimeError: If posting the comment fails
     """
     comment_body = f"""\
 ## Recommended Squash Commit Message
@@ -197,13 +198,10 @@ _Copy this message when squash merging the PR._
     )
 
     if not success:
-        logger.error(f"Failed to post commit message comment: {output}")
-        return False
-
-    return True
+        raise RuntimeError(f"Failed to post commit message comment: {output}")
 
 
-def enable_auto_merge_with_message(owner: str, repo: str, pr_number: int, message: str) -> bool:
+def enable_auto_merge_with_message(owner: str, repo: str, pr_number: int, message: str) -> None:
     """Enable auto-merge with the specified commit message.
 
     Args:
@@ -212,8 +210,8 @@ def enable_auto_merge_with_message(owner: str, repo: str, pr_number: int, messag
         pr_number: PR number
         message: Commit message for the squash merge
 
-    Returns:
-        True if successful
+    Raises:
+        RuntimeError: If enabling auto-merge fails
     """
     # Split message into subject and body
     lines = message.strip().split("\n", 1)
@@ -236,10 +234,7 @@ def enable_auto_merge_with_message(owner: str, repo: str, pr_number: int, messag
     success, output = run_gh_command(args, repo=f"{owner}/{repo}")
 
     if not success:
-        logger.error(f"Failed to enable auto-merge: {output}")
-        return False
-
-    return True
+        raise RuntimeError(f"Failed to enable auto-merge: {output}")
 
 
 def prepare_squash_commit_message(
@@ -248,7 +243,7 @@ def prepare_squash_commit_message(
     repo: str,
     pr_number: int,
     auto_merge: bool = False,
-) -> str | None:
+) -> str:
     """Generate and post/prepare squash merge commit message.
 
     Main entry point for commit message generation. Fetches PR info,
@@ -263,27 +258,21 @@ def prepare_squash_commit_message(
         auto_merge: If True, enable auto-merge with message; if False, post as comment
 
     Returns:
-        Generated commit message, or None if failed
+        Generated commit message
+
+    Raises:
+        RuntimeError: If any step fails (fetching PR info, generating message, or posting)
     """
     # 1. Fetch PR info
     pr_info = get_pr_info(owner, repo, pr_number)
-    if pr_info is None:
-        logger.error("Failed to fetch PR info")
-        return None
 
     # 2. Generate commit message via LLM
     commit_message = generate_commit_message(llm, pr_info)
-    if not commit_message:
-        logger.error("Failed to generate commit message")
-        return None
 
     # 3. Post or prepare
     if auto_merge:
-        success = enable_auto_merge_with_message(owner, repo, pr_number, commit_message)
+        enable_auto_merge_with_message(owner, repo, pr_number, commit_message)
     else:
-        success = post_commit_message_comment(owner, repo, pr_number, commit_message)
-
-    if not success:
-        logger.warning("Failed to post/enable commit message, but returning it anyway")
+        post_commit_message_comment(owner, repo, pr_number, commit_message)
 
     return commit_message
