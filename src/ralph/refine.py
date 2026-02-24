@@ -292,6 +292,9 @@ class RefineRunner:
         Generates a conventional commit message via LLM and either:
         - Posts as PR comment (for manual merge)
         - Enables auto-merge with the message (for auto-merge)
+
+        Raises:
+            RuntimeError: If auto_merge is enabled but setup fails
         """
         console.print()
         console.print("[bold]Preparing squash merge commit message...[/]")
@@ -309,7 +312,14 @@ class RefineRunner:
             else:
                 console.print("[green]✓[/] Commit message posted as PR comment")
         except RuntimeError as e:
-            console.print(f"[yellow]![/] Failed to prepare commit message: {e}")
+            if self.refinement_config.auto_merge:
+                # Critical: user expects auto-merge, must not fail silently
+                console.print(f"[red]✗[/] Failed to enable auto-merge: {e}")
+                raise
+            else:
+                # Non-critical: user can still merge manually with their own message
+                console.print(f"[yellow]![/] Failed to post commit message comment: {e}")
+                console.print("[yellow]  You can still merge manually with your own message[/]")
 
     def _determine_phase(self) -> RefinePhase:
         """Determine which phase to run based on PR state."""
