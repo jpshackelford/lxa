@@ -79,7 +79,7 @@ class TestGetPRInfo:
         """Should raise RuntimeError when gh command fails."""
         with patch("src.ralph.commit_message.run_gh_command") as mock_run:
             mock_run.return_value = (False, "error: not found")
-            
+
             with pytest.raises(RuntimeError, match="Failed to get PR info"):
                 get_pr_info("owner", "repo", 123)
 
@@ -87,7 +87,7 @@ class TestGetPRInfo:
         """Should raise RuntimeError when gh returns invalid JSON."""
         with patch("src.ralph.commit_message.run_gh_command") as mock_run:
             mock_run.return_value = (True, "not valid json")
-            
+
             with pytest.raises(RuntimeError, match="Invalid JSON from gh pr view"):
                 get_pr_info("owner", "repo", 123)
 
@@ -414,38 +414,38 @@ class TestPrepareSquashCommitMessageIntegration:
         # Verify the commit message format
         assert result is not None
         assert result == realistic_commit_message
-        
+
         # Check conventional commit format
         assert result.startswith("feat(markdown):")
         assert "#789" in result
-        
+
         # Check structure: first line, blank line, bullet points
         lines = result.split("\n")
         assert len(lines) >= 3
         assert lines[0].startswith("feat(")
         assert lines[1] == ""  # blank line after subject
         assert any(line.startswith("- ") for line in lines[2:])
-        
+
         # Verify gh commands were called correctly
         assert mock_run.call_count == 2
-        
+
         # First call: pr view
         first_call_args = mock_run.call_args_list[0][0][0]
         assert "pr" in first_call_args
         assert "view" in first_call_args
         assert "789" in first_call_args
-        
+
         # Second call: pr comment
         second_call_args = mock_run.call_args_list[1][0][0]
         assert "pr" in second_call_args
         assert "comment" in second_call_args
-        
+
         # Verify LLM was called with correct prompt structure
         mock_llm.completion.assert_called_once()
         call_args = mock_llm.completion.call_args
         messages = call_args.kwargs["messages"]
         prompt_text = messages[0].content[0].text
-        
+
         # Verify prompt contains all PR information
         assert "Add markdown section numbering support" in prompt_text
         assert "#789" in prompt_text
