@@ -91,3 +91,4 @@ make test-cov
 | Document | Description |
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
+| [Squash Commit Messages](doc/reference/squash-commit-messages.md) | Auto-generated commit messages for PR merges |
