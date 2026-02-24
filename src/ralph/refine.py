@@ -297,7 +297,7 @@ class RefineRunner:
         console.print("[bold]Preparing squash merge commit message...[/]")
 
         try:
-            commit_message = prepare_squash_commit_message(
+            prepare_squash_commit_message(
                 self.llm,
                 self.owner,
                 self.repo,
