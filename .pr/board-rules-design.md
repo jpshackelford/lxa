@@ -489,22 +489,67 @@ lxa board apply
 lxa board sync --full
 ```
 
-## Open Questions
+## Design Decisions
 
-1. **Column ordering** — GitHub Projects V2 may not preserve column order.
-   Should we track order separately or accept GitHub's ordering?
+1. **Column ordering** — Need to verify behavior with real boards. Initial
+   research suggests the GraphQL API preserves option order as defined in
+   mutations. Test with real board before finalizing approach.
 
-2. **Rule validation** — Should we validate that rule columns exist in the
-   columns list? Warn or error?
+2. **Rule validation** — Error if rule references unknown column (fail fast),
+   but also warn during `apply --dry-run` so users can catch issues before
+   applying.
 
-3. **Macro discoverability** — How do users learn what macros are available?
-   `lxa board macros` command?
+3. **Macro discoverability** — Add `lxa board macros` command that lists
+   available macros with descriptions and usage examples.
 
-4. **Custom macros** — Should users be able to define macros in a Python file
-   in `~/.lxa/macros.py`? Or only built-in?
+4. **Custom macros** — Only built-in macros for now. Keeps things simple and
+   avoids security concerns with arbitrary code loading. Can revisit if users
+   request it.
 
-5. **Multiple boards** — Current design assumes one active board. Support for
-   multiple boards with different repo sets?
+5. **Multiple boards** — Support multiple boards with `--board NAME` flag.
+   Add commands for listing boards and setting a default so `--board` isn't
+   required for routine operations.
+
+## Multi-Board Support
+
+### Additional Commands
+
+```bash
+# List configured boards
+lxa board list
+
+# Set default board
+lxa board default my-board
+
+# Show which board is default
+lxa board default
+
+# Commands use default board unless --board specified
+lxa board scan                      # uses default
+lxa board scan --board other-board  # uses specific board
+```
+
+### Config Structure
+
+```toml
+# ~/.lxa/config.toml
+[board]
+default = "agent-workflow"  # name of default board
+
+[board.boards.agent-workflow]
+config = "~/.lxa/boards/agent-workflow.yaml"
+project_id = "PVT_xxx"
+
+[board.boards.personal]
+config = "~/.lxa/boards/personal.yaml"
+project_id = "PVT_yyy"
+```
+
+### Board Naming
+
+Board names are derived from the YAML filename by default:
+- `~/.lxa/boards/agent-workflow.yaml` → board name: `agent-workflow`
+- Can be overridden with `board.name` in the YAML
 
 ---
 
