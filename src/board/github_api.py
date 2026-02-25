@@ -411,11 +411,13 @@ class GitHubClient:
         # Build options from BoardColumn enum
         options = []
         for col in BoardColumn.all_columns():
-            options.append({
-                "name": col.value,
-                "color": BoardColumn.column_colors()[col],
-                "description": BoardColumn.column_descriptions()[col],
-            })
+            options.append(
+                {
+                    "name": col.value,
+                    "color": BoardColumn.column_colors()[col],
+                    "description": BoardColumn.column_descriptions()[col],
+                }
+            )
 
         mutation = """
         mutation($projectId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
@@ -443,9 +445,7 @@ class GitHubClient:
         column_options = {opt["name"]: opt["id"] for opt in field["options"]}
         return field["id"], column_options
 
-    def update_status_field_options(
-        self, project_id: str, field_id: str
-    ) -> dict[str, str]:
+    def update_status_field_options(self, project_id: str, field_id: str) -> dict[str, str]:
         """Update the Status field to have all workflow columns.
 
         Args:
@@ -457,11 +457,13 @@ class GitHubClient:
         """
         options = []
         for col in BoardColumn.all_columns():
-            options.append({
-                "name": col.value,
-                "color": BoardColumn.column_colors()[col],
-                "description": BoardColumn.column_descriptions()[col],
-            })
+            options.append(
+                {
+                    "name": col.value,
+                    "color": BoardColumn.column_colors()[col],
+                    "description": BoardColumn.column_descriptions()[col],
+                }
+            )
 
         mutation = """
         mutation($projectId: ID!, $fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {

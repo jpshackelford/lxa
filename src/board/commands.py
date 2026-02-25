@@ -129,7 +129,9 @@ def cmd_init(
 
         # Check/configure Status field
         if project.status_field_id:
-            console.print(f"\n[green]✓[/] Status field exists with {len(project.column_option_ids)} options")
+            console.print(
+                f"\n[green]✓[/] Status field exists with {len(project.column_option_ids)} options"
+            )
 
             # Check if all columns exist
             missing = []
@@ -157,7 +159,9 @@ def cmd_init(
                 field_id, column_options = client.create_status_field(project.id)
                 project.status_field_id = field_id
                 project.column_option_ids = column_options
-                console.print(f"[green]✓[/] Created Status field with {len(column_options)} columns")
+                console.print(
+                    f"[green]✓[/] Created Status field with {len(column_options)} columns"
+                )
 
         # Save configuration
         if not dry_run:
@@ -569,8 +573,7 @@ def cmd_status(
             for col in BoardColumn.all_columns():
                 items = cache.get_items_by_column(col)
                 data["items"][col.value] = [
-                    {"repo": i.repo, "number": i.number, "title": i.title}
-                    for i in items
+                    {"repo": i.repo, "number": i.number, "title": i.title} for i in items
                 ]
         console.print(json.dumps(data, indent=2))
         return 0
@@ -699,7 +702,10 @@ def cmd_config(
     table.add_column("Value")
 
     table.add_row("project_id", config.project_id or "[dim](not set)[/]")
-    table.add_row("project_number", str(config.project_number) if config.project_number else "[dim](not set)[/]")
+    table.add_row(
+        "project_number",
+        str(config.project_number) if config.project_number else "[dim](not set)[/]",
+    )
     table.add_row("username", config.username or "[dim](not set)[/]")
     table.add_row("scan_lookback_days", str(config.scan_lookback_days))
     table.add_row("agent_username_pattern", config.agent_username_pattern)

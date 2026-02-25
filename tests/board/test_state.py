@@ -1,6 +1,5 @@
 """Tests for state detection rules."""
 
-
 from src.board.config import BoardConfig
 from src.board.models import BoardColumn, Item, ItemType
 from src.board.state import determine_column, is_active, is_terminal, needs_attention

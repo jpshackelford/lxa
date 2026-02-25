@@ -102,9 +102,7 @@ class BoardCache:
     def get_config(self, key: str, default: str | None = None) -> str | None:
         """Get a config value."""
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT value FROM config WHERE key = ?", (key,)
-            ).fetchone()
+            row = conn.execute("SELECT value FROM config WHERE key = ?", (key,)).fetchone()
             return row["value"] if row else default
 
     def set_config(self, key: str, value: str) -> None:
