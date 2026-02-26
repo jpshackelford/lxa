@@ -18,7 +18,13 @@ from src.board.config import (
     save_board_config,
 )
 from src.board.github_api import GitHubClient, get_github_username
-from src.board.models import BoardColumn, Item, ItemType, SyncResult
+from src.board.models import (
+    ATTENTION_COLUMNS,
+    Item,
+    ItemType,
+    SyncResult,
+    get_default_columns,
+)
 from src.board.state import determine_column, explain_column
 
 console = Console()
@@ -135,9 +141,9 @@ def cmd_init(
 
             # Check if all columns exist
             missing = []
-            for col in BoardColumn.all_columns():
-                if col.value not in project.column_option_ids:
-                    missing.append(col.value)
+            for col_name in get_default_columns():
+                if col_name not in project.column_option_ids:
+                    missing.append(col_name)
 
             if missing:
                 console.print(f"[yellow]Missing columns:[/] {', '.join(missing)}")
@@ -570,9 +576,9 @@ def cmd_status(
         }
         if verbose:
             data["items"] = {}
-            for col in BoardColumn.all_columns():
-                items = cache.get_items_by_column(col)
-                data["items"][col.value] = [
+            for col_name in get_default_columns():
+                items = cache.get_items_by_column(col_name)
+                data["items"][col_name] = [
                     {"repo": i.repo, "number": i.number, "title": i.title} for i in items
                 ]
         console.print(json.dumps(data, indent=2))
@@ -592,25 +598,19 @@ def cmd_status(
     table.add_column("Count", justify="right")
 
     total = 0
-    attention_columns = {
-        BoardColumn.HUMAN_REVIEW.value,
-        BoardColumn.FINAL_REVIEW.value,
-        BoardColumn.APPROVED.value,
-        BoardColumn.ICEBOX.value,
-    }
 
-    for col in BoardColumn.all_columns():
-        count = counts.get(col.value, 0)
+    for col_name in get_default_columns():
+        count = counts.get(col_name, 0)
         total += count
 
-        if attention and col.value not in attention_columns:
+        if attention and col_name not in ATTENTION_COLUMNS:
             continue
 
         style = ""
-        if col.value in attention_columns and count > 0:
+        if col_name in ATTENTION_COLUMNS and count > 0:
             style = "bold yellow"
 
-        table.add_row(col.value, str(count), style=style)
+        table.add_row(col_name, str(count), style=style)
 
     if not attention:
         table.add_row("─" * 20, "─" * 5)
@@ -622,15 +622,15 @@ def cmd_status(
     # Verbose: show items in each column
     if verbose:
         console.print()
-        for col in BoardColumn.all_columns():
-            if attention and col.value not in attention_columns:
+        for col_name in get_default_columns():
+            if attention and col_name not in ATTENTION_COLUMNS:
                 continue
 
-            items = cache.get_items_by_column(col)
+            items = cache.get_items_by_column(col_name)
             if not items:
                 continue
 
-            console.print(f"\n[bold]{col.value}[/] ({len(items)})")
+            console.print(f"\n[bold]{col_name}[/] ({len(items)})")
             for item in items[:10]:  # Limit to 10 per column
                 console.print(f"  • {item.repo}#{item.number}: {item.title[:60]}")
             if len(items) > 10:
