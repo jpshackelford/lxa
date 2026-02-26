@@ -119,9 +119,11 @@ class TestCmdScanIntegration:
 
     def test_scan_adds_new_items_to_board(self, configured_board, monkeypatch):
         """Test that scan finds items and adds them to the board."""
-        config, cache = configured_board
+        _config, cache = configured_board
 
-        search_response = load_fixture("search_issues_response")
+        # GraphQL search responses for PRs and issues
+        graphql_search_prs = load_fixture("graphql_search_prs_response")
+        graphql_search_issues = load_fixture("graphql_search_issues_response")
         project_items_response = {
             "data": {
                 "node": {
@@ -134,15 +136,23 @@ class TestCmdScanIntegration:
         add_item_response = load_fixture("add_item_response")
         update_status_response = load_fixture("update_status_response")
 
-        def get_handler(url, **_kwargs):
-            if "search/issues" in url:
-                return MockResponse(search_response)
+        search_call_count = 0
+
+        def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
+            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
-            if "items" in query:
+            # Handle GraphQL search queries (for PRs and issues)
+            if "search(" in query and "issueCount" in query:
+                search_call_count += 1
+                # First call is for PRs, second for issues
+                if search_call_count % 2 == 1:
+                    return MockResponse(graphql_search_prs)
+                return MockResponse(graphql_search_issues)
+            elif "items" in query:
                 return MockResponse(project_items_response)
             elif "addProjectV2ItemById" in query:
                 return MockResponse(add_item_response)
@@ -171,9 +181,11 @@ class TestCmdScanIntegration:
 
     def test_scan_skips_existing_items(self, configured_board, monkeypatch):
         """Test that scan doesn't re-add items already on board."""
-        config, cache = configured_board
+        _config, _cache = configured_board
 
-        search_response = load_fixture("search_issues_response")
+        # GraphQL search responses
+        graphql_search_prs = load_fixture("graphql_search_prs_response")
+        graphql_search_issues = load_fixture("graphql_search_issues_response")
         # Simulate item #38 already on board
         project_items_response = {
             "data": {
@@ -197,16 +209,21 @@ class TestCmdScanIntegration:
         }
 
         add_calls = []
+        search_call_count = 0
 
-        def get_handler(url, **_kwargs):
-            if "search/issues" in url:
-                return MockResponse(search_response)
+        def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
+            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
-            if "items" in query:
+            if "search(" in query and "issueCount" in query:
+                search_call_count += 1
+                if search_call_count % 2 == 1:
+                    return MockResponse(graphql_search_prs)
+                return MockResponse(graphql_search_issues)
+            elif "items" in query:
                 return MockResponse(project_items_response)
             elif "addProjectV2ItemById" in query:
                 add_calls.append(body)
@@ -228,27 +245,34 @@ class TestCmdScanIntegration:
         result = cmd_scan(dry_run=False, verbose=False)
 
         assert result == 0
-        # Item #38 should be skipped, only #36 and #33 should be added
-        assert len(add_calls) == 2  # Exactly 2 new items
+        # Item #38 should be skipped, other items should be added
+        # We have 3 PRs + 2 issues = 5 items, minus #38 = 4 items to add
+        assert len(add_calls) == 4
 
     def test_scan_dry_run_no_mutations(self, configured_board, monkeypatch):
         """Test that dry run doesn't make any mutations."""
-        config, cache = configured_board
+        _config, _cache = configured_board
 
-        search_response = load_fixture("search_issues_response")
+        graphql_search_prs = load_fixture("graphql_search_prs_response")
+        graphql_search_issues = load_fixture("graphql_search_issues_response")
         project_items_response = {"data": {"node": {"items": {"nodes": []}}}}
 
         mutation_calls = []
+        search_call_count = 0
 
-        def get_handler(url, **_kwargs):
-            if "search/issues" in url:
-                return MockResponse(search_response)
+        def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
+            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
-            if "items" in query:
+            if "search(" in query and "issueCount" in query:
+                search_call_count += 1
+                if search_call_count % 2 == 1:
+                    return MockResponse(graphql_search_prs)
+                return MockResponse(graphql_search_issues)
+            elif "items" in query:
                 return MockResponse(project_items_response)
             elif "mutation" in query.lower():
                 mutation_calls.append(query)
@@ -397,15 +421,19 @@ class TestErrorHandling:
         _config, _cache = configured_board
 
         def mock_get(*_args, **_kwargs):
-            return MockResponse({"message": "Rate limited"}, status_code=403)
+            return MockResponse({})
+
+        def mock_post(*_args, **kwargs):
+            body = kwargs.get("json", {})
+            query = body.get("query", "")
+            # Return error for search queries, success for project items
+            if "search(" in query:
+                return MockResponse({"errors": [{"message": "Rate limited"}]}, status_code=200)
+            return MockResponse({"data": {"node": {"items": {"nodes": []}}}})
 
         with (
             patch.object(httpx.Client, "get", mock_get),
-            patch.object(
-                httpx.Client,
-                "post",
-                lambda *_a, **_k: MockResponse({"data": {"node": {"items": {"nodes": []}}}}),
-            ),
+            patch.object(httpx.Client, "post", mock_post),
         ):
             monkeypatch.setattr(
                 "src.board.commands.get_github_username",
