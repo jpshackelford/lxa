@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.board.config import CACHE_FILE, ensure_lxa_home
-from src.board.models import BoardColumn, CachedItem, ItemType, ProjectInfo
+from src.board.models import CachedItem, ItemType, ProjectInfo
 
 SCHEMA = """
 -- Configuration and metadata
@@ -163,7 +163,7 @@ class BoardCache:
         node_id: str,
         title: str,
         state: str,
-        column: BoardColumn | None = None,
+        column: str | None = None,
         board_item_id: str | None = None,
         updated_at: datetime | None = None,
     ) -> None:
@@ -182,7 +182,7 @@ class BoardCache:
                     node_id,
                     title,
                     state,
-                    column.value if column else None,
+                    column,
                     board_item_id,
                     updated_at.isoformat() if updated_at else None,
                     now,
@@ -190,7 +190,7 @@ class BoardCache:
             )
 
     def update_item_column(
-        self, repo: str, number: int, column: BoardColumn, board_item_id: str | None = None
+        self, repo: str, number: int, column: str, board_item_id: str | None = None
     ) -> None:
         """Update just the column for an item."""
         now = datetime.now(tz=UTC).isoformat()
@@ -199,16 +199,16 @@ class BoardCache:
                 conn.execute(
                     """UPDATE items SET column = ?, board_item_id = ?, synced_at = ?
                        WHERE repo = ? AND number = ?""",
-                    (column.value, board_item_id, now, repo, number),
+                    (column, board_item_id, now, repo, number),
                 )
             else:
                 conn.execute(
                     """UPDATE items SET column = ?, synced_at = ?
                        WHERE repo = ? AND number = ?""",
-                    (column.value, now, repo, number),
+                    (column, now, repo, number),
                 )
 
-    def get_items_by_column(self, column: BoardColumn | None = None) -> list[CachedItem]:
+    def get_items_by_column(self, column: str | None = None) -> list[CachedItem]:
         """Get all cached items, optionally filtered by column."""
         with self._connection() as conn:
             if column:
@@ -217,7 +217,7 @@ class BoardCache:
                               column, board_item_id, updated_at, synced_at
                        FROM items WHERE column = ?
                        ORDER BY repo, number""",
-                    (column.value,),
+                    (column,),
                 ).fetchall()
             else:
                 rows = conn.execute(
