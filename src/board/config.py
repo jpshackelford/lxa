@@ -3,6 +3,7 @@
 Configuration is stored in ~/.lxa/config.toml under the [board] section.
 """
 
+import io
 import os
 import tempfile
 from dataclasses import dataclass, field
@@ -155,6 +156,7 @@ def save_board_config(config: BoardConfig) -> None:
     """Save board configuration to ~/.lxa/config.toml.
 
     Preserves other sections in the config file.
+    Uses atomic write to prevent partial writes and race conditions.
     """
     ensure_lxa_home()
 
@@ -189,9 +191,10 @@ def save_board_config(config: BoardConfig) -> None:
     # Update existing data
     existing_data["board"] = board_data
 
-    # Write back
-    with open(CONFIG_FILE, "wb") as f:
-        tomli_w.dump(existing_data, f)
+    # Write atomically to prevent partial writes and race conditions
+    buffer = io.BytesIO()
+    tomli_w.dump(existing_data, buffer)
+    atomic_write(CONFIG_FILE, buffer.getvalue())
 
 
 def add_watched_repo(repo: str) -> bool:
