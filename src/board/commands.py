@@ -3,7 +3,6 @@
 Each function implements a board subcommand (init, scan, sync, status, config).
 """
 
-import contextlib
 from datetime import UTC, datetime, timedelta
 
 from rich.console import Console
@@ -259,7 +258,8 @@ def cmd_scan(
                     existing_refs.add(f"{repo}#{number}")
         console.print(f"[dim]Found {len(existing_refs)} existing items[/]")
 
-        # Search for user's items in each repo
+        # Search for user's items in each repo using GraphQL
+        # GraphQL search returns complete PR data (merged, reviewDecision) in one query
         console.print("\nSearching for your issues and PRs...")
         all_items: list[Item] = []
 
@@ -269,7 +269,7 @@ def cmd_scan(
                 console.print(f"[dim]  Searching: {repo}[/]")
 
             try:
-                search_result = client.search_issues(query)
+                search_result = client.search_issues_graphql(query)
                 all_items.extend(search_result.items)
                 if verbose:
                     console.print(f"[dim]    Found {len(search_result.items)} items[/]")
@@ -290,13 +290,8 @@ def cmd_scan(
                     console.print(f"[dim]  Skip (exists): {item.short_ref}[/]")
                 continue
 
-            # Enrich PR data with review decision
-            if item.type == ItemType.PULL_REQUEST and not item.merged:
-                owner, repo_name = item.repo.split("/")
-                with contextlib.suppress(Exception):
-                    item.review_decision = client.get_pr_review_decision(
-                        owner, repo_name, item.number
-                    )
+            # Note: PR data (merged, reviewDecision) is already complete from GraphQL search
+            # No additional API calls needed here
 
             # Determine column
             column = determine_column(item, config)
