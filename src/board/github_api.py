@@ -124,6 +124,175 @@ class GitHubClient:
             incomplete_results=data.get("incomplete_results", False),
         )
 
+    def search_issues_graphql(
+        self,
+        query: str,
+        per_page: int = 100,
+    ) -> SearchResult:
+        """Search issues and PRs using GitHub GraphQL API.
+
+        This method returns complete data including PR-specific fields like
+        `merged` and `reviewDecision` in a single query, avoiding N+1 queries.
+
+        Note: GitHub's GraphQL search requires separate queries for PRs and
+        issues when fetching type-specific fields. This method makes 2 queries
+        and combines the results.
+
+        Args:
+            query: Search query (e.g., "involves:user repo:owner/repo")
+            per_page: Results per page (max 100)
+
+        Returns:
+            SearchResult with matching items including complete PR data
+        """
+        all_items: list[Item] = []
+        total_count = 0
+
+        # Query for PRs (with PR-specific fields)
+        pr_query = f"is:pr {query}"
+        pr_result = self._graphql_search_prs(pr_query, per_page)
+        all_items.extend(pr_result["items"])
+        total_count += pr_result["count"]
+
+        # Query for issues (with issue-specific fields)
+        issue_query = f"is:issue {query}"
+        issue_result = self._graphql_search_issues(issue_query, per_page)
+        all_items.extend(issue_result["items"])
+        total_count += issue_result["count"]
+
+        # Sort by updated_at descending (matching REST API default)
+        all_items.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
+
+        return SearchResult(
+            total_count=total_count,
+            items=all_items,
+            incomplete_results=False,
+        )
+
+    def _graphql_search_prs(self, query: str, limit: int) -> dict:
+        """Search for PRs using GraphQL, returning complete PR data."""
+        gql_query = """
+        query($query: String!, $limit: Int!) {
+            search(query: $query, type: ISSUE, first: $limit) {
+                issueCount
+                nodes {
+                    ... on PullRequest {
+                        id
+                        number
+                        title
+                        state
+                        isDraft
+                        merged
+                        reviewDecision
+                        repository { nameWithOwner }
+                        author { login }
+                        assignees(first: 10) { nodes { login } }
+                        labels(first: 10) { nodes { name } }
+                        createdAt
+                        updatedAt
+                    }
+                }
+            }
+        }
+        """
+        data = self.graphql(gql_query, {"query": query, "limit": limit})
+        search = data["search"]
+
+        items = []
+        for node in search["nodes"]:
+            if not node:  # Skip null nodes
+                continue
+            items.append(self._parse_graphql_pr(node))
+
+        return {"count": search["issueCount"], "items": items}
+
+    def _graphql_search_issues(self, query: str, limit: int) -> dict:
+        """Search for issues using GraphQL."""
+        gql_query = """
+        query($query: String!, $limit: Int!) {
+            search(query: $query, type: ISSUE, first: $limit) {
+                issueCount
+                nodes {
+                    ... on Issue {
+                        id
+                        number
+                        title
+                        state
+                        stateReason
+                        repository { nameWithOwner }
+                        author { login }
+                        assignees(first: 10) { nodes { login } }
+                        labels(first: 10) { nodes { name } }
+                        createdAt
+                        updatedAt
+                    }
+                }
+            }
+        }
+        """
+        data = self.graphql(gql_query, {"query": query, "limit": limit})
+        search = data["search"]
+
+        items = []
+        for node in search["nodes"]:
+            if not node:  # Skip null nodes
+                continue
+            items.append(self._parse_graphql_issue(node))
+
+        return {"count": search["issueCount"], "items": items}
+
+    def _parse_graphql_pr(self, data: dict) -> Item:
+        """Parse a GraphQL PR node into an Item."""
+        repo = data["repository"]["nameWithOwner"]
+
+        # Map GraphQL state to REST API state format
+        state = data["state"].lower()  # OPEN -> open, MERGED -> merged, CLOSED -> closed
+
+        return Item(
+            repo=repo,
+            number=data["number"],
+            type=ItemType.PULL_REQUEST,
+            node_id=data["id"],
+            title=data["title"],
+            state=state,
+            author=data["author"]["login"] if data["author"] else "ghost",
+            assignees=[a["login"] for a in data["assignees"]["nodes"]],
+            labels=[lbl["name"] for lbl in data["labels"]["nodes"]],
+            created_at=datetime.fromisoformat(data["createdAt"].replace("Z", "+00:00")),
+            updated_at=datetime.fromisoformat(data["updatedAt"].replace("Z", "+00:00")),
+            is_draft=data["isDraft"],
+            merged=data["merged"],
+            review_decision=data["reviewDecision"],
+        )
+
+    def _parse_graphql_issue(self, data: dict) -> Item:
+        """Parse a GraphQL Issue node into an Item."""
+        repo = data["repository"]["nameWithOwner"]
+
+        # Map GraphQL state to REST API state format
+        state = data["state"].lower()  # OPEN -> open, CLOSED -> closed
+
+        # Detect if closed by bot (stale bot, etc.)
+        closed_by_bot = False
+        if state == "closed" and data.get("stateReason") == "NOT_PLANNED":
+            # NOT_PLANNED often indicates stale bot closure
+            closed_by_bot = True
+
+        return Item(
+            repo=repo,
+            number=data["number"],
+            type=ItemType.ISSUE,
+            node_id=data["id"],
+            title=data["title"],
+            state=state,
+            author=data["author"]["login"] if data["author"] else "ghost",
+            assignees=[a["login"] for a in data["assignees"]["nodes"]],
+            labels=[lbl["name"] for lbl in data["labels"]["nodes"]],
+            created_at=datetime.fromisoformat(data["createdAt"].replace("Z", "+00:00")),
+            updated_at=datetime.fromisoformat(data["updatedAt"].replace("Z", "+00:00")),
+            closed_by_bot=closed_by_bot,
+        )
+
     def get_notifications(
         self,
         since: datetime | None = None,
