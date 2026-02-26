@@ -10,7 +10,14 @@ from datetime import datetime
 
 import httpx
 
-from src.board.models import BoardColumn, Item, ItemType, ProjectInfo
+from src.board.models import (
+    Item,
+    ItemType,
+    ProjectInfo,
+    get_column_color,
+    get_column_description,
+    get_default_columns,
+)
 
 
 def get_github_token() -> str:
@@ -408,14 +415,14 @@ class GitHubClient:
         Returns:
             Tuple of (field_id, {column_name: option_id})
         """
-        # Build options from BoardColumn enum
+        # Build options from default columns
         options = []
-        for col in BoardColumn.all_columns():
+        for col_name in get_default_columns():
             options.append(
                 {
-                    "name": col.value,
-                    "color": BoardColumn.column_colors()[col],
-                    "description": BoardColumn.column_descriptions()[col],
+                    "name": col_name,
+                    "color": get_column_color(col_name),
+                    "description": get_column_description(col_name),
                 }
             )
 
@@ -456,12 +463,12 @@ class GitHubClient:
             Dict of {column_name: option_id}
         """
         options = []
-        for col in BoardColumn.all_columns():
+        for col_name in get_default_columns():
             options.append(
                 {
-                    "name": col.value,
-                    "color": BoardColumn.column_colors()[col],
-                    "description": BoardColumn.column_descriptions()[col],
+                    "name": col_name,
+                    "color": get_column_color(col_name),
+                    "description": get_column_description(col_name),
                 }
             )
 
