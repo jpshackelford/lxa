@@ -121,7 +121,7 @@ class TestGitHubClientGraphQLSearch:
 
         call_count = 0
 
-        def mock_post(*args, **kwargs):
+        def mock_post(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
             # First call is for PRs, second is for issues
@@ -168,7 +168,7 @@ class TestGitHubClientGraphQLSearch:
 
         call_count = 0
 
-        def mock_post(*args, **kwargs):
+        def mock_post(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:

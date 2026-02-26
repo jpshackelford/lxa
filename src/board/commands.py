@@ -20,7 +20,6 @@ from src.board.github_api import GitHubClient, get_github_username
 from src.board.models import (
     ATTENTION_COLUMNS,
     Item,
-    ItemType,
     SyncResult,
     get_default_columns,
 )

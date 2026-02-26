@@ -3,6 +3,7 @@
 Configuration is stored in ~/.lxa/config.toml under the [board] section.
 """
 
+import contextlib
 import io
 import os
 import tempfile
@@ -50,14 +51,10 @@ def atomic_write(path: Path, content: bytes) -> None:
         os.replace(tmp_path, path)
     except Exception:
         # Clean up temp file on failure
-        try:
+        with contextlib.suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
 
 
