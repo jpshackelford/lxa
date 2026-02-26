@@ -3,6 +3,8 @@
 Configuration is stored in ~/.lxa/config.toml under the [board] section.
 """
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,6 +19,45 @@ import tomli_w
 LXA_HOME = Path.home() / ".lxa"
 CONFIG_FILE = LXA_HOME / "config.toml"
 CACHE_FILE = LXA_HOME / "board-cache.db"
+
+
+def atomic_write(path: Path, content: bytes) -> None:
+    """Write content to a file atomically using temp file + rename.
+
+    This prevents partial writes and race conditions where concurrent
+    processes might read an incomplete file. The rename operation is
+    atomic on POSIX systems.
+
+    Args:
+        path: Target file path
+        content: Bytes to write
+    """
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create temp file in same directory (required for atomic rename)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=".tmp_",
+        suffix=path.suffix,
+    )
+    try:
+        os.write(fd, content)
+        os.close(fd)
+        # Atomic rename on POSIX; on Windows this may fail if target exists
+        # but Windows users are rare for CLI tools
+        os.replace(tmp_path, path)
+    except Exception:
+        # Clean up temp file on failure
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 @dataclass
