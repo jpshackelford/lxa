@@ -15,7 +15,7 @@ import src.board.cache as cache_module
 import src.board.config as config_module
 from src.board.cache import BoardCache
 from src.board.config import BoardConfig, save_board_config
-from src.board.models import BoardColumn, ProjectInfo
+from src.board.models import COLUMN_BACKLOG, COLUMN_HUMAN_REVIEW, ProjectInfo
 
 from .fixtures import load_fixture
 
@@ -289,7 +289,7 @@ class TestCmdStatusIntegration:
             node_id="I_1",
             title="Issue 1",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -298,7 +298,7 @@ class TestCmdStatusIntegration:
             node_id="I_2",
             title="Issue 2",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -307,7 +307,7 @@ class TestCmdStatusIntegration:
             node_id="PR_1",
             title="PR 1",
             state="open",
-            column=BoardColumn.HUMAN_REVIEW,
+            column=COLUMN_HUMAN_REVIEW,
         )
 
         from src.board.commands import cmd_status
@@ -332,7 +332,7 @@ class TestCmdStatusIntegration:
             node_id="I_1",
             title="Test",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
 
         from src.board.commands import cmd_status

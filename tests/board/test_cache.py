@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 from src.board.cache import BoardCache
-from src.board.models import BoardColumn, ItemType, ProjectInfo
+from src.board.models import (
+    COLUMN_AGENT_CODING,
+    COLUMN_BACKLOG,
+    COLUMN_DONE,
+    COLUMN_HUMAN_REVIEW,
+    ItemType,
+    ProjectInfo,
+)
 
 
 @pytest.fixture
@@ -45,7 +52,7 @@ class TestBoardCache:
             node_id="I_xxx",
             title="Test issue",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
 
         item = cache.get_item("owner/repo", 42)
@@ -65,10 +72,10 @@ class TestBoardCache:
             node_id="I_xxx",
             title="Test issue",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
 
-        cache.update_item_column("owner/repo", 42, BoardColumn.AGENT_CODING)
+        cache.update_item_column("owner/repo", 42, COLUMN_AGENT_CODING)
 
         item = cache.get_item("owner/repo", 42)
         assert item is not None
@@ -83,7 +90,7 @@ class TestBoardCache:
             node_id="I_1",
             title="Issue 1",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -92,7 +99,7 @@ class TestBoardCache:
             node_id="I_2",
             title="Issue 2",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -101,13 +108,13 @@ class TestBoardCache:
             node_id="PR_1",
             title="PR 1",
             state="open",
-            column=BoardColumn.HUMAN_REVIEW,
+            column=COLUMN_HUMAN_REVIEW,
         )
 
-        backlog = cache.get_items_by_column(BoardColumn.BACKLOG)
+        backlog = cache.get_items_by_column(COLUMN_BACKLOG)
         assert len(backlog) == 2
 
-        human_review = cache.get_items_by_column(BoardColumn.HUMAN_REVIEW)
+        human_review = cache.get_items_by_column(COLUMN_HUMAN_REVIEW)
         assert len(human_review) == 1
 
     def test_column_counts(self, cache: BoardCache):
@@ -119,7 +126,7 @@ class TestBoardCache:
             node_id="I_1",
             title="Issue 1",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -128,7 +135,7 @@ class TestBoardCache:
             node_id="I_2",
             title="Issue 2",
             state="open",
-            column=BoardColumn.BACKLOG,
+            column=COLUMN_BACKLOG,
         )
         cache.upsert_item(
             repo="owner/repo",
@@ -137,7 +144,7 @@ class TestBoardCache:
             node_id="PR_1",
             title="PR 1",
             state="open",
-            column=BoardColumn.DONE,
+            column=COLUMN_DONE,
         )
 
         counts = cache.get_column_counts()

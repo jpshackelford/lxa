@@ -1,29 +1,37 @@
 """Tests for board models."""
 
-from src.board.models import BoardColumn, Item, ItemType
+from src.board.models import (
+    COLUMN_CLOSED,
+    COLUMN_ICEBOX,
+    Item,
+    ItemType,
+    get_column_color,
+    get_column_description,
+    get_default_columns,
+)
 
 
-class TestBoardColumn:
-    """Tests for BoardColumn enum."""
+class TestColumnHelpers:
+    """Tests for column helper functions."""
 
-    def test_all_columns_returns_all_columns_in_order(self):
-        """Verify all_columns returns correct columns."""
-        columns = BoardColumn.all_columns()
+    def test_get_default_columns_returns_all_columns_in_order(self):
+        """Verify get_default_columns returns correct columns."""
+        columns = get_default_columns()
         assert len(columns) == 9
-        assert columns[0] == BoardColumn.ICEBOX
-        assert columns[-1] == BoardColumn.CLOSED
+        assert columns[0] == COLUMN_ICEBOX
+        assert columns[-1] == COLUMN_CLOSED
 
-    def test_column_colors_has_all_columns(self):
-        """Verify color mapping is complete."""
-        colors = BoardColumn.column_colors()
-        for col in BoardColumn.all_columns():
-            assert col in colors
+    def test_get_column_color_returns_valid_colors(self):
+        """Verify color helper returns valid colors."""
+        for col_name in get_default_columns():
+            color = get_column_color(col_name)
+            assert color in {"GRAY", "BLUE", "YELLOW", "ORANGE", "PURPLE", "GREEN"}
 
-    def test_column_descriptions_has_all_columns(self):
-        """Verify description mapping is complete."""
-        descriptions = BoardColumn.column_descriptions()
-        for col in BoardColumn.all_columns():
-            assert col in descriptions
+    def test_get_column_description_returns_non_empty(self):
+        """Verify description helper returns descriptions."""
+        for col_name in get_default_columns():
+            desc = get_column_description(col_name)
+            assert desc  # Non-empty string
 
 
 class TestItem:

@@ -176,7 +176,7 @@ def configured_board_for_status(mock_config_dir):
     """Set up a configured board for status tests."""
     from src.board.cache import BoardCache
     from src.board.config import BoardConfig, save_board_config
-    from src.board.models import BoardColumn, ItemType, ProjectInfo
+    from src.board.models import COLUMN_BACKLOG, ItemType, ProjectInfo
 
     config = BoardConfig(
         project_id="PVT_test",
@@ -204,7 +204,7 @@ def configured_board_for_status(mock_config_dir):
         node_id="I_test",
         title="Test issue",
         state="open",
-        column=BoardColumn.BACKLOG,
+        column=COLUMN_BACKLOG,
     )
 
     return config, cache
