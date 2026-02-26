@@ -303,7 +303,7 @@ def cmd_scan(
 
             if verbose:
                 console.print(f"  {item.short_ref}: {item.title[:50]}...")
-                console.print(f"    → {column.value}")
+                console.print(f"    → {column}")
                 if verbose:
                     console.print(f"    [dim]{explain_column(item, config)}[/]")
 
@@ -316,7 +316,7 @@ def cmd_scan(
                 board_item_id = client.add_item_to_project(project.id, item.node_id)
 
                 # Set status
-                option_id = project.column_option_ids.get(column.value)
+                option_id = project.column_option_ids.get(column)
                 if option_id:
                     client.update_item_status(
                         project.id, board_item_id, project.status_field_id, option_id
@@ -337,7 +337,7 @@ def cmd_scan(
 
                 result.items_added += 1
                 if not verbose:
-                    console.print(f"[green]Added:[/] {item.short_ref} → {column.value}")
+                    console.print(f"[green]Added:[/] {item.short_ref} → {column}")
 
             except Exception as e:
                 result.errors.append(f"Error adding {item.short_ref}: {e}")
@@ -480,15 +480,15 @@ def cmd_sync(
 
             # Check cached state
             cached = cache.get_item(repo, number)
-            if cached and cached.column == new_column.value:
+            if cached and cached.column == new_column:
                 result.items_unchanged += 1
                 if verbose:
-                    console.print(f"[dim]    Unchanged: {new_column.value}[/]")
+                    console.print(f"[dim]    Unchanged: {new_column}[/]")
                 continue
 
             old_column = cached.column if cached else "(new)"
             if verbose:
-                console.print(f"  {item_ref}: {old_column} → {new_column.value}")
+                console.print(f"  {item_ref}: {old_column} → {new_column}")
 
             if dry_run:
                 result.items_updated += 1
@@ -503,7 +503,7 @@ def cmd_sync(
                     result.items_added += 1
 
                 # Update status
-                option_id = project.column_option_ids.get(new_column.value)
+                option_id = project.column_option_ids.get(new_column)
                 if option_id and board_item_id:
                     client.update_item_status(
                         project.id, board_item_id, project.status_field_id, option_id
@@ -524,7 +524,7 @@ def cmd_sync(
 
                 result.items_updated += 1
                 if not verbose:
-                    console.print(f"[green]Updated:[/] {item_ref} → {new_column.value}")
+                    console.print(f"[green]Updated:[/] {item_ref} → {new_column}")
 
             except Exception as e:
                 result.errors.append(f"Error updating {item_ref}: {e}")
