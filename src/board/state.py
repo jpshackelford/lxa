@@ -1,26 +1,24 @@
 """State detection rules for board column assignment.
 
 Determines which column an issue or PR should be in based on its state.
-Rules are evaluated in priority order; first matching rule wins.
+Supports both legacy hardcoded rules and declarative YAML-based rules.
 """
 
+from typing import TYPE_CHECKING
+
+import src.board.macros  # noqa: F401 - Import macros to register them
 from src.board.config import BoardConfig
 from src.board.models import BoardColumn, Item, ItemType
+
+if TYPE_CHECKING:
+    from src.board.yaml_config import BoardDefinition
 
 
 def determine_column(item: Item, config: BoardConfig | None = None) -> BoardColumn:
     """Determine which board column an item belongs in.
 
-    Rules are evaluated in priority order:
-    1. Merged PRs → Done
-    2. Approved PRs → Approved
-    3. Closed issues by bot → Icebox
-    4. Closed issues/PRs → Closed
-    5. PRs with changes requested → Agent Refinement
-    6. PRs ready for review (not draft) → Final Review
-    7. Draft PRs → Human Review
-    8. Issues with agent assigned → Agent Coding
-    9. Everything else → Backlog
+    Uses hardcoded rules for backward compatibility. For declarative rules,
+    use determine_column_from_rules() with a BoardDefinition.
 
     Args:
         item: The issue or PR to evaluate
@@ -69,6 +67,36 @@ def determine_column(item: Item, config: BoardConfig | None = None) -> BoardColu
 
     # Rule 9: Default → Backlog
     return BoardColumn.BACKLOG
+
+
+def determine_column_from_rules(
+    item: Item,
+    board_definition: "BoardDefinition",
+) -> str:
+    """Determine column using declarative YAML rules.
+
+    This is the new declarative approach using rules from YAML config.
+
+    Args:
+        item: The issue or PR to evaluate
+        board_definition: Board definition with rules
+
+    Returns:
+        Column name as string (from YAML config)
+    """
+    from src.board.rules import evaluate_rules
+    from src.board.yaml_config import BoardDefinition
+
+    if not isinstance(board_definition, BoardDefinition):
+        raise TypeError("board_definition must be a BoardDefinition")
+
+    match = evaluate_rules(
+        item=item,
+        rules=board_definition.rules,
+        config=board_definition,
+        agent_pattern=board_definition.agent_pattern,
+    )
+    return match.column
 
 
 def _has_agent_assigned(item: Item, agent_pattern: str) -> bool:
