@@ -17,8 +17,7 @@ class ItemType(Enum):
     PULL_REQUEST = "pr"
 
 
-# Default column names as constants for backward compatibility
-# These are used when no YAML config is loaded
+# Column name constants - used as canonical column names
 COLUMN_ICEBOX = "Icebox"
 COLUMN_BACKLOG = "Backlog"
 COLUMN_AGENT_CODING = "Agent Coding"
@@ -84,41 +83,6 @@ def get_column_description(column_name: str) -> str:
     return col.description if col else ""
 
 
-# DEPRECATED: BoardColumn enum is deprecated, use string column names directly.
-# This class is kept for backward compatibility during migration.
-class BoardColumn(Enum):
-    """Board workflow columns.
-
-    DEPRECATED: Use string column names directly instead.
-    This enum is kept for backward compatibility but will be removed.
-    """
-
-    ICEBOX = COLUMN_ICEBOX
-    BACKLOG = COLUMN_BACKLOG
-    AGENT_CODING = COLUMN_AGENT_CODING
-    HUMAN_REVIEW = COLUMN_HUMAN_REVIEW
-    AGENT_REFINEMENT = COLUMN_AGENT_REFINEMENT
-    FINAL_REVIEW = COLUMN_FINAL_REVIEW
-    APPROVED = COLUMN_APPROVED
-    DONE = COLUMN_DONE
-    CLOSED = COLUMN_CLOSED
-
-    @classmethod
-    def all_columns(cls) -> list["BoardColumn"]:
-        """Return all columns in workflow order."""
-        return [cls(name) for name in get_default_columns()]
-
-    @classmethod
-    def column_colors(cls) -> dict["BoardColumn", str]:
-        """Return GitHub project color for each column."""
-        return {cls(name): get_column_color(name) for name in get_default_columns()}
-
-    @classmethod
-    def column_descriptions(cls) -> dict["BoardColumn", str]:
-        """Return description for each column."""
-        return {cls(name): get_column_description(name) for name in get_default_columns()}
-
-
 @dataclass
 class Item:
     """Represents an issue or PR on the board."""
@@ -147,7 +111,7 @@ class Item:
 
     # Board tracking
     board_item_id: str | None = None
-    current_column: BoardColumn | None = None
+    current_column: str | None = None
 
     @property
     def url(self) -> str:
