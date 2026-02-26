@@ -1,0 +1,59 @@
+{
+  "data": {
+    "organization": {
+      "projectV2": {
+        "id": "PVT_kwDOTest123",
+        "number": 2,
+        "title": "Test Project Board",
+        "url": "https://github.com/orgs/TestOrg/projects/2",
+        "field": {
+          "id": "PVTSSF_testfield123",
+          "name": "Status",
+          "options": [
+            {
+              "id": "opt_backlog",
+              "name": "Backlog",
+              "color": "BLUE",
+              "description": "Ready to work"
+            },
+            {
+              "id": "opt_in_progress",
+              "name": "In Progress",
+              "color": "YELLOW",
+              "description": "Actively being worked on"
+            },
+            {
+              "id": "opt_review",
+              "name": "Review",
+              "color": "ORANGE",
+              "description": "Needs review"
+            },
+            {
+              "id": "opt_done",
+              "name": "Done",
+              "color": "GREEN",
+              "description": "Completed"
+            }
+          ]
+        },
+        "items": {
+          "nodes": [
+            {
+              "id": "PVTI_existing1",
+              "content": {
+                "number": 10,
+                "title": "Existing item",
+                "state": "OPEN",
+                "repository": {"nameWithOwner": "owner/repo"}
+              },
+              "fieldValueByName": {
+                "name": "Backlog",
+                "optionId": "opt_backlog"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

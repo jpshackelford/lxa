@@ -3,6 +3,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from functools import lru_cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.board.yaml_config import BoardDefinition
 
 
 class ItemType(Enum):
@@ -12,63 +17,106 @@ class ItemType(Enum):
     PULL_REQUEST = "pr"
 
 
-class BoardColumn(Enum):
-    """Board workflow columns."""
+# Default column names as constants for backward compatibility
+# These are used when no YAML config is loaded
+COLUMN_ICEBOX = "Icebox"
+COLUMN_BACKLOG = "Backlog"
+COLUMN_AGENT_CODING = "Agent Coding"
+COLUMN_HUMAN_REVIEW = "Human Review"
+COLUMN_AGENT_REFINEMENT = "Agent Refinement"
+COLUMN_FINAL_REVIEW = "Final Review"
+COLUMN_APPROVED = "Approved"
+COLUMN_DONE = "Done"
+COLUMN_CLOSED = "Closed"
 
-    ICEBOX = "Icebox"
-    BACKLOG = "Backlog"
-    AGENT_CODING = "Agent Coding"
-    HUMAN_REVIEW = "Human Review"
-    AGENT_REFINEMENT = "Agent Refinement"
-    FINAL_REVIEW = "Final Review"
-    APPROVED = "Approved"
-    DONE = "Done"
-    CLOSED = "Closed"
+# Columns that need human attention
+ATTENTION_COLUMNS = {
+    COLUMN_HUMAN_REVIEW,
+    COLUMN_FINAL_REVIEW,
+    COLUMN_APPROVED,
+    COLUMN_ICEBOX,
+}
+
+# Columns that represent active work
+ACTIVE_COLUMNS = {
+    COLUMN_AGENT_CODING,
+    COLUMN_HUMAN_REVIEW,
+    COLUMN_AGENT_REFINEMENT,
+    COLUMN_FINAL_REVIEW,
+}
+
+# Terminal columns (work is done)
+TERMINAL_COLUMNS = {
+    COLUMN_DONE,
+    COLUMN_CLOSED,
+}
+
+
+@lru_cache(maxsize=1)
+def get_default_board_definition() -> "BoardDefinition":
+    """Get the default board definition from the agent-workflow template.
+
+    This is cached to avoid repeated parsing.
+    Returns a BoardDefinition with default columns and rules.
+    """
+    from src.board.yaml_config import get_template, load_board_from_string
+
+    template = get_template("agent-workflow")
+    return load_board_from_string(template)
+
+
+def get_default_columns() -> list[str]:
+    """Get the default column names in order."""
+    return get_default_board_definition().column_names
+
+
+def get_column_color(column_name: str) -> str:
+    """Get the color for a column name."""
+    board = get_default_board_definition()
+    col = board.get_column(column_name)
+    return col.color if col else "GRAY"
+
+
+def get_column_description(column_name: str) -> str:
+    """Get the description for a column name."""
+    board = get_default_board_definition()
+    col = board.get_column(column_name)
+    return col.description if col else ""
+
+
+# DEPRECATED: BoardColumn enum is deprecated, use string column names directly.
+# This class is kept for backward compatibility during migration.
+class BoardColumn(Enum):
+    """Board workflow columns.
+
+    DEPRECATED: Use string column names directly instead.
+    This enum is kept for backward compatibility but will be removed.
+    """
+
+    ICEBOX = COLUMN_ICEBOX
+    BACKLOG = COLUMN_BACKLOG
+    AGENT_CODING = COLUMN_AGENT_CODING
+    HUMAN_REVIEW = COLUMN_HUMAN_REVIEW
+    AGENT_REFINEMENT = COLUMN_AGENT_REFINEMENT
+    FINAL_REVIEW = COLUMN_FINAL_REVIEW
+    APPROVED = COLUMN_APPROVED
+    DONE = COLUMN_DONE
+    CLOSED = COLUMN_CLOSED
 
     @classmethod
     def all_columns(cls) -> list["BoardColumn"]:
         """Return all columns in workflow order."""
-        return [
-            cls.ICEBOX,
-            cls.BACKLOG,
-            cls.AGENT_CODING,
-            cls.HUMAN_REVIEW,
-            cls.AGENT_REFINEMENT,
-            cls.FINAL_REVIEW,
-            cls.APPROVED,
-            cls.DONE,
-            cls.CLOSED,
-        ]
+        return [cls(name) for name in get_default_columns()]
 
     @classmethod
     def column_colors(cls) -> dict["BoardColumn", str]:
         """Return GitHub project color for each column."""
-        return {
-            cls.ICEBOX: "GRAY",
-            cls.BACKLOG: "BLUE",
-            cls.AGENT_CODING: "YELLOW",
-            cls.HUMAN_REVIEW: "ORANGE",
-            cls.AGENT_REFINEMENT: "YELLOW",
-            cls.FINAL_REVIEW: "PURPLE",
-            cls.APPROVED: "GREEN",
-            cls.DONE: "GREEN",
-            cls.CLOSED: "GRAY",
-        }
+        return {cls(name): get_column_color(name) for name in get_default_columns()}
 
     @classmethod
     def column_descriptions(cls) -> dict["BoardColumn", str]:
         """Return description for each column."""
-        return {
-            cls.ICEBOX: "Auto-closed due to inactivity; awaiting triage",
-            cls.BACKLOG: "Triaged issues ready to be worked",
-            cls.AGENT_CODING: "Agent actively working on implementation",
-            cls.HUMAN_REVIEW: "Needs human attention",
-            cls.AGENT_REFINEMENT: "Agent addressing review feedback",
-            cls.FINAL_REVIEW: "Awaiting approval from reviewers",
-            cls.APPROVED: "PR approved, ready to merge",
-            cls.DONE: "Merged",
-            cls.CLOSED: "Ignored / Won't fix",
-        }
+        return {cls(name): get_column_description(name) for name in get_default_columns()}
 
 
 @dataclass
