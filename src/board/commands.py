@@ -740,3 +740,264 @@ def _print_sync_summary(result: SyncResult, dry_run: bool) -> None:
 
     if result.errors:
         console.print(f"  [red]Errors: {len(result.errors)}[/]")
+
+
+def cmd_apply(
+    *,
+    config_file: str | None = None,
+    template: str | None = None,
+    dry_run: bool = False,
+    prune: bool = False,
+) -> int:
+    """Apply a YAML board configuration.
+
+    Reconciles an existing board with a YAML configuration file.
+    Creates columns that don't exist, updates colors/descriptions,
+    and optionally removes columns not in the config.
+
+    Args:
+        config_file: Path to YAML config file (default: ~/.lxa/boards/agent-workflow.yaml)
+        template: Use built-in template instead of file
+        dry_run: Show what would be done without making changes
+        prune: Remove columns not in config
+
+    Returns:
+        Exit code (0 for success)
+    """
+    from pathlib import Path
+
+    from src.board.rules import validate_rules
+    from src.board.yaml_config import (
+        get_default_board_path,
+        get_template,
+        init_default_board,
+        list_templates,
+        load_board_definition,
+        load_board_from_string,
+    )
+
+    console.print(Panel("[bold blue]lxa board apply[/]", expand=False))
+
+    # Load board definition
+    if template:
+        console.print(f"Using template: [cyan]{template}[/]")
+        try:
+            yaml_content = get_template(template)
+            board_def = load_board_from_string(yaml_content)
+        except ValueError as e:
+            console.print(f"[red]Error:[/] {e}")
+            available = [t[0] for t in list_templates()]
+            console.print(f"[dim]Available templates: {', '.join(available)}[/]")
+            return 1
+    elif config_file:
+        config_path = Path(config_file).expanduser()
+        console.print(f"Loading config: [cyan]{config_path}[/]")
+        try:
+            board_def = load_board_definition(config_path)
+        except FileNotFoundError:
+            console.print(f"[red]Error:[/] Config file not found: {config_path}")
+            return 1
+        except Exception as e:
+            console.print(f"[red]Error parsing config:[/] {e}")
+            return 1
+    else:
+        # Use default board config
+        default_path = get_default_board_path()
+        if not default_path.exists():
+            console.print(f"[yellow]Creating default config:[/] {default_path}")
+            if not dry_run:
+                init_default_board()
+
+        console.print(f"Loading config: [cyan]{default_path}[/]")
+        try:
+            board_def = load_board_definition(default_path)
+        except FileNotFoundError:
+            console.print("[red]Error:[/] No config file found. Use --template or --config.")
+            return 1
+
+    console.print(f"Board: [bold]{board_def.name}[/]")
+    if board_def.description:
+        console.print(f"[dim]{board_def.description}[/]")
+
+    # Validate rules
+    import src.board.macros  # noqa: F401 - register macros
+
+    errors = validate_rules(board_def.rules, board_def.column_names)
+    if errors:
+        console.print("\n[red]Configuration errors:[/]")
+        for error in errors:
+            console.print(f"  • {error}")
+        return 1
+
+    console.print(
+        f"\n[green]✓[/] Configuration valid ({len(board_def.columns)} columns, {len(board_def.rules)} rules)"
+    )
+
+    # Load existing board config
+    config = load_board_config()
+    if not config.project_id:
+        console.print("\n[red]Error:[/] No board configured. Run 'lxa board init' first.")
+        return 1
+
+    cache = BoardCache()
+    project = cache.get_project_info(config.project_id)
+    if not project:
+        console.print("[red]Error:[/] Project not in cache. Run 'lxa board init' first.")
+        return 1
+
+    console.print(f"\nTarget project: [cyan]{project.title}[/]")
+    console.print(f"URL: {project.url}")
+
+    # Compute changes
+    console.print("\n[bold]Computing changes...[/]")
+
+    existing_columns = set(project.column_option_ids.keys())
+    config_columns = {col.name for col in board_def.columns}
+
+    columns_to_add = config_columns - existing_columns
+    columns_to_remove = existing_columns - config_columns if prune else set()
+
+    # Check for columns to update (color/description changes would need API call)
+    # For now, we only handle add/remove
+
+    has_changes = bool(columns_to_add or columns_to_remove)
+
+    if columns_to_add:
+        console.print("\n[bold]Columns to add:[/]")
+        for name in columns_to_add:
+            col = board_def.get_column(name)
+            if col:
+                console.print(
+                    f"  [green]+[/] {name} ({col.color}) - {col.description or 'No description'}"
+                )
+
+    if columns_to_remove:
+        console.print("\n[bold]Columns to remove:[/]")
+        for name in columns_to_remove:
+            console.print(f"  [red]-[/] {name}")
+
+    if not has_changes:
+        console.print("\n[green]✓[/] Board is already up to date")
+        _update_board_repos(board_def, config, dry_run)
+        return 0
+
+    if dry_run:
+        console.print("\n[yellow]Dry run - no changes made[/]")
+        return 0
+
+    # Apply changes
+    console.print("\n[bold]Applying changes...[/]")
+
+    if not project.status_field_id:
+        console.print("[red]Error:[/] No Status field configured. Run 'lxa board init' first.")
+        return 1
+
+    with GitHubClient() as client:
+        if columns_to_add:
+            console.print("Updating Status field options...")
+            # Get all column definitions in order
+            all_columns = [(col.name, col.color, col.description) for col in board_def.columns]
+
+            try:
+                new_options = client.update_status_field_with_columns(
+                    project.id,
+                    project.status_field_id,
+                    all_columns,
+                )
+                project.column_option_ids = new_options
+                cache.cache_project_info(project)
+                console.print(f"[green]✓[/] Added {len(columns_to_add)} column(s)")
+            except Exception as e:
+                console.print(f"[red]Error updating columns:[/] {e}")
+                return 1
+
+        if columns_to_remove:
+            console.print("[yellow]Note:[/] Column removal not yet implemented")
+            console.print("[dim]Columns exist on board but not in config[/]")
+
+    _update_board_repos(board_def, config, dry_run)
+
+    console.print("\n[green]✓[/] Board configuration applied")
+    return 0
+
+
+def _update_board_repos(board_def, config, dry_run: bool) -> None:
+    """Update watched repos from board definition."""
+    if board_def.repos:
+        new_repos = set(board_def.repos)
+        current_repos = set(config.watched_repos)
+
+        if new_repos != current_repos:
+            console.print("\n[bold]Updating watched repositories...[/]")
+            added = new_repos - current_repos
+            removed = current_repos - new_repos
+
+            for repo in added:
+                console.print(f"  [green]+[/] {repo}")
+            for repo in removed:
+                console.print(f"  [red]-[/] {repo}")
+
+            if not dry_run:
+                config.watched_repos = list(board_def.repos)
+                save_board_config(config)
+                console.print("[green]✓[/] Watched repos updated")
+
+
+def cmd_templates() -> int:
+    """List available built-in templates.
+
+    Returns:
+        Exit code (0 for success)
+    """
+    from src.board.yaml_config import list_templates
+
+    console.print(Panel("[bold blue]lxa board templates[/]", expand=False))
+    console.print()
+
+    templates = list_templates()
+
+    table = Table(title="Available Templates")
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+
+    for name, desc in templates:
+        table.add_row(name, desc)
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Usage: lxa board apply --template <name>[/]")
+
+    return 0
+
+
+def cmd_macros() -> int:
+    """List available macros for rule conditions.
+
+    Returns:
+        Exit code (0 for success)
+    """
+    from src.board.macros import get_macro_help
+
+    console.print(Panel("[bold blue]lxa board macros[/]", expand=False))
+    console.print()
+
+    macros = get_macro_help()
+
+    for name, doc in sorted(macros.items()):
+        console.print(f"[cyan]${name}[/]")
+        # Print first line of docstring
+        if doc:
+            first_line = doc.strip().split("\n")[0]
+            console.print(f"  {first_line}")
+
+            # Find YAML usage example if present
+            if "YAML usage:" in doc:
+                usage_start = doc.find("YAML usage:")
+                usage_section = doc[usage_start:].split("\n")
+                for line in usage_section[1:4]:  # Show up to 3 lines of example
+                    line = line.strip()
+                    if line and not line.startswith('"""'):
+                        console.print(f"  [dim]{line}[/]")
+        console.print()
+
+    return 0

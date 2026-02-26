@@ -490,6 +490,51 @@ class GitHubClient:
         field = data["updateProjectV2Field"]["projectV2Field"]
         return {opt["name"]: opt["id"] for opt in field["options"]}
 
+    def update_status_field_with_columns(
+        self,
+        project_id: str,
+        field_id: str,
+        columns: list[tuple[str, str, str]],
+    ) -> dict[str, str]:
+        """Update the Status field with custom column definitions.
+
+        Args:
+            project_id: GraphQL ID of the project
+            field_id: GraphQL ID of the Status field
+            columns: List of (name, color, description) tuples
+
+        Returns:
+            Dict of {column_name: option_id}
+        """
+        options = [
+            {"name": name, "color": color, "description": desc} for name, color, desc in columns
+        ]
+
+        mutation = """
+        mutation($projectId: ID!, $fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+            updateProjectV2Field(input: {
+                projectId: $projectId
+                fieldId: $fieldId
+                singleSelectOptions: $options
+            }) {
+                projectV2Field {
+                    ... on ProjectV2SingleSelectField {
+                        id
+                        options {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        }
+        """
+        data = self.graphql(
+            mutation, {"projectId": project_id, "fieldId": field_id, "options": options}
+        )
+        field = data["updateProjectV2Field"]["projectV2Field"]
+        return {opt["name"]: opt["id"] for opt in field["options"]}
+
     def add_item_to_project(self, project_id: str, content_id: str) -> str:
         """Add an issue or PR to a project.
 

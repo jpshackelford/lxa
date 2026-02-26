@@ -697,11 +697,60 @@ Configuration:
         help="Show configuration with defaults",
     )
 
+    # board apply
+    board_apply_parser = board_subparsers.add_parser(
+        "apply",
+        help="Apply a YAML board configuration",
+    )
+    board_apply_parser.add_argument(
+        "--config",
+        "-c",
+        dest="config_file",
+        help="Path to YAML config file (default: ~/.lxa/boards/agent-workflow.yaml)",
+    )
+    board_apply_parser.add_argument(
+        "--template",
+        "-t",
+        help="Use built-in template instead of file",
+    )
+    board_apply_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_apply_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Remove columns not in config",
+    )
+
+    # board templates
+    board_subparsers.add_parser(
+        "templates",
+        help="List available built-in templates",
+    )
+
+    # board macros
+    board_subparsers.add_parser(
+        "macros",
+        help="List available macros for rule conditions",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
     if args.command == "board":
-        from src.board.commands import cmd_config, cmd_init, cmd_scan, cmd_status, cmd_sync
+        from src.board.commands import (
+            cmd_apply,
+            cmd_config,
+            cmd_init,
+            cmd_macros,
+            cmd_scan,
+            cmd_status,
+            cmd_sync,
+            cmd_templates,
+        )
 
         if args.board_command == "init":
             return cmd_init(
@@ -741,6 +790,20 @@ Configuration:
                 value=args.value,
                 show_defaults=args.show_defaults,
             )
+
+        if args.board_command == "apply":
+            return cmd_apply(
+                config_file=args.config_file,
+                template=args.template,
+                dry_run=args.dry_run,
+                prune=args.prune,
+            )
+
+        if args.board_command == "templates":
+            return cmd_templates()
+
+        if args.board_command == "macros":
+            return cmd_macros()
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
