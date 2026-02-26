@@ -236,9 +236,7 @@ class TestCmdScanIntegration:
         config, cache = configured_board
 
         search_response = load_fixture("search_issues_response")
-        project_items_response = {
-            "data": {"node": {"items": {"nodes": []}}}
-        }
+        project_items_response = {"data": {"node": {"items": {"nodes": []}}}}
 
         mutation_calls = []
 

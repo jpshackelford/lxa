@@ -114,7 +114,11 @@ class TestBoardCommandsSmoke:
 
         # Should show usage or error about missing args
         captured = capsys.readouterr()
-        assert "Usage" in captured.out or "Error" in captured.out or "No project specified" in captured.out
+        assert (
+            "Usage" in captured.out
+            or "Error" in captured.out
+            or "No project specified" in captured.out
+        )
 
     def test_cmd_config_repos_add(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test adding a repo to watch list."""
