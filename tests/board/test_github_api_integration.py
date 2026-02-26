@@ -4,7 +4,6 @@ These tests verify the full code path from GitHubClient methods through
 httpx to response parsing, using mocked HTTP responses.
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -65,7 +64,7 @@ class TestGitHubClientSearch:
             item2 = result.items[1]
             assert item2.number == 36
             assert item2.assignees == ["openhands-agent"]
-            assert "enhancement" in [lbl for lbl in item2.labels]
+            assert "enhancement" in item2.labels
 
             # Check third item (closed)
             item3 = result.items[2]

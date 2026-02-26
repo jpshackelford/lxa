@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+import src.board.cache as cache_module
+import src.board.config as config_module
 from src.board.cache import BoardCache
 from src.board.config import BoardConfig, save_board_config
 from src.board.models import BoardColumn, ProjectInfo
@@ -43,20 +45,19 @@ def mock_config_dir(tmp_path: Path, monkeypatch):
     config_dir = tmp_path / ".lxa"
     config_dir.mkdir()
 
-    # Patch the config paths in BOTH modules (config and cache import separately)
-    import src.board.config as config_module
-    import src.board.cache as cache_module
-
     monkeypatch.setattr(config_module, "LXA_HOME", config_dir)
     monkeypatch.setattr(config_module, "CONFIG_FILE", config_dir / "config.toml")
     monkeypatch.setattr(config_module, "CACHE_FILE", config_dir / "board-cache.db")
     monkeypatch.setattr(cache_module, "CACHE_FILE", config_dir / "board-cache.db")
 
+    # Set a fake GITHUB_TOKEN to allow GitHubClient initialization in tests
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token-fake")
+
     return config_dir
 
 
 @pytest.fixture
-def configured_board(mock_config_dir, tmp_path):
+def configured_board(mock_config_dir):
     """Set up a configured board with cached project info."""
     # Create config
     config = BoardConfig(
@@ -93,8 +94,8 @@ class MockHttpxClient:
     """Mock httpx.Client that can be configured with responses."""
 
     def __init__(self, get_handler=None, post_handler=None):
-        self.get_handler = get_handler or (lambda *a, **k: MockResponse({}))
-        self.post_handler = post_handler or (lambda *a, **k: MockResponse({"data": {}}))
+        self.get_handler = get_handler or (lambda url, **kw: MockResponse({}))  # noqa: ARG005
+        self.post_handler = post_handler or (lambda url, **kw: MockResponse({"data": {}}))  # noqa: ARG005
         self.headers = {}
 
     def get(self, url, **kwargs):
@@ -133,12 +134,12 @@ class TestCmdScanIntegration:
         add_item_response = load_fixture("add_item_response")
         update_status_response = load_fixture("update_status_response")
 
-        def get_handler(url, **kwargs):
+        def get_handler(url, **_kwargs):
             if "search/issues" in url:
                 return MockResponse(search_response)
             return MockResponse({})
 
-        def post_handler(url, **kwargs):
+        def post_handler(_url, **kwargs):
             body = kwargs.get("json", {})
             query = body.get("query", "")
             if "items" in query:
@@ -151,7 +152,7 @@ class TestCmdScanIntegration:
 
         mock_client = MockHttpxClient(get_handler, post_handler)
 
-        monkeypatch.setattr(httpx, "Client", lambda **kwargs: mock_client)
+        monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
             "src.board.commands.get_github_username",
             lambda: "testuser",
@@ -197,12 +198,12 @@ class TestCmdScanIntegration:
 
         add_calls = []
 
-        def get_handler(url, **kwargs):
+        def get_handler(url, **_kwargs):
             if "search/issues" in url:
                 return MockResponse(search_response)
             return MockResponse({})
 
-        def post_handler(url, **kwargs):
+        def post_handler(_url, **kwargs):
             body = kwargs.get("json", {})
             query = body.get("query", "")
             if "items" in query:
@@ -216,7 +217,7 @@ class TestCmdScanIntegration:
 
         mock_client = MockHttpxClient(get_handler, post_handler)
 
-        monkeypatch.setattr(httpx, "Client", lambda **kwargs: mock_client)
+        monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
             "src.board.commands.get_github_username",
             lambda: "testuser",
@@ -241,12 +242,12 @@ class TestCmdScanIntegration:
 
         mutation_calls = []
 
-        def get_handler(url, **kwargs):
+        def get_handler(url, **_kwargs):
             if "search/issues" in url:
                 return MockResponse(search_response)
             return MockResponse({})
 
-        def post_handler(url, **kwargs):
+        def post_handler(_url, **kwargs):
             body = kwargs.get("json", {})
             query = body.get("query", "")
             if "items" in query:
@@ -258,7 +259,7 @@ class TestCmdScanIntegration:
 
         mock_client = MockHttpxClient(get_handler, post_handler)
 
-        monkeypatch.setattr(httpx, "Client", lambda **kwargs: mock_client)
+        monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
             "src.board.commands.get_github_username",
             lambda: "testuser",
@@ -350,7 +351,7 @@ class TestCmdStatusIntegration:
 class TestCmdConfigIntegration:
     """Integration tests for cmd_config."""
 
-    def test_config_shows_current_settings(self, configured_board, capsys):
+    def test_config_shows_current_settings(self, configured_board, capsys):  # noqa: ARG002
         """Test that config shows current settings."""
         from src.board.commands import cmd_config
 
@@ -361,7 +362,7 @@ class TestCmdConfigIntegration:
         assert "PVT_kwDOTest123" in captured.out
         assert "testuser" in captured.out
 
-    def test_config_add_repo(self, mock_config_dir):
+    def test_config_add_repo(self, mock_config_dir):  # noqa: ARG002
         """Test adding a watched repo."""
         # Start with empty config
         config = BoardConfig()
@@ -383,7 +384,7 @@ class TestCmdConfigIntegration:
 class TestErrorHandling:
     """Test error handling in commands."""
 
-    def test_scan_without_config_fails(self, mock_config_dir, capsys):
+    def test_scan_without_config_fails(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that scan fails gracefully without configuration."""
         from src.board.commands import cmd_scan
 
@@ -393,30 +394,32 @@ class TestErrorHandling:
         captured = capsys.readouterr()
         assert "No board configured" in captured.out
 
-    def test_scan_handles_api_error(self, configured_board, monkeypatch, capsys):
+    def test_scan_handles_api_error(self, configured_board, monkeypatch, capsys):  # noqa: ARG002
         """Test that scan handles API errors gracefully."""
-        config, cache = configured_board
+        _config, _cache = configured_board
 
-        def mock_get(*args, **kwargs):
+        def mock_get(*_args, **_kwargs):
             return MockResponse({"message": "Rate limited"}, status_code=403)
 
-        with patch.object(httpx.Client, "get", mock_get):
-            with patch.object(
+        with (
+            patch.object(httpx.Client, "get", mock_get),
+            patch.object(
                 httpx.Client,
                 "post",
-                lambda *a, **k: MockResponse({"data": {"node": {"items": {"nodes": []}}}}),
-            ):
-                monkeypatch.setattr(
-                    "src.board.commands.get_github_username",
-                    lambda: "testuser",
-                )
+                lambda *_a, **_k: MockResponse({"data": {"node": {"items": {"nodes": []}}}}),
+            ),
+        ):
+            monkeypatch.setattr(
+                "src.board.commands.get_github_username",
+                lambda: "testuser",
+            )
 
-                from src.board.commands import cmd_scan
+            from src.board.commands import cmd_scan
 
-                # Should handle error without crashing
-                result = cmd_scan(dry_run=False)
+            # Should handle error without crashing
+            result = cmd_scan(dry_run=False)
 
         # May succeed with 0 items or fail gracefully
-        captured = capsys.readouterr()
+        capsys.readouterr()
         # Just verify it didn't crash with unhandled exception
         assert isinstance(result, int)
