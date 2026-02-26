@@ -153,7 +153,7 @@ def save_board_config(config: BoardConfig) -> None:
     """Save board configuration to ~/.lxa/config.toml.
 
     Preserves other sections in the config file.
-    Uses atomic write to prevent partial writes and race conditions.
+    Uses atomic write to prevent partial writes.
     """
     ensure_lxa_home()
 
@@ -188,7 +188,7 @@ def save_board_config(config: BoardConfig) -> None:
     # Update existing data
     existing_data["board"] = board_data
 
-    # Write atomically to prevent partial writes and race conditions
+    # Write atomically to prevent partial writes
     buffer = io.BytesIO()
     tomli_w.dump(existing_data, buffer)
     atomic_write(CONFIG_FILE, buffer.getvalue())

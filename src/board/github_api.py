@@ -3,6 +3,7 @@
 Uses GitHub's REST API for search/notifications and GraphQL for Project operations.
 """
 
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from src.board.models import (
     get_column_description,
     get_default_columns,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_github_token() -> str:
@@ -37,9 +40,10 @@ def get_github_username() -> str | None:
 
     # Query API for authenticated user
     try:
-        client = GitHubClient()
-        return client.get_authenticated_user()
-    except Exception:
+        with GitHubClient() as client:
+            return client.get_authenticated_user()
+    except Exception as e:
+        logger.warning("Could not determine GitHub username: %s", e)
         return None
 
 
@@ -134,9 +138,8 @@ class GitHubClient:
         This method returns complete data including PR-specific fields like
         `merged` and `reviewDecision` in a single query, avoiding N+1 queries.
 
-        Note: GitHub's GraphQL search requires separate queries for PRs and
-        issues when fetching type-specific fields. This method makes 2 queries
-        and combines the results.
+        Uses inline fragments to fetch both Issue and PullRequest type-specific
+        fields in one API call.
 
         Args:
             query: Search query (e.g., "involves:user repo:owner/repo")
@@ -145,37 +148,25 @@ class GitHubClient:
         Returns:
             SearchResult with matching items including complete PR data
         """
-        all_items: list[Item] = []
-        total_count = 0
-
-        # Query for PRs (with PR-specific fields)
-        pr_query = f"is:pr {query}"
-        pr_result = self._graphql_search_prs(pr_query, per_page)
-        all_items.extend(pr_result["items"])
-        total_count += pr_result["count"]
-
-        # Query for issues (with issue-specific fields)
-        issue_query = f"is:issue {query}"
-        issue_result = self._graphql_search_issues(issue_query, per_page)
-        all_items.extend(issue_result["items"])
-        total_count += issue_result["count"]
-
-        # Sort by updated_at descending (matching REST API default)
-        all_items.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
-
-        return SearchResult(
-            total_count=total_count,
-            items=all_items,
-            incomplete_results=False,
-        )
-
-    def _graphql_search_prs(self, query: str, limit: int) -> dict:
-        """Search for PRs using GraphQL, returning complete PR data."""
         gql_query = """
         query($query: String!, $limit: Int!) {
             search(query: $query, type: ISSUE, first: $limit) {
                 issueCount
                 nodes {
+                    __typename
+                    ... on Issue {
+                        id
+                        number
+                        title
+                        state
+                        stateReason
+                        repository { nameWithOwner }
+                        author { login }
+                        assignees(first: 10) { nodes { login } }
+                        labels(first: 10) { nodes { name } }
+                        createdAt
+                        updatedAt
+                    }
                     ... on PullRequest {
                         id
                         number
@@ -195,51 +186,26 @@ class GitHubClient:
             }
         }
         """
-        data = self.graphql(gql_query, {"query": query, "limit": limit})
+        data = self.graphql(gql_query, {"query": query, "limit": per_page})
         search = data["search"]
 
         items = []
         for node in search["nodes"]:
             if not node:  # Skip null nodes
                 continue
-            items.append(self._parse_graphql_pr(node))
+            if node["__typename"] == "PullRequest":
+                items.append(self._parse_graphql_pr(node))
+            else:
+                items.append(self._parse_graphql_issue(node))
 
-        return {"count": search["issueCount"], "items": items}
+        # Sort by updated_at descending (matching REST API default)
+        items.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
 
-    def _graphql_search_issues(self, query: str, limit: int) -> dict:
-        """Search for issues using GraphQL."""
-        gql_query = """
-        query($query: String!, $limit: Int!) {
-            search(query: $query, type: ISSUE, first: $limit) {
-                issueCount
-                nodes {
-                    ... on Issue {
-                        id
-                        number
-                        title
-                        state
-                        stateReason
-                        repository { nameWithOwner }
-                        author { login }
-                        assignees(first: 10) { nodes { login } }
-                        labels(first: 10) { nodes { name } }
-                        createdAt
-                        updatedAt
-                    }
-                }
-            }
-        }
-        """
-        data = self.graphql(gql_query, {"query": query, "limit": limit})
-        search = data["search"]
-
-        items = []
-        for node in search["nodes"]:
-            if not node:  # Skip null nodes
-                continue
-            items.append(self._parse_graphql_issue(node))
-
-        return {"count": search["issueCount"], "items": items}
+        return SearchResult(
+            total_count=search["issueCount"],
+            items=items,
+            incomplete_results=False,
+        )
 
     def _parse_graphql_pr(self, data: dict) -> Item:
         """Parse a GraphQL PR node into an Item."""
@@ -406,15 +372,14 @@ class GitHubClient:
         )
 
     def _extract_linked_issues(self, body: str) -> list[int]:
-        """Extract issue numbers from PR body (e.g., 'Fixes #123')."""
-        patterns = [
-            r"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*#(\d+)",
-            r"#(\d+)",
-        ]
+        """Extract all referenced issue numbers from PR body.
+
+        Finds any #N pattern including closing keywords (fixes, closes, resolves)
+        and general references (e.g., 'Related to #50').
+        """
         issues = set()
-        for pattern in patterns:
-            for match in re.finditer(pattern, body, re.IGNORECASE):
-                issues.add(int(match.group(1)))
+        for match in re.finditer(r"#(\d+)", body):
+            issues.add(int(match.group(1)))
         return sorted(issues)
 
     # GraphQL methods for Project operations
