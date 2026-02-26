@@ -46,7 +46,17 @@ class BoardConfig:
 
     def get_column_name(self, column_key: str) -> str:
         """Get the column name, using custom mapping if set."""
-        from src.board.models import BoardColumn
+        from src.board.models import (
+            COLUMN_AGENT_CODING,
+            COLUMN_AGENT_REFINEMENT,
+            COLUMN_APPROVED,
+            COLUMN_BACKLOG,
+            COLUMN_CLOSED,
+            COLUMN_DONE,
+            COLUMN_FINAL_REVIEW,
+            COLUMN_HUMAN_REVIEW,
+            COLUMN_ICEBOX,
+        )
 
         # Use custom mapping if provided
         if column_key in self.column_names:
@@ -54,15 +64,15 @@ class BoardConfig:
 
         # Default mapping
         defaults = {
-            "icebox": BoardColumn.ICEBOX.value,
-            "backlog": BoardColumn.BACKLOG.value,
-            "agent_coding": BoardColumn.AGENT_CODING.value,
-            "human_review": BoardColumn.HUMAN_REVIEW.value,
-            "agent_refinement": BoardColumn.AGENT_REFINEMENT.value,
-            "final_review": BoardColumn.FINAL_REVIEW.value,
-            "approved": BoardColumn.APPROVED.value,
-            "done": BoardColumn.DONE.value,
-            "closed": BoardColumn.CLOSED.value,
+            "icebox": COLUMN_ICEBOX,
+            "backlog": COLUMN_BACKLOG,
+            "agent_coding": COLUMN_AGENT_CODING,
+            "human_review": COLUMN_HUMAN_REVIEW,
+            "agent_refinement": COLUMN_AGENT_REFINEMENT,
+            "final_review": COLUMN_FINAL_REVIEW,
+            "approved": COLUMN_APPROVED,
+            "done": COLUMN_DONE,
+            "closed": COLUMN_CLOSED,
         }
         return defaults.get(column_key, column_key)
 
