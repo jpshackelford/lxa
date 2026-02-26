@@ -6,8 +6,8 @@ AI-assisted development workflows.
 
 from src.board.config import BoardConfig, load_board_config, save_board_config
 from src.board.models import (
-    ATTENTION_COLUMNS,
     ACTIVE_COLUMNS,
+    ATTENTION_COLUMNS,
     TERMINAL_COLUMNS,
     Item,
     ItemType,
