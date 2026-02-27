@@ -17,6 +17,47 @@ This document provides a comprehensive manual testing plan for PR #40: Board CLI
 - [ ] Clear any existing lxa configuration: `rm -rf ~/.lxa`
 - [ ] Ensure no existing "UAT Test Board" project exists on your GitHub account
 
+### Enable API Logging (Recommended)
+
+**Enable API request/response logging throughout UAT testing** to capture debug information and generate test fixtures. This helps with:
+- Debugging any issues encountered during testing
+- Capturing real API responses for future automated test fixtures
+- Understanding the exact API calls made by each command
+
+**Setup** (run once before starting tests):
+```bash
+# Enable API logging
+export LXA_LOG_API=1
+
+# Optional: Use a dedicated directory for UAT logs
+export LXA_LOG_API_DIR=~/.lxa/uat-api-logs
+
+# Create the log directory
+mkdir -p "${LXA_LOG_API_DIR:-~/.lxa/api_logs}"
+```
+
+**What gets logged**:
+- `NNNN_request.json` - Request details (method, URL, headers, body)
+- `NNNN_response.json` - Response details (status, headers, body)
+
+**Security Note**: Authorization tokens are automatically redacted in logged headers.
+
+**After each test suite**, consider organizing logs:
+```bash
+# Example: Archive logs after Test Suite 1
+LOG_DIR="${LXA_LOG_API_DIR:-~/.lxa/api_logs}"
+mkdir -p "$LOG_DIR/suite-1-init"
+mv "$LOG_DIR"/*.json "$LOG_DIR/suite-1-init/" 2>/dev/null || true
+```
+
+**Useful fixtures to capture**:
+| Test Case | Fixture Value |
+|-----------|---------------|
+| TC-1.1 | Project creation response |
+| TC-3.2 | Search API responses for issues/PRs |
+| TC-4.1/4.2 | Items in various states for rule testing |
+| TC-5.1 | Notifications API response |
+
 ---
 
 ## Test Suite 1: Initial Setup & Board Creation
