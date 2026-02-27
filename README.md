@@ -128,6 +128,26 @@ Icebox → Backlog → Agent Coding → Human Review → Agent Refinement
 
 See [Board Management](doc/reference/board-management.md) for detailed documentation.
 
+#### Debugging API Calls
+
+Enable API logging to capture all GitHub API requests and responses:
+
+```bash
+# Enable API logging
+export LXA_LOG_API=1
+
+# Optionally set custom log directory
+export LXA_LOG_API_DIR=/path/to/logs
+
+# Run any board command - all API calls will be logged
+lxa board scan --dry-run
+
+# Logs saved to ~/.lxa/api_logs/ as:
+# 0001_request.json, 0001_response.json, 0002_request.json, ...
+```
+
+This is useful for debugging API issues and generating test fixture data.
+
 ## Development
 
 ```bash
