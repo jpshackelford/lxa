@@ -121,9 +121,8 @@ class TestCmdScanIntegration:
         """Test that scan finds items and adds them to the board."""
         _config, cache = configured_board
 
-        # GraphQL search responses for PRs and issues
-        graphql_search_prs = load_fixture("graphql_search_prs_response")
-        graphql_search_issues = load_fixture("graphql_search_issues_response")
+        # GraphQL combined search response (PRs and issues in one query)
+        graphql_search_combined = load_fixture("graphql_search_combined_response")
         project_items_response = {
             "data": {
                 "node": {
@@ -136,22 +135,15 @@ class TestCmdScanIntegration:
         add_item_response = load_fixture("add_item_response")
         update_status_response = load_fixture("update_status_response")
 
-        search_call_count = 0
-
         def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
-            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
-            # Handle GraphQL search queries (for PRs and issues)
+            # Handle GraphQL combined search query
             if "search(" in query and "issueCount" in query:
-                search_call_count += 1
-                # First call is for PRs, second for issues
-                if search_call_count % 2 == 1:
-                    return MockResponse(graphql_search_prs)
-                return MockResponse(graphql_search_issues)
+                return MockResponse(graphql_search_combined)
             elif "items" in query:
                 return MockResponse(project_items_response)
             elif "addProjectV2ItemById" in query:
@@ -183,9 +175,8 @@ class TestCmdScanIntegration:
         """Test that scan doesn't re-add items already on board."""
         _config, _cache = configured_board
 
-        # GraphQL search responses
-        graphql_search_prs = load_fixture("graphql_search_prs_response")
-        graphql_search_issues = load_fixture("graphql_search_issues_response")
+        # GraphQL combined search response
+        graphql_search_combined = load_fixture("graphql_search_combined_response")
         # Simulate item #38 already on board
         project_items_response = {
             "data": {
@@ -209,20 +200,15 @@ class TestCmdScanIntegration:
         }
 
         add_calls = []
-        search_call_count = 0
 
         def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
-            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
             if "search(" in query and "issueCount" in query:
-                search_call_count += 1
-                if search_call_count % 2 == 1:
-                    return MockResponse(graphql_search_prs)
-                return MockResponse(graphql_search_issues)
+                return MockResponse(graphql_search_combined)
             elif "items" in query:
                 return MockResponse(project_items_response)
             elif "addProjectV2ItemById" in query:
@@ -253,25 +239,19 @@ class TestCmdScanIntegration:
         """Test that dry run doesn't make any mutations."""
         _config, _cache = configured_board
 
-        graphql_search_prs = load_fixture("graphql_search_prs_response")
-        graphql_search_issues = load_fixture("graphql_search_issues_response")
+        graphql_search_combined = load_fixture("graphql_search_combined_response")
         project_items_response = {"data": {"node": {"items": {"nodes": []}}}}
 
         mutation_calls = []
-        search_call_count = 0
 
         def get_handler(_url, **_kwargs):
             return MockResponse({})
 
         def post_handler(_url, **kwargs):
-            nonlocal search_call_count
             body = kwargs.get("json", {})
             query = body.get("query", "")
             if "search(" in query and "issueCount" in query:
-                search_call_count += 1
-                if search_call_count % 2 == 1:
-                    return MockResponse(graphql_search_prs)
-                return MockResponse(graphql_search_issues)
+                return MockResponse(graphql_search_combined)
             elif "items" in query:
                 return MockResponse(project_items_response)
             elif "mutation" in query.lower():

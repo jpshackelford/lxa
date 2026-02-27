@@ -115,23 +115,17 @@ class TestGitHubClientGraphQLSearch:
     """Test GitHubClient GraphQL search operations."""
 
     def test_search_issues_graphql_combines_prs_and_issues(self):
-        """Test that search_issues_graphql combines PR and issue results."""
-        pr_fixture = load_fixture("graphql_search_prs_response")
-        issue_fixture = load_fixture("graphql_search_issues_response")
+        """Test that search_issues_graphql returns PR and issue results."""
+        combined_fixture = load_fixture("graphql_search_combined_response")
 
-        call_count = 0
+        with patch.object(httpx.Client, "post") as mock_post:
+            mock_post.return_value = MockResponse(combined_fixture)
 
-        def mock_post(*_args, **_kwargs):
-            nonlocal call_count
-            call_count += 1
-            # First call is for PRs, second is for issues
-            if call_count == 1:
-                return MockResponse(pr_fixture)
-            return MockResponse(issue_fixture)
-
-        with patch.object(httpx.Client, "post", side_effect=mock_post):
             client = GitHubClient(token="test-token")
             result = client.search_issues_graphql("repo:owner/repo")
+
+            # Should make only ONE API call (combined query)
+            assert mock_post.call_count == 1
 
             # Should have combined results
             assert result.total_count == 5  # 3 PRs + 2 issues
@@ -163,19 +157,11 @@ class TestGitHubClientGraphQLSearch:
 
     def test_search_issues_graphql_sorts_by_updated(self):
         """Test that results are sorted by updated_at descending."""
-        pr_fixture = load_fixture("graphql_search_prs_response")
-        issue_fixture = load_fixture("graphql_search_issues_response")
+        combined_fixture = load_fixture("graphql_search_combined_response")
 
-        call_count = 0
+        with patch.object(httpx.Client, "post") as mock_post:
+            mock_post.return_value = MockResponse(combined_fixture)
 
-        def mock_post(*_args, **_kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return MockResponse(pr_fixture)
-            return MockResponse(issue_fixture)
-
-        with patch.object(httpx.Client, "post", side_effect=mock_post):
             client = GitHubClient(token="test-token")
             result = client.search_issues_graphql("repo:owner/repo")
 

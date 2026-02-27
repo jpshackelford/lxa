@@ -1,0 +1,85 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 5,
+      "nodes": [
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOTest1",
+          "number": 40,
+          "title": "feat: Implement board CLI tools",
+          "state": "OPEN",
+          "isDraft": true,
+          "merged": false,
+          "reviewDecision": null,
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [] },
+          "labels": { "nodes": [] },
+          "createdAt": "2026-02-25T01:59:20Z",
+          "updatedAt": "2026-02-26T14:01:47Z"
+        },
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOTest2",
+          "number": 39,
+          "title": "Add version command",
+          "state": "OPEN",
+          "isDraft": false,
+          "merged": false,
+          "reviewDecision": "APPROVED",
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [{ "login": "reviewer" }] },
+          "labels": { "nodes": [{ "name": "enhancement" }] },
+          "createdAt": "2026-02-24T13:50:31Z",
+          "updatedAt": "2026-02-24T13:52:35Z"
+        },
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOTest1",
+          "number": 38,
+          "title": "Reduce verbosity",
+          "state": "OPEN",
+          "stateReason": null,
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [{ "login": "openhands-agent" }] },
+          "labels": { "nodes": [{ "name": "enhancement" }] },
+          "createdAt": "2026-02-24T13:09:52Z",
+          "updatedAt": "2026-02-24T13:11:09Z"
+        },
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOTest3",
+          "number": 35,
+          "title": "Add documentation",
+          "state": "MERGED",
+          "isDraft": false,
+          "merged": true,
+          "reviewDecision": "APPROVED",
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [] },
+          "labels": { "nodes": [] },
+          "createdAt": "2026-02-23T17:21:25Z",
+          "updatedAt": "2026-02-24T12:24:53Z"
+        },
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOTest2",
+          "number": 33,
+          "title": "Add PR refinement loop",
+          "state": "CLOSED",
+          "stateReason": "COMPLETED",
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [] },
+          "labels": { "nodes": [] },
+          "createdAt": "2026-02-22T00:44:08Z",
+          "updatedAt": "2026-02-23T17:16:03Z"
+        }
+      ]
+    }
+  }
+}
