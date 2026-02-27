@@ -4,6 +4,7 @@ Provides commands for managing GitHub Project boards that track
 AI-assisted development workflows.
 """
 
+from src.board.api_logging import clear_logs, get_log_directory, is_api_logging_enabled
 from src.board.config import BoardConfig, load_board_config, save_board_config
 from src.board.models import (
     ACTIVE_COLUMNS,
@@ -21,7 +22,10 @@ __all__ = [
     "BoardConfig",
     "Item",
     "ItemType",
+    "clear_logs",
     "get_default_columns",
+    "get_log_directory",
+    "is_api_logging_enabled",
     "load_board_config",
     "save_board_config",
 ]

@@ -236,6 +236,36 @@ Local state is cached at `~/.lxa/board-cache.db` (SQLite). This enables:
 - Change detection for sync operations
 - Faster incremental updates
 
+### API Logging for Debugging
+
+For debugging or generating test fixtures, you can enable API request/response
+logging by setting an environment variable:
+
+```bash
+# Enable API logging
+export LXA_LOG_API=1
+
+# Run any board command - all API calls will be logged
+lxa board scan --dry-run
+```
+
+Log files are saved to `~/.lxa/api_logs/` with incrementing sequence numbers:
+- `0001_request.json` - Request details (method, URL, headers, body)
+- `0001_response.json` - Response details (status, headers, body)
+- `0002_request.json` - Next request
+- etc.
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `LXA_LOG_API` | (not set) | Set to `1`, `true`, `yes`, or `on` to enable logging |
+| `LXA_LOG_API_DIR` | `~/.lxa/api_logs/` | Custom directory for log files |
+
+Authorization tokens are automatically redacted in logged headers for security.
+This feature is useful for:
+- Debugging API issues
+- Generating fixture data for tests
+- Understanding the API calls made by each command
+
 ## YAML Board Configuration
 
 For advanced customization, you can define boards using YAML files stored in

@@ -11,6 +11,7 @@ from datetime import datetime
 
 import httpx
 
+from src.board.api_logging import create_logging_client
 from src.board.models import (
     Item,
     ItemType,
@@ -63,9 +64,16 @@ class GitHubClient:
     GRAPHQL_URL = "https://api.github.com/graphql"
 
     def __init__(self, token: str | None = None):
-        """Initialize client with GitHub token."""
+        """Initialize client with GitHub token.
+
+        If LXA_LOG_API environment variable is set (to "1", "true", "yes", or "on"),
+        all API requests and responses will be logged to ~/.lxa/api_logs/ (or the
+        directory specified by LXA_LOG_API_DIR). Each request/response pair is saved
+        as {sequence}_request.json and {sequence}_response.json for debugging and
+        generating test fixtures.
+        """
         self.token = token or get_github_token()
-        self._client = httpx.Client(
+        self._client = create_logging_client(
             headers={
                 "Authorization": f"Bearer {self.token}",
                 "Accept": "application/vnd.github+json",
