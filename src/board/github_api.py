@@ -132,26 +132,31 @@ class GitHubClient:
         self,
         query: str,
         per_page: int = 100,
+        max_results: int = 1000,
     ) -> SearchResult:
         """Search issues and PRs using GitHub GraphQL API.
 
         This method returns complete data including PR-specific fields like
         `merged` and `reviewDecision` in a single query, avoiding N+1 queries.
 
-        Uses inline fragments to fetch both Issue and PullRequest type-specific
-        fields in one API call.
+        Uses cursor-based pagination to fetch all results up to max_results.
 
         Args:
             query: Search query (e.g., "involves:user repo:owner/repo")
             per_page: Results per page (max 100)
+            max_results: Maximum total results to fetch (default 1000, GitHub's limit)
 
         Returns:
             SearchResult with matching items including complete PR data
         """
         gql_query = """
-        query($query: String!, $limit: Int!) {
-            search(query: $query, type: ISSUE, first: $limit) {
+        query($query: String!, $limit: Int!, $cursor: String) {
+            search(query: $query, type: ISSUE, first: $limit, after: $cursor) {
                 issueCount
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
                 nodes {
                     __typename
                     ... on Issue {
@@ -186,25 +191,46 @@ class GitHubClient:
             }
         }
         """
-        data = self.graphql(gql_query, {"query": query, "limit": per_page})
-        search = data["search"]
+        all_items: list[Item] = []
+        cursor: str | None = None
+        total_count = 0
 
-        items = []
-        for node in search["nodes"]:
-            if not node:  # Skip null nodes
-                continue
-            if node["__typename"] == "PullRequest":
-                items.append(self._parse_graphql_pr(node))
-            else:
-                items.append(self._parse_graphql_issue(node))
+        while len(all_items) < max_results:
+            data = self.graphql(gql_query, {"query": query, "limit": per_page, "cursor": cursor})
+            search = data["search"]
+            total_count = search["issueCount"]
+
+            for node in search["nodes"]:
+                if not node:  # Skip null nodes
+                    continue
+                if node["__typename"] == "PullRequest":
+                    all_items.append(self._parse_graphql_pr(node))
+                else:
+                    all_items.append(self._parse_graphql_issue(node))
+
+            # Check if there are more pages
+            page_info = search["pageInfo"]
+            if not page_info["hasNextPage"]:
+                break
+
+            cursor = page_info["endCursor"]
+
+            # Safety check: stop if we've hit max_results
+            if len(all_items) >= max_results:
+                logger.info(
+                    "Reached max_results limit (%d). Total available: %d",
+                    max_results,
+                    total_count,
+                )
+                break
 
         # Sort by updated_at descending (matching REST API default)
-        items.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
+        all_items.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
 
         return SearchResult(
-            total_count=search["issueCount"],
-            items=items,
-            incomplete_results=False,
+            total_count=total_count,
+            items=all_items,
+            incomplete_results=len(all_items) < total_count,
         )
 
     def _parse_graphql_pr(self, data: dict) -> Item:
@@ -381,6 +407,119 @@ class GitHubClient:
         for match in re.finditer(r"#(\d+)", body):
             issues.add(int(match.group(1)))
         return sorted(issues)
+
+    def fetch_items_batch(self, items: list[tuple[str, str, int, str]]) -> dict[str, Item | None]:
+        """Fetch multiple issues/PRs in a single GraphQL query.
+
+        This avoids N+1 API calls when processing notifications.
+
+        Args:
+            items: List of (owner, repo, number, item_type) tuples
+                   where item_type is "Issue" or "PullRequest"
+
+        Returns:
+            Dict mapping "owner/repo#number" to Item (or None if not found)
+        """
+        if not items:
+            return {}
+
+        # Build dynamic query with aliases for each item
+        # GitHub GraphQL has complexity limits, so batch in chunks of 50
+        BATCH_SIZE = 50
+        results: dict[str, Item | None] = {}
+
+        for i in range(0, len(items), BATCH_SIZE):
+            batch = items[i : i + BATCH_SIZE]
+            batch_results = self._fetch_items_batch_chunk(batch)
+            results.update(batch_results)
+
+        return results
+
+    def _fetch_items_batch_chunk(
+        self, items: list[tuple[str, str, int, str]]
+    ) -> dict[str, Item | None]:
+        """Fetch a single batch of items via GraphQL."""
+        # Build fragments for each item
+        fragments = []
+        item_keys = []  # Track which key maps to which alias
+
+        for idx, (owner, repo, number, item_type) in enumerate(items):
+            key = f"{owner}/{repo}#{number}"
+            item_keys.append((f"item{idx}", key, owner, repo, item_type))
+
+            if item_type == "PullRequest":
+                fragments.append(f'''
+                    item{idx}: repository(owner: "{owner}", name: "{repo}") {{
+                        pullRequest(number: {number}) {{
+                            id
+                            number
+                            title
+                            state
+                            isDraft
+                            merged
+                            reviewDecision
+                            author {{ login }}
+                            assignees(first: 10) {{ nodes {{ login }} }}
+                            labels(first: 10) {{ nodes {{ name }} }}
+                            createdAt
+                            updatedAt
+                        }}
+                    }}
+                ''')
+            else:
+                fragments.append(f'''
+                    item{idx}: repository(owner: "{owner}", name: "{repo}") {{
+                        issue(number: {number}) {{
+                            id
+                            number
+                            title
+                            state
+                            stateReason
+                            author {{ login }}
+                            assignees(first: 10) {{ nodes {{ login }} }}
+                            labels(first: 10) {{ nodes {{ name }} }}
+                            createdAt
+                            updatedAt
+                        }}
+                    }}
+                ''')
+
+        query = "query {\n" + "\n".join(fragments) + "\n}"
+
+        try:
+            data = self.graphql(query)
+        except RuntimeError as e:
+            # If batch query fails, return empty results
+            # Caller can fall back to individual fetches
+            logger.warning("Batch GraphQL query failed: %s", e)
+            return {key: None for _, key, *_ in item_keys}
+
+        # Parse results
+        results: dict[str, Item | None] = {}
+        for alias, key, owner, repo, item_type in item_keys:
+            repo_data = data.get(alias)
+            if not repo_data:
+                results[key] = None
+                continue
+
+            if item_type == "PullRequest":
+                pr_data = repo_data.get("pullRequest")
+                if pr_data:
+                    results[key] = self._parse_graphql_pr(
+                        {**pr_data, "repository": {"nameWithOwner": f"{owner}/{repo}"}}
+                    )
+                else:
+                    results[key] = None
+            else:
+                issue_data = repo_data.get("issue")
+                if issue_data:
+                    results[key] = self._parse_graphql_issue(
+                        {**issue_data, "repository": {"nameWithOwner": f"{owner}/{repo}"}}
+                    )
+                else:
+                    results[key] = None
+
+        return results
 
     # GraphQL methods for Project operations
 

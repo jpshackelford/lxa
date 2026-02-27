@@ -171,6 +171,126 @@ class TestGitHubClientGraphQLSearch:
 
             client.close()
 
+    def test_search_issues_graphql_paginates(self):
+        """Test that search paginates through multiple pages."""
+        # Page 1: 2 items, has next page
+        page1_response = {
+            "data": {
+                "search": {
+                    "issueCount": 4,
+                    "pageInfo": {
+                        "hasNextPage": True,
+                        "endCursor": "cursor_page1",
+                    },
+                    "nodes": [
+                        {
+                            "__typename": "Issue",
+                            "id": "I_1",
+                            "number": 1,
+                            "title": "Issue 1",
+                            "state": "OPEN",
+                            "stateReason": None,
+                            "repository": {"nameWithOwner": "owner/repo"},
+                            "author": {"login": "user"},
+                            "assignees": {"nodes": []},
+                            "labels": {"nodes": []},
+                            "createdAt": "2026-01-01T00:00:00Z",
+                            "updatedAt": "2026-01-04T00:00:00Z",
+                        },
+                        {
+                            "__typename": "Issue",
+                            "id": "I_2",
+                            "number": 2,
+                            "title": "Issue 2",
+                            "state": "OPEN",
+                            "stateReason": None,
+                            "repository": {"nameWithOwner": "owner/repo"},
+                            "author": {"login": "user"},
+                            "assignees": {"nodes": []},
+                            "labels": {"nodes": []},
+                            "createdAt": "2026-01-01T00:00:00Z",
+                            "updatedAt": "2026-01-03T00:00:00Z",
+                        },
+                    ],
+                }
+            }
+        }
+
+        # Page 2: 2 items, no next page
+        page2_response = {
+            "data": {
+                "search": {
+                    "issueCount": 4,
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "__typename": "Issue",
+                            "id": "I_3",
+                            "number": 3,
+                            "title": "Issue 3",
+                            "state": "OPEN",
+                            "stateReason": None,
+                            "repository": {"nameWithOwner": "owner/repo"},
+                            "author": {"login": "user"},
+                            "assignees": {"nodes": []},
+                            "labels": {"nodes": []},
+                            "createdAt": "2026-01-01T00:00:00Z",
+                            "updatedAt": "2026-01-02T00:00:00Z",
+                        },
+                        {
+                            "__typename": "Issue",
+                            "id": "I_4",
+                            "number": 4,
+                            "title": "Issue 4",
+                            "state": "OPEN",
+                            "stateReason": None,
+                            "repository": {"nameWithOwner": "owner/repo"},
+                            "author": {"login": "user"},
+                            "assignees": {"nodes": []},
+                            "labels": {"nodes": []},
+                            "createdAt": "2026-01-01T00:00:00Z",
+                            "updatedAt": "2026-01-01T00:00:00Z",
+                        },
+                    ],
+                }
+            }
+        }
+
+        call_count = 0
+
+        def mock_post(*_args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Check if cursor was passed
+            body = kwargs.get("json", {})
+            cursor = body.get("variables", {}).get("cursor")
+            if cursor == "cursor_page1":
+                return MockResponse(page2_response)
+            return MockResponse(page1_response)
+
+        with patch.object(httpx.Client, "post", side_effect=mock_post):
+            client = GitHubClient(token="test-token")
+            result = client.search_issues_graphql("repo:owner/repo", per_page=2)
+
+            # Should make 2 API calls (one per page)
+            assert call_count == 2
+
+            # Should have all 4 items
+            assert result.total_count == 4
+            assert len(result.items) == 4
+
+            # Verify all items are present
+            numbers = {i.number for i in result.items}
+            assert numbers == {1, 2, 3, 4}
+
+            # Should not be marked incomplete
+            assert result.incomplete_results is False
+
+            client.close()
+
     def test_parse_graphql_pr_handles_ghost_author(self):
         """Test parsing PR with deleted (ghost) author."""
         client = GitHubClient(token="test-token")
@@ -194,6 +314,132 @@ class TestGitHubClientGraphQLSearch:
         item = client._parse_graphql_pr(pr_data)
         assert item.author == "ghost"
 
+        client.close()
+
+
+class TestGitHubClientBatchFetch:
+    """Test batch fetching of items via GraphQL."""
+
+    def test_fetch_items_batch_returns_items(self):
+        """Test batch fetching multiple items in one query."""
+        # Mock response for batch query
+        batch_response = {
+            "data": {
+                "item0": {
+                    "pullRequest": {
+                        "id": "PR_test1",
+                        "number": 40,
+                        "title": "Test PR",
+                        "state": "OPEN",
+                        "isDraft": True,
+                        "merged": False,
+                        "reviewDecision": None,
+                        "author": {"login": "testuser"},
+                        "assignees": {"nodes": []},
+                        "labels": {"nodes": []},
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-02T00:00:00Z",
+                    }
+                },
+                "item1": {
+                    "issue": {
+                        "id": "I_test1",
+                        "number": 38,
+                        "title": "Test Issue",
+                        "state": "OPEN",
+                        "stateReason": None,
+                        "author": {"login": "testuser"},
+                        "assignees": {"nodes": [{"login": "openhands-agent"}]},
+                        "labels": {"nodes": [{"name": "enhancement"}]},
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-02T00:00:00Z",
+                    }
+                },
+            }
+        }
+
+        with patch.object(httpx.Client, "post") as mock_post:
+            mock_post.return_value = MockResponse(batch_response)
+
+            client = GitHubClient(token="test-token")
+            items_to_fetch = [
+                ("owner", "repo", 40, "PullRequest"),
+                ("owner", "repo", 38, "Issue"),
+            ]
+            results = client.fetch_items_batch(items_to_fetch)
+
+            # Should make exactly one API call
+            assert mock_post.call_count == 1
+
+            # Should return both items
+            assert len(results) == 2
+            assert "owner/repo#40" in results
+            assert "owner/repo#38" in results
+
+            # Verify PR data
+            pr = results["owner/repo#40"]
+            assert pr is not None
+            assert pr.number == 40
+            assert pr.is_draft is True
+            assert pr.type == ItemType.PULL_REQUEST
+
+            # Verify Issue data
+            issue = results["owner/repo#38"]
+            assert issue is not None
+            assert issue.number == 38
+            assert issue.assignees == ["openhands-agent"]
+            assert "enhancement" in issue.labels
+
+            client.close()
+
+    def test_fetch_items_batch_handles_missing_items(self):
+        """Test that batch fetch handles deleted/missing items gracefully."""
+        batch_response = {
+            "data": {
+                "item0": {
+                    "pullRequest": None  # PR was deleted
+                },
+                "item1": {
+                    "issue": {
+                        "id": "I_test1",
+                        "number": 38,
+                        "title": "Test Issue",
+                        "state": "OPEN",
+                        "stateReason": None,
+                        "author": {"login": "testuser"},
+                        "assignees": {"nodes": []},
+                        "labels": {"nodes": []},
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-02T00:00:00Z",
+                    }
+                },
+            }
+        }
+
+        with patch.object(httpx.Client, "post") as mock_post:
+            mock_post.return_value = MockResponse(batch_response)
+
+            client = GitHubClient(token="test-token")
+            items_to_fetch = [
+                ("owner", "repo", 999, "PullRequest"),  # Doesn't exist
+                ("owner", "repo", 38, "Issue"),
+            ]
+            results = client.fetch_items_batch(items_to_fetch)
+
+            # Missing item should be None
+            assert results["owner/repo#999"] is None
+
+            # Existing item should be present
+            assert results["owner/repo#38"] is not None
+            assert results["owner/repo#38"].number == 38
+
+            client.close()
+
+    def test_fetch_items_batch_empty_list(self):
+        """Test batch fetch with empty list returns empty dict."""
+        client = GitHubClient(token="test-token")
+        results = client.fetch_items_batch([])
+        assert results == {}
         client.close()
 
 

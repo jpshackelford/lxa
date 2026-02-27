@@ -418,8 +418,10 @@ def cmd_sync(
             cache.set_last_sync()
             return 0
 
-        # Process notifications
-        seen_items: set[str] = set()  # Dedupe by repo#number
+        # Parse notifications to get items to fetch
+        # Collect all items first, then batch fetch via GraphQL
+        items_to_fetch: list[tuple[str, str, int, str]] = []  # (owner, repo, number, type)
+        seen_items: set[str] = set()
 
         for notif in notifications:
             subject = notif.get("subject", {})
@@ -437,37 +439,44 @@ def cmd_sync(
             if len(parts) < 4:
                 continue
 
-            repo = f"{parts[0]}/{parts[1]}"
+            owner = parts[0]
+            repo_name = parts[1]
             try:
                 number = int(parts[3])
             except (ValueError, IndexError):
                 continue
 
-            item_ref = f"{repo}#{number}"
+            item_ref = f"{owner}/{repo_name}#{number}"
             if item_ref in seen_items:
                 continue
             seen_items.add(item_ref)
 
+            items_to_fetch.append((owner, repo_name, number, subject_type))
+
+        if not items_to_fetch:
+            console.print("[green]No issues or PRs to sync[/]")
+            cache.set_last_sync()
+            return 0
+
+        # Batch fetch all items via GraphQL (avoids N+1 API calls)
+        console.print(f"\nFetching {len(items_to_fetch)} items...")
+        fetched_items = client.fetch_items_batch(items_to_fetch)
+
+        # Process fetched items
+        for owner, repo_name, number, _item_type in items_to_fetch:
+            repo = f"{owner}/{repo_name}"
+            item_ref = f"{repo}#{number}"
             result.items_checked += 1
+
+            item = fetched_items.get(item_ref)
+            if item is None:
+                result.errors.append(f"Could not fetch {item_ref}")
+                if verbose:
+                    console.print(f"[yellow]  Skipped (not found): {item_ref}[/]")
+                continue
 
             if verbose:
                 console.print(f"[dim]  Checking: {item_ref}[/]")
-
-            # Get current item state
-            owner, repo_name = repo.split("/")
-            try:
-                if subject_type == "PullRequest":
-                    item = client.get_pull_request(owner, repo_name, number)
-                    # Get review decision
-                    if not item.merged:
-                        item.review_decision = client.get_pr_review_decision(
-                            owner, repo_name, number
-                        )
-                else:
-                    item = client.get_issue(owner, repo_name, number)
-            except Exception as e:
-                result.errors.append(f"Error fetching {item_ref}: {e}")
-                continue
 
             # Determine new column
             new_column = determine_column(item, config)

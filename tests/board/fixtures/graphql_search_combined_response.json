@@ -2,6 +2,10 @@
   "data": {
     "search": {
       "issueCount": 5,
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      },
       "nodes": [
         {
           "__typename": "PullRequest",
