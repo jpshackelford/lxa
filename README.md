@@ -97,6 +97,37 @@ lxa reconcile .pr/design.md --dry-run  # Preview changes
 lxa reconcile .pr/design.md            # Apply changes
 ```
 
+### Board Management
+
+Track AI-assisted development across multiple repositories with GitHub Projects:
+
+```bash
+# Create a new board
+lxa board init --create "My Agent Board"
+
+# Add repos to watch
+lxa board config repos add owner/repo1
+lxa board config repos add owner/repo2
+
+# Scan for your issues/PRs and populate board
+lxa board scan
+
+# Incremental sync using notifications
+lxa board sync
+
+# Check what needs attention
+lxa board status --attention
+```
+
+The board automatically organizes items into workflow columns based on their state:
+
+```
+Icebox → Backlog → Agent Coding → Human Review → Agent Refinement
+                              → Final Review → Approved → Done / Closed
+```
+
+See [Board Management](doc/reference/board-management.md) for detailed documentation.
+
 ## Development
 
 ```bash
@@ -131,4 +162,5 @@ make test-cov
 | Document | Description |
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
+| [Board Management](doc/reference/board-management.md) | GitHub Projects board for tracking development workflow |
 | [PR Refinement](doc/reference/pr-refinement.md) | Two-phase code review and refinement loop |
