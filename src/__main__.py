@@ -570,7 +570,248 @@ Configuration:
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
 
+    # Board subcommand (with nested subcommands)
+    board_parser = subparsers.add_parser(
+        "board",
+        help="Manage GitHub Project board for tracking development workflow",
+    )
+    board_subparsers = board_parser.add_subparsers(dest="board_command", required=True)
+
+    # board init
+    board_init_parser = board_subparsers.add_parser(
+        "init",
+        help="Initialize or configure a GitHub Project board",
+    )
+    board_init_group = board_init_parser.add_mutually_exclusive_group()
+    board_init_group.add_argument(
+        "--create",
+        metavar="NAME",
+        help="Create a new project with this name",
+    )
+    board_init_group.add_argument(
+        "--project-id",
+        help="Configure existing project by GraphQL ID (PVT_xxx)",
+    )
+    board_init_group.add_argument(
+        "--project-number",
+        type=int,
+        help="Configure existing user project by number",
+    )
+    board_init_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
+    # board scan
+    board_scan_parser = board_subparsers.add_parser(
+        "scan",
+        help="Scan repos for issues/PRs and add to board",
+    )
+    board_scan_parser.add_argument(
+        "--repos",
+        help="Comma-separated list of repos to scan (default: watched repos)",
+    )
+    board_scan_parser.add_argument(
+        "--since",
+        type=int,
+        metavar="DAYS",
+        help="Only include items updated in last N days",
+    )
+    board_scan_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_scan_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output",
+    )
+
+    # board sync
+    board_sync_parser = board_subparsers.add_parser(
+        "sync",
+        help="Sync board with GitHub state (incremental update)",
+    )
+    board_sync_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Force full reconciliation of all items",
+    )
+    board_sync_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_sync_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output",
+    )
+
+    # board status
+    board_status_parser = board_subparsers.add_parser(
+        "status",
+        help="Show current board status",
+    )
+    board_status_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show items in each column",
+    )
+    board_status_parser.add_argument(
+        "--attention",
+        "-a",
+        action="store_true",
+        help="Only show items needing attention",
+    )
+    board_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # board config
+    board_config_parser = board_subparsers.add_parser(
+        "config",
+        help="View and manage board configuration",
+    )
+    board_config_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["repos", "set"],
+        help="Action: repos (add/remove), set (key value)",
+    )
+    board_config_parser.add_argument(
+        "key",
+        nargs="?",
+        help="For repos: add/remove; for set: config key",
+    )
+    board_config_parser.add_argument(
+        "value",
+        nargs="?",
+        help="For repos: owner/repo; for set: value",
+    )
+    board_config_parser.add_argument(
+        "--show-defaults",
+        action="store_true",
+        help="Show configuration with defaults",
+    )
+
+    # board apply
+    board_apply_parser = board_subparsers.add_parser(
+        "apply",
+        help="Apply a YAML board configuration",
+    )
+    board_apply_parser.add_argument(
+        "--config",
+        "-c",
+        dest="config_file",
+        help="Path to YAML config file (default: ~/.lxa/boards/agent-workflow.yaml)",
+    )
+    board_apply_parser.add_argument(
+        "--template",
+        "-t",
+        help="Use built-in template instead of file",
+    )
+    board_apply_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_apply_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Remove columns not in config",
+    )
+
+    # board templates
+    board_subparsers.add_parser(
+        "templates",
+        help="List available built-in templates",
+    )
+
+    # board macros
+    board_subparsers.add_parser(
+        "macros",
+        help="List available macros for rule conditions",
+    )
+
     args = parser.parse_args(argv)
+
+    # Handle board command
+    if args.command == "board":
+        from src.board.commands import (
+            cmd_apply,
+            cmd_config,
+            cmd_init,
+            cmd_macros,
+            cmd_scan,
+            cmd_status,
+            cmd_sync,
+            cmd_templates,
+        )
+
+        if args.board_command == "init":
+            return cmd_init(
+                create_name=args.create,
+                project_id=args.project_id,
+                project_number=args.project_number,
+                dry_run=args.dry_run,
+            )
+
+        if args.board_command == "scan":
+            repos = args.repos.split(",") if args.repos else None
+            return cmd_scan(
+                repos=repos,
+                since_days=args.since,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+
+        if args.board_command == "sync":
+            return cmd_sync(
+                full=args.full,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+
+        if args.board_command == "status":
+            return cmd_status(
+                verbose=args.verbose,
+                attention=args.attention,
+                json_output=args.json,
+            )
+
+        if args.board_command == "config":
+            return cmd_config(
+                action=args.action,
+                key=args.key,
+                value=args.value,
+                show_defaults=args.show_defaults,
+            )
+
+        if args.board_command == "apply":
+            return cmd_apply(
+                config_file=args.config_file,
+                template=args.template,
+                dry_run=args.dry_run,
+                prune=args.prune,
+            )
+
+        if args.board_command == "templates":
+            return cmd_templates()
+
+        if args.board_command == "macros":
+            return cmd_macros()
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
