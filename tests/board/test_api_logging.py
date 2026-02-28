@@ -225,7 +225,7 @@ class TestLoggingTransport:
             assert data["status_code"] == 200
             assert data["body"]["login"] == "testuser"
 
-    def test_transport_wrapper_properties(self, temp_log_dir):
+    def test_transport_wrapper_properties(self):
         """LoggingTransport wraps another transport."""
         transport = LoggingTransport()
         assert hasattr(transport, "_transport")

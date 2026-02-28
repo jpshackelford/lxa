@@ -22,6 +22,7 @@ from openhands.tools.terminal import TerminalTool
 from rich.console import Console
 from rich.panel import Panel
 
+from src.ralph.commit_message import prepare_squash_commit_message
 from src.ralph.github_review import (
     CIStatus,
     format_threads_for_prompt,
@@ -277,7 +278,48 @@ class RefineRunner:
         else:
             result = self._run_respond(started_at)
 
+        # Prepare commit message when refinement completes successfully
+        if result.completed and (
+            self.refinement_config.auto_merge or self.refinement_config.allow_merge
+        ):
+            self._prepare_commit_message()
+
         return result
+
+    def _prepare_commit_message(self) -> None:
+        """Prepare the squash merge commit message.
+
+        Generates a conventional commit message via LLM and either:
+        - Posts as PR comment (for manual merge)
+        - Enables auto-merge with the message (for auto-merge)
+
+        Raises:
+            RuntimeError: If auto_merge is enabled but setup fails
+        """
+        console.print()
+        console.print("[bold]Preparing squash merge commit message...[/]")
+
+        try:
+            prepare_squash_commit_message(
+                self.llm,
+                self.owner,
+                self.repo,
+                self.pr_number,
+                auto_merge=self.refinement_config.auto_merge,
+            )
+            if self.refinement_config.auto_merge:
+                console.print("[green]✓[/] Auto-merge enabled with commit message")
+            else:
+                console.print("[green]✓[/] Commit message posted as PR comment")
+        except RuntimeError as e:
+            if self.refinement_config.auto_merge:
+                # Critical: user expects auto-merge, must not fail silently
+                console.print(f"[red]✗[/] Failed to enable auto-merge: {e}")
+                raise
+            else:
+                # Non-critical: user can still merge manually with their own message
+                console.print(f"[yellow]![/] Failed to post commit message comment: {e}")
+                console.print("[yellow]  You can still merge manually with your own message[/]")
 
     def _determine_phase(self) -> RefinePhase:
         """Determine which phase to run based on PR state."""

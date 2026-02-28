@@ -3,14 +3,40 @@
 An autonomous agent built with the [OpenHands
 SDK](https://github.com/All-Hands-AI/openhands) for long-horizon task execution.
 
-## Setup
+## Installation
+
+### Global Install (Recommended)
+
+Install `lxa` globally so it's available from anywhere:
 
 ```bash
-# Install dependencies
+# Install globally with uv
+make install-global
+
+# Verify installation
+lxa --version
+```
+
+### Development Install
+
+For development, install in editable mode:
+
+```bash
+# Install with dev dependencies
 uv pip install -e ".[dev]"
 
 # Or using make
 make dev
+```
+
+### Version Information
+
+Check your installed version:
+
+```bash
+lxa --version
+# Output: lxa 0.1.0 (abc1234)  - clean build with git SHA
+# Output: lxa 0.1.0 (abc1234, dirty)  - local build with uncommitted changes
 ```
 
 ## Usage
@@ -183,4 +209,5 @@ make test-cov
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
 | [Board Management](doc/reference/board-management.md) | GitHub Projects board for tracking development workflow |
+| [Squash Commit Messages](doc/reference/squash-commit-messages.md) | Auto-generated commit messages for PR merges |
 | [PR Refinement](doc/reference/pr-refinement.md) | Two-phase code review and refinement loop |

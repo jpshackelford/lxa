@@ -167,7 +167,7 @@ def get_pr_status(owner: str, repo: str, pr_number: int) -> PRStatus | None:
 
     # Parse CI status
     # GitHub API returns "status" (QUEUED, IN_PROGRESS, COMPLETED) and
-    # "conclusion" (SUCCESS, FAILURE, CANCELLED, etc.) for each check
+    # "conclusion" (SUCCESS, FAILURE, CANCELLED, SKIPPED, etc.) for each check
     status_checks = data.get("statusCheckRollup", []) or []
     if not status_checks:
         ci_status = CIStatus.UNKNOWN
@@ -181,8 +181,8 @@ def get_pr_status(owner: str, repo: str, pr_number: int) -> PRStatus | None:
         # Check if any failed (only look at non-empty conclusions)
         elif any(c in ("FAILURE", "CANCELLED", "TIMED_OUT", "ERROR") for c in conclusions if c):
             ci_status = CIStatus.FAILING
-        # Check if all completed successfully
-        elif conclusions and all(c == "SUCCESS" for c in conclusions if c):
+        # Check if all completed successfully (SUCCESS or SKIPPED are both passing states)
+        elif conclusions and all(c in ("SUCCESS", "SKIPPED") for c in conclusions if c):
             ci_status = CIStatus.PASSING
         else:
             ci_status = CIStatus.UNKNOWN
@@ -433,10 +433,15 @@ def wait_for_ci(owner: str, repo: str, pr_number: int, timeout: int = 600) -> CI
 
     Returns:
         Final CI status
+
+    Note:
+        Uses short sleep intervals to remain responsive to keyboard interrupts.
     """
     import time
 
     start_time = time.time()
+    poll_interval = 30  # How often to check CI status
+    sleep_chunk = 1  # Short sleep chunks for interrupt responsiveness
 
     while time.time() - start_time < timeout:
         status = get_pr_status(owner, repo, pr_number)
@@ -447,8 +452,12 @@ def wait_for_ci(owner: str, repo: str, pr_number: int, timeout: int = 600) -> CI
             return status.ci_status
 
         # CI still pending, wait and retry
+        # Use short sleep chunks to remain responsive to KeyboardInterrupt
         logger.info(f"CI pending, waiting... ({int(time.time() - start_time)}s)")
-        time.sleep(30)
+        for _ in range(poll_interval):
+            if time.time() - start_time >= timeout:
+                break
+            time.sleep(sleep_chunk)
 
     logger.warning(f"CI wait timed out after {timeout}s")
     return CIStatus.PENDING

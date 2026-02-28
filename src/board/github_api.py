@@ -9,8 +9,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-import httpx
-
 from src.board.api_logging import create_logging_client
 from src.board.models import (
     Item,
