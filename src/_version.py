@@ -19,7 +19,7 @@ def get_git_info() -> dict[str, str | None]:
     """Get git information for version display.
 
     Returns:
-        Dict with "sha" (short commit hash or None) and "dirty" ("true"/"false"/None)
+        Dict with "sha" (short commit hash or None) and "local" ("true"/"false"/None)
     """
     try:
         sha = subprocess.run(
@@ -28,7 +28,7 @@ def get_git_info() -> dict[str, str | None]:
             text=True,
             timeout=5,
         )
-        dirty = subprocess.run(
+        local = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True,
             text=True,
@@ -36,10 +36,10 @@ def get_git_info() -> dict[str, str | None]:
         )
         return {
             "sha": sha.stdout.strip() if sha.returncode == 0 else None,
-            "dirty": "true" if dirty.stdout.strip() else "false",
+            "local": "true" if local.stdout.strip() else "false",
         }
     except (subprocess.SubprocessError, FileNotFoundError, OSError):
-        return {"sha": None, "dirty": None}
+        return {"sha": None, "local": None}
 
 
 def get_version() -> str:
@@ -61,7 +61,7 @@ def get_version_info() -> dict[str, str | None]:
     return {
         "version": __version__,
         "git_sha": git_info["sha"],
-        "git_dirty": git_info["dirty"],
+        "git_local": git_info["local"],
     }
 
 
@@ -69,7 +69,7 @@ def get_full_version_string() -> str:
     """Get a human-readable version string with build info.
 
     Returns:
-        String like "lxa 0.1.0 (abc1234)" or "lxa 0.1.0 (abc1234, dirty)"
+        String like "lxa 0.1.0 (abc1234)" or "lxa 0.1.0 (abc1234, local)"
     """
     info = get_version_info()
     parts = [f"lxa {info['version']}"]
@@ -77,8 +77,8 @@ def get_full_version_string() -> str:
     details = []
     if info["git_sha"]:
         details.append(info["git_sha"])
-    if info["git_dirty"] == "true":
-        details.append("dirty")
+    if info["git_local"] == "true":
+        details.append("local")
 
     if details:
         parts.append(f"({', '.join(details)})")

@@ -37,14 +37,14 @@ class TestVersionModule:
         info = get_version_info()
         assert "version" in info
         assert "git_sha" in info
-        assert "git_dirty" in info
+        assert "git_local" in info
         assert info["version"] == __version__
 
     def test_get_git_info_returns_dict(self) -> None:
-        """get_git_info should return dict with sha and dirty keys."""
+        """get_git_info should return dict with sha and local keys."""
         info = get_git_info()
         assert "sha" in info
-        assert "dirty" in info
+        assert "local" in info
 
     def test_get_full_version_string_starts_with_lxa(self) -> None:
         """Full version string should start with 'lxa'."""
