@@ -19,7 +19,7 @@ def get_git_info() -> dict[str, str | None]:
     """Get git information for version display.
 
     Returns:
-        Dict with 'sha' (short commit hash) and 'dirty' (bool as string)
+        Dict with "sha" (short commit hash or None) and "dirty" ("true"/"false"/None)
     """
     try:
         sha = subprocess.run(
@@ -69,7 +69,7 @@ def get_full_version_string() -> str:
     """Get a human-readable version string with build info.
 
     Returns:
-        String like "lxa 0.1.0 (abc1234, local)" or "lxa 0.1.0 (abc1234)"
+        String like "lxa 0.1.0 (abc1234)" or "lxa 0.1.0 (abc1234, dirty)"
     """
     info = get_version_info()
     parts = [f"lxa {info['version']}"]
