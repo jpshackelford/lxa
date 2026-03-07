@@ -139,6 +139,12 @@ detect 10-15% improvements with 80%+ power.
 - **Paper-ready**: 350 problems × 3 runs × 3 conditions = ~3,150 total runs
 - **With model generalization**: Add 100 problems × 2 additional models = +600 runs
 
+**Development approach**: Pilot first. Before committing to full-scale runs:
+1. Build and run golden set (20 problems) across all conditions
+2. Validate core assumptions (tool benefit exists, automated verification works)
+3. Determine appropriate scale based on observed effect sizes and variance
+4. Defer venue, scope, and model selection decisions until pilot results inform them
+
 ### 2.2 Handling LLM Stochasticity
 
 LLM outputs vary even with identical inputs. To account for this:
@@ -202,9 +208,9 @@ For paper-ready benchmark with balanced coverage:
 | Size | Count | % |
 |------|-------|---|
 | Short (200-500 words) | 140 | 40% |
-| Medium (1-3K words) | 122 | 35% |
+| Medium (1-3K words) | 124 | 35% |
 | Long (5-15K words) | 70 | 20% |
-| Very Long (20K+ words) | 18 | 5% |
+| Very Long (20K+ words) | 16 | 5% |
 
 **By complexity**:
 | Complexity | Count | % |
@@ -225,16 +231,18 @@ For paper-ready benchmark with balanced coverage:
 
 ```
                     Short   Medium   Long    VLong   Total
-Structural          32      28       16      4       80
-Hierarchy           16      14       8       2       40
-Numbering           16      14       8       2       40
-TOC                 12      10       6       2       30
+Structural          36      32       18      4       90
+Multi-op            28      25       14      3       70
+Numbering           18      16       9       2       45
+Hierarchy           18      16       9       2       45
 Formatting          16      14       8       2       40
-Multi-op            24      21       12      3       60
-Error Recovery      12      10       6       2       30
+TOC                 14      12       7       2       35
+Error Recovery      10      9        5       1       25
 ─────────────────────────────────────────────────────────
-Total               128     111      64      17      320
+Total               140     124      70      16      350
 ```
+
+*Note: Size distribution targets 40% short, 35% medium, 20% long, 5% very long.*
 
 ## 4. Problem Design
 
@@ -358,7 +366,14 @@ instruction: |
 
 ## 6. Verification Methods
 
-### 6.1 Automated Verification
+**Verification Hierarchy**: Automated checks are the primary verification method
+and should handle 95%+ of problems. LLM-as-judge is a fallback for semantic edge
+cases only. Human validation is used solely for calibration.
+
+### 6.1 Automated Verification (Primary)
+
+Automated verification is deterministic, fast, and cheap. It is the **primary**
+method for scoring benchmark results.
 
 1. **Structural Validation**
    - Parse output document into section tree
@@ -370,21 +385,27 @@ instruction: |
    - Check sequential numbering
 
 3. **Content Preservation**
-   - Verify no content lost (diff-based)
+   - Verify no content lost (diff-based comparison of section bodies)
    - Verify no unintended content added
-   - Preserve semantic equivalence
+   - Normalize whitespace before comparison
 
 4. **Lint Validation**
    - Run linter on output
    - Check for introduced errors
 
-### 6.2 LLM-as-Judge
+5. **Expected Output Comparison** (when applicable)
+   - Compare against `expected_file` for deterministic problems
+   - Use for atomic operations with single correct answer
 
-For semantic correctness where automated checks are insufficient:
+### 6.2 LLM-as-Judge (Fallback Only)
+
+**Use sparingly.** LLM-as-judge adds variance, latency, and cost. Only invoke
+when automated checks cannot determine correctness—for example, when multiple
+valid restructurings exist or semantic equivalence matters more than exact match.
 
 ```python
 def llm_judge_verify(problem, output):
-    """Use an LLM to verify semantic correctness."""
+    """Fallback for cases where automated checks are insufficient."""
     prompt = f"""
     You are evaluating whether an LLM correctly completed a markdown editing task.
     
@@ -407,12 +428,13 @@ def llm_judge_verify(problem, output):
     """
 ```
 
-### 6.3 Human Validation (Subset)
+### 6.3 Human Validation (Calibration Only)
 
-For ground truth calibration:
+For ground truth calibration, not routine scoring:
 - Randomly sample 10% of problems
 - Have 2+ human annotators verify
-- Use to calibrate LLM-as-judge accuracy
+- Use to calibrate automated check accuracy
+- Run once during benchmark development, not per evaluation
 
 ## 7. Experimental Design
 
