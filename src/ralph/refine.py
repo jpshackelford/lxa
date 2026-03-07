@@ -33,6 +33,7 @@ from src.ralph.github_review import (
 from src.ralph.refinement_config import (
     CODE_REVIEW_PRINCIPLES,
     COMMIT_GUIDELINES,
+    RESPOND_PRINCIPLES,
     SELF_REVIEW_WORKFLOW,
 )
 from src.ralph.runner import RefinementConfig
@@ -128,13 +129,17 @@ on PR #{pr_number} in repository {repo_slug}.
 EXISTING REVIEW THREADS TO ADDRESS:
 {review_threads}
 
+{respond_principles}
+
 WORKFLOW:
 1. Check out the PR branch: `gh pr checkout {pr_number} --repo {repo_slug}`
 2. Wait for CI to pass first
 3. For EACH unresolved review thread above:
-   a. Understand what the reviewer is asking
-   b. Make the fix or improvement
-   c. Commit with message: "Address review: [brief description]"
+   a. Read and understand what the reviewer is asking
+   b. Evaluate: Is this feedback valid? Would implementing it genuinely improve the code?
+   c. If valid: Make the fix, preferring root-cause solutions over workarounds
+   d. If not valid or out of scope: Prepare a respectful explanation
+   e. Commit with message: "Address review: [brief description]"
 4. Push your commits
 5. Wait for CI to pass
 6. After CI passes, reply to and resolve each thread:
@@ -145,8 +150,8 @@ WORKFLOW:
 IMPORTANT:
 - Address ALL unresolved threads, not just some
 - Push changes BEFORE replying to threads
-- Reply to each thread explaining what you did
-- Mark each thread as resolved after the fix is pushed
+- Reply to each thread explaining what you did (or why you declined)
+- Mark each thread as resolved after addressing it
 - Use the exact thread IDs provided above
 
 OUTPUT when done:
@@ -216,6 +221,7 @@ def create_respond_agent(
         repo_slug=repo_slug,
         review_threads=review_threads_text,
         thread_count=thread_count,
+        respond_principles=RESPOND_PRINCIPLES,
     )
 
     skills = [
