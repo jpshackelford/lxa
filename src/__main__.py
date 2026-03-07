@@ -18,9 +18,9 @@ Or via the installed command:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,13 +31,14 @@ if "LOG_LEVEL" not in os.environ:
 
 # Suppress LiteLLM's asyncio deprecation warning.
 # LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
-# when no event loop is running. This is harmless but noisy.
+# when no event loop is running. The warning fires during cleanup/shutdown.
+# Creating a default event loop prevents the deprecation warning.
 # See: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_event_loop
-warnings.filterwarnings(
-    "ignore",
-    message="There is no current event loop",
-    category=DeprecationWarning,
-)
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    # No running loop - create one so get_event_loop() won't warn
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
