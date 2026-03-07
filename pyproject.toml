@@ -65,6 +65,10 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# __main__.py sets env vars and suppresses warnings before imports
+"src/__main__.py" = ["E402"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 

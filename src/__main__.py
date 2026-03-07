@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,12 @@ from pathlib import Path
 # Users can override with LOG_LEVEL=INFO or LOG_LEVEL=DEBUG
 if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
+
+# Suppress LiteLLM's asyncio deprecation warning.
+# LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
+# when no event loop is running. This is harmless but noisy.
+# See: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_event_loop
+warnings.filterwarnings("ignore", message="There is no current event loop")
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
