@@ -383,7 +383,7 @@ All tasks require:
 - Passing type checks (`make typecheck`)
 - Passing tests (`make test`)
 
-### 4.1 Design Composition Agent
+### 4.1 Design Composition Agent (M1)
 
 **Goal**: Agent that composes design documents with quality checklist review,
 commits to feature branch, and can hand off to execution.
