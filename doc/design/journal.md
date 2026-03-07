@@ -71,3 +71,44 @@ The skill file provides comprehensive style guidance including:
 - The forbidden words list is extensive and may need to be referenced frequently
 - Some "forbidden" words might be appropriate in specific technical contexts
 - Style rules need to be balanced with readability and natural language flow
+
+## Task 3: .openhands/microagents/implementation-plan.md - Plan structure, TDD, demos
+
+**Date**: 2026-03-07
+
+### Files Created/Modified
+- `.openhands/microagents/implementation-plan.md` - New skill file created
+
+### Task Description
+Created the implementation-plan skill file containing:
+- Definition of done criteria and quality gates
+- Milestone structure guidelines (single vs multiple milestones)
+- Test-driven development approach with task-test pairing
+- Demo artifacts types and documentation requirements
+- Dependency ordering and analysis techniques
+- File path specifications and conventions
+- Quality checklist for implementation plans
+- Comprehensive examples for different project sizes
+
+### Implementation Details
+The skill file provides comprehensive planning guidance including:
+- Standard quality criteria that apply to all projects
+- Clear rules for when to use single vs multiple milestones
+- TDD approach with explicit task-test pairing examples
+- Various demo artifact types (executable scripts, interactive examples, config examples)
+- Dependency analysis and resolution techniques
+- File path conventions and directory creation specifications
+- Quality checklist covering structure, dependencies, testing, and completeness
+
+### Lessons Learned
+1. **Explicit Pairing**: TDD requires explicit pairing of implementation and test tasks
+2. **Dependency Analysis**: Systematic dependency analysis prevents ordering issues
+3. **Demo Value**: Demo artifacts serve multiple purposes (validation, documentation, feedback)
+4. **Path Specificity**: Every task must specify exact file paths for clarity
+5. **Quality Gates**: Definition of done must be established upfront
+
+### Potential Gotchas
+- Dependency ordering can be complex in large projects - need systematic analysis
+- Demo artifacts need to be realistic and actually demonstrate the milestone value
+- File path conventions must be consistent throughout the project
+- Test categories (unit/integration/e2e) need clear boundaries and execution time expectations
