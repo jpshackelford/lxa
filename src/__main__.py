@@ -30,6 +30,8 @@ if "LOG_LEVEL" not in os.environ:
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
+from openhands.sdk.subagent import register_agent_if_absent
+from openhands.tools import register_builtins_agents
 from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
@@ -40,6 +42,7 @@ from src.agents.orchestrator import (
     create_orchestrator_agent,
     run_preflight_checks,
 )
+from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
@@ -49,6 +52,23 @@ from src.utils.github import parse_pr_url
 load_dotenv()
 
 console = Console()
+
+
+def _register_agents() -> None:
+    """Register agent types for delegation.
+
+    This must be called before creating any orchestrator agent that uses
+    the DelegateTool, as the tool looks up agent factories from the registry.
+    """
+    # Register builtin agents (includes "default" agent)
+    register_builtins_agents(cli_mode=True)
+
+    # Register task_agent for orchestrator delegation
+    register_agent_if_absent(
+        name="task_agent",
+        factory_func=create_task_agent,
+        description="Short-lived agent for completing single implementation tasks",
+    )
 
 CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
 
@@ -403,6 +423,9 @@ def main(argv: list[str] | None = None) -> int:
     if "--version" in args_to_check or "-V" in args_to_check:
         print(get_full_version_string())
         return 0
+
+    # Register agent types for delegation (must happen before orchestrator runs)
+    _register_agents()
 
     parser = argparse.ArgumentParser(
         prog="lxa",
