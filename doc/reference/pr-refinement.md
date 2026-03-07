@@ -108,6 +108,33 @@ Self-review uses "roasted" code review principles inspired by Linus Torvalds:
 5. **Skip Style Nits**
    - Formatting, naming conventions = linter territory
 
+## Review Response Principles
+
+When responding to external review comments, the agent follows these principles:
+
+1. **Evaluate Before Acting**
+   - Assess whether reviewer feedback is valid before implementing
+   - Consider: Does this genuinely improve code quality, correctness, or maintainability?
+   - Not all feedback must be implemented, but valid concerns should be addressed
+
+2. **Fix Root Causes, Not Symptoms**
+   - Prefer fixing underlying issues over suppressing warnings
+   - If using `# type: ignore` or similar, explain why and verify no proper fix exists
+   - Ask: "Am I fixing this, or hiding it?"
+
+3. **Stay In Scope**
+   - Do not implement new features while responding to reviews
+   - Avoid scope creep beyond the PR's original purpose
+   - Suggest follow-up PRs for out-of-scope suggestions
+
+4. **Reasonable Cleanup Is OK**
+   - Opportunistic cleanup in the immediate area being touched is acceptable
+   - Keep cleanup proportional—don't refactor entire modules
+
+5. **Explain Your Decisions**
+   - When declining feedback, explain why respectfully
+   - When implementing, reference the commit that addresses it
+
 ## GitHub Integration
 
 The refinement loop uses GitHub's GraphQL API for review thread management:
