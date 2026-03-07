@@ -70,6 +70,7 @@ def _register_agents() -> None:
         description="Short-lived agent for completing single implementation tasks",
     )
 
+
 CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
 
 
