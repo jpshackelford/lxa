@@ -50,9 +50,7 @@ def get_github_token() -> str:
     if token:
         return token
 
-    raise ValueError(
-        "GitHub token not available. Set GITHUB_TOKEN env var or run 'gh auth login'"
-    )
+    raise ValueError("GitHub token not available. Set GITHUB_TOKEN env var or run 'gh auth login'")
 
 
 def _get_username_from_gh_cli() -> str | None:
