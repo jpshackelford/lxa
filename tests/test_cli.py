@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.__main__ import find_git_root, main
+from src.__main__ import _register_agents, find_git_root, main
 
 
 class TestFindGitRoot:
@@ -148,3 +148,50 @@ class TestCLIIntegration:
         )
         assert "implement" in result.stdout
         assert "reconcile" in result.stdout
+
+
+class TestAgentRegistration:
+    """Tests for agent registration at CLI startup."""
+
+    def test_register_agents_registers_builtins(self) -> None:
+        """_register_agents should register builtin agents including 'bash'."""
+        from openhands.sdk.subagent import get_agent_factory
+
+        _register_agents()
+
+        # Builtin agents should be registered
+        bash_factory = get_agent_factory("bash")
+        assert bash_factory is not None, "bash agent should be registered"
+
+    def test_register_agents_registers_task_agent(self) -> None:
+        """_register_agents should register the task_agent."""
+        from openhands.sdk.subagent import get_agent_factory
+
+        _register_agents()
+
+        # task_agent should be registered
+        task_factory = get_agent_factory("task_agent")
+        assert task_factory is not None, "task_agent should be registered"
+
+    def test_register_agents_idempotent(self) -> None:
+        """_register_agents should be safe to call multiple times."""
+        from openhands.sdk.subagent import get_agent_factory
+
+        # Call multiple times - should not raise
+        _register_agents()
+        _register_agents()
+        _register_agents()
+
+        # Agents should still be registered
+        assert get_agent_factory("bash") is not None
+        assert get_agent_factory("task_agent") is not None
+
+    def test_agents_available_in_registry_info(self) -> None:
+        """Registered agents should appear in registry info."""
+        from openhands.sdk.subagent.registry import get_factory_info
+
+        _register_agents()
+
+        info = get_factory_info()
+        assert "bash" in info, "bash should appear in registry info"
+        assert "task_agent" in info, "task_agent should appear in registry info"
