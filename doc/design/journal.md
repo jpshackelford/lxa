@@ -112,3 +112,47 @@ The skill file provides comprehensive planning guidance including:
 - Demo artifacts need to be realistic and actually demonstrate the milestone value
 - File path conventions must be consistent throughout the project
 - Test categories (unit/integration/e2e) need clear boundaries and execution time expectations
+
+## Task 4: tests/skills/test_design_skills.py - Verify skills load and contain key guidance
+
+**Date**: 2026-03-07
+
+### Files Created/Modified
+- `tests/skills/test_design_skills.py` - New test file created
+
+### Task Description
+Created comprehensive tests for the three design skill files:
+- Test file existence for all three skill files
+- Test content validation for key workflow elements, style rules, and planning guidance
+- Test markdown structure and formatting
+- Test practical examples and tool references
+- Verify all skills contain substantial, actionable content
+
+### Implementation Details
+The test file includes 9 test methods covering:
+- File existence verification for all skill files
+- Content validation for design-composition (workflow, precheck, template structure)
+- Content validation for design-style (forbidden words, content rules, examples)
+- Content validation for implementation-plan (definition of done, TDD, demos)
+- Markdown structure validation (headers, content length)
+- Practical examples verification (workflow examples, before/after, task checkboxes)
+- Tool references verification (TaskTrackerTool, git operations)
+
+### Testing Results
+All 9 tests pass successfully:
+- design-composition.md exists and contains required workflow elements
+- design-style.md exists and contains forbidden words and style rules
+- implementation-plan.md exists and contains TDD and planning guidance
+- All files have proper markdown structure and substantial content
+- All files contain practical examples and appropriate tool references
+
+### Lessons Learned
+1. **Content Validation**: Tests verify not just existence but actual content quality
+2. **Comprehensive Coverage**: Tests check both structure and specific guidance elements
+3. **Tool Integration**: Skills properly reference the tools they're intended to work with
+4. **Example Verification**: All skills contain concrete, actionable examples
+
+### Potential Gotchas
+- Tests are tightly coupled to skill content, may need updates if skills change
+- Path-based tests assume specific directory structure
+- Content assertions may be fragile if wording changes significantly
