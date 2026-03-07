@@ -541,9 +541,10 @@ class TestGetGitHubUsername:
 
         fixture = load_fixture("user_response")
 
-        with patch.dict("os.environ", {}, clear=False):
-            # Clear GITHUB_USERNAME
+        # Need to mock at the right level - mock the GitHubClient's get method
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}, clear=False):
             import os
+
             original_username = os.environ.pop("GITHUB_USERNAME", None)
             try:
                 with patch.object(httpx.Client, "get") as mock_get:
@@ -559,6 +560,7 @@ class TestGetGitHubUsername:
 
         with patch.dict("os.environ", {}, clear=False):
             import os
+
             original_username = os.environ.pop("GITHUB_USERNAME", None)
             original_token = os.environ.pop("GITHUB_TOKEN", None)
             try:
@@ -575,7 +577,6 @@ class TestGetGitHubUsername:
     def test_gh_cli_returns_username(self):
         """Test _get_username_from_gh_cli extracts username from gh output."""
         from src.board.github_api import _get_username_from_gh_cli
-        import subprocess
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -609,8 +610,9 @@ class TestGetGitHubUsername:
 
     def test_gh_cli_returns_none_on_timeout(self):
         """Test _get_username_from_gh_cli returns None on timeout."""
-        from src.board.github_api import _get_username_from_gh_cli
         import subprocess
+
+        from src.board.github_api import _get_username_from_gh_cli
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("gh", 10)):
             assert _get_username_from_gh_cli() is None
