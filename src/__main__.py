@@ -30,8 +30,12 @@ if "LOG_LEVEL" not in os.environ:
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
-from openhands.sdk.subagent import register_agent_if_absent  # pyright: ignore[reportMissingImports]
-from openhands.tools import register_builtins_agents  # pyright: ignore[reportAttributeAccessIssue]
+from openhands.sdk.subagent import (  # pyright: ignore[reportMissingImports]
+    register_agent_if_absent,
+)
+from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
+    register_builtins_agents,
+)
 from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
