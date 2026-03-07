@@ -1256,3 +1256,28 @@ Clean paragraph.
         text = obs.visualize
         assert "Fixed 3" in str(text)
         assert "1 remaining" in str(text)
+
+
+class TestDeprecatedCommands:
+    """Tests documenting intentional breaking changes to the command API."""
+
+    def test_parse_command_no_longer_valid(self):
+        """Document that 'parse' command was intentionally removed.
+
+        The 'parse' command was renamed to 'overview' for better discoverability.
+        This is a deliberate breaking change. Callers using 'parse' must update
+        to use 'overview' instead.
+        """
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            MarkdownAction(command="parse", file="test.md")
+
+        error = str(exc_info.value)
+        assert "parse" in error.lower() or "literal" in error.lower()
+
+    def test_overview_replaces_parse(self):
+        """Verify 'overview' is the replacement for deprecated 'parse' command."""
+        action = MarkdownAction(command="overview", file="test.md")
+        assert action.command == "overview"
