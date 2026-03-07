@@ -110,7 +110,9 @@ class TestBoardCommandsSmoke:
             lambda: "testuser",
         )
 
-        cmd_init(create_name=None, project_id=None, project_number=None, board_name=None, dry_run=False)
+        cmd_init(
+            create_name=None, project_id=None, project_number=None, board_name=None, dry_run=False
+        )
 
         # Should show usage or error about missing args
         captured = capsys.readouterr()

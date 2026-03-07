@@ -204,7 +204,7 @@ class TestLoadSaveConfig:
 
         # Read raw file and check other section is preserved
         content = config_file.read_text()
-        assert '[other]' in content
+        assert "[other]" in content
         assert 'key = "value"' in content
 
 
@@ -381,9 +381,7 @@ class TestNonDefaultSettings:
 
     def test_saves_non_default_agent_pattern(self, temp_config_dir):  # noqa: ARG002
         """Non-default agent_username_pattern is saved."""
-        board = BoardConfig(
-            name="test", project_id="PVT_123", agent_username_pattern="mybot"
-        )
+        board = BoardConfig(name="test", project_id="PVT_123", agent_username_pattern="mybot")
         save_board_config(board, "test")
 
         loaded = load_board_config("test")
