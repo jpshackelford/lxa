@@ -105,6 +105,15 @@ def cmd_init(
             save_board_config(config)
             cache.cache_project_info(project)
             console.print("[green]✓[/] Saved configuration")
+
+            # Show next steps
+            console.print("\n[bold]Next steps:[/]")
+            console.print("  1. Add repos to watch:")
+            console.print("     [dim]lxa board config repos add owner/repo[/]")
+            console.print("  2. Scan for issues and PRs:")
+            console.print("     [dim]lxa board scan[/]")
+            console.print("  3. Check board status:")
+            console.print("     [dim]lxa board status[/]")
             return 0
 
         # Case 2: Configure existing project by ID
