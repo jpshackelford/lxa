@@ -24,6 +24,7 @@ from rich.panel import Panel
 
 from src.agents.orchestrator import GitPlatform, create_orchestrator_agent
 from src.tools.checklist import ChecklistParser
+from src.visualizers import Verbosity, get_visualizer
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class RalphLoopRunner:
         completion_signal: str = COMPLETION_SIGNAL,
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
         refinement_config: RefinementConfig | None = None,
+        verbosity: Verbosity = Verbosity.NORMAL,
     ):
         """Initialize the Ralph Loop runner.
 
@@ -102,6 +104,7 @@ class RalphLoopRunner:
             completion_signal: String that signals completion in agent output
             conversations_dir: Directory for conversation persistence
             refinement_config: Configuration for PR refinement loop
+            verbosity: Output verbosity level (quiet, normal, verbose)
         """
         self.llm = llm
         self.design_doc_path = design_doc_path
@@ -112,6 +115,7 @@ class RalphLoopRunner:
         self.completion_signal = completion_signal
         self.conversations_dir = conversations_dir
         self.refinement_config = refinement_config or RefinementConfig()
+        self.verbosity = verbosity
 
         self._iteration = 0
         self._consecutive_failures = 0
@@ -257,8 +261,6 @@ class RalphLoopRunner:
         Returns:
             IterationResult with success status and output
         """
-        from openhands.tools.delegate import DelegationVisualizer
-
         try:
             # Build context for this iteration
             context_message = self._build_context_message()
@@ -271,11 +273,12 @@ class RalphLoopRunner:
                 platform=self.platform,
             )
 
-            # Create conversation
+            # Create conversation with verbosity-appropriate visualizer
+            visualizer = get_visualizer(self.verbosity, name=f"Ralph-{self._iteration}")
             conversation = Conversation(
                 agent=agent,
                 workspace=self.workspace,
-                visualizer=DelegationVisualizer(name=f"Ralph-{self._iteration}"),
+                visualizer=visualizer,
                 persistence_dir=self.conversations_dir,
             )
 

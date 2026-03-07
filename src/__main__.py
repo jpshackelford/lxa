@@ -30,7 +30,6 @@ if "LOG_LEVEL" not in os.environ:
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
-from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
@@ -44,6 +43,7 @@ from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
+from src.visualizers import Verbosity, get_visualizer
 
 # Load environment variables
 load_dotenv()
@@ -149,12 +149,17 @@ def prepare_execution(design_doc: Path, workspace: Path, *, mode_name: str) -> E
     )
 
 
-def run_orchestrator(design_doc: Path, workspace: Path) -> int:
+def run_orchestrator(
+    design_doc: Path,
+    workspace: Path,
+    verbosity: Verbosity = Verbosity.NORMAL,
+) -> int:
     """Run the orchestrator agent.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
+        verbosity: Output verbosity level (quiet, normal, verbose)
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -175,12 +180,13 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print("[bold cyan]Starting orchestrator...[/]")
     console.print()
 
-    # Create conversation with visualizer for real-time sub-agent output
-    # and persistence to ~/.openhands/conversations for history
+    # Create conversation with verbosity-appropriate visualizer
+    # Persistence to ~/.openhands/conversations for history
+    visualizer = get_visualizer(verbosity, name="Orchestrator")
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
-        visualizer=DelegationVisualizer(name="Orchestrator"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
     )
 
@@ -353,6 +359,7 @@ def run_ralph_loop(
     *,
     max_iterations: int = 20,
     refinement_config: RefinementConfig | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
 ) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
@@ -361,6 +368,7 @@ def run_ralph_loop(
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
         refinement_config: Configuration for code review refinement loop
+        verbosity: Output verbosity level (quiet, normal, verbose)
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -381,6 +389,7 @@ def run_ralph_loop(
         platform=ctx.platform,
         max_iterations=max_iterations,
         refinement_config=refinement_config,
+        verbosity=verbosity,
     )
 
     loop_result = runner.run()
@@ -499,6 +508,16 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    implement_parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default="normal",
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details) (default: normal)"
+        ),
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -606,6 +625,9 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
+    # Parse verbosity level
+    verbosity = Verbosity(args.verbosity)
+
     # Run in loop mode or single execution
     if args.loop:
         return run_ralph_loop(
@@ -619,9 +641,10 @@ Configuration:
                 min_iterations=args.min_iterations,
                 max_iterations=args.max_refine_iterations,
             ),
+            verbosity=verbosity,
         )
     else:
-        return run_orchestrator(design_doc, workspace)
+        return run_orchestrator(design_doc, workspace, verbosity=verbosity)
 
 
 def find_git_root(start_path: Path) -> Path:
