@@ -525,6 +525,97 @@ class TestGitHubClientAuthentication:
                     os.environ["GITHUB_TOKEN"] = original
 
 
+class TestGetGitHubUsername:
+    """Test get_github_username and gh CLI fallback."""
+
+    def test_returns_env_var_first(self):
+        """Test that GITHUB_USERNAME env var takes priority."""
+        from src.board.github_api import get_github_username
+
+        with patch.dict("os.environ", {"GITHUB_USERNAME": "envuser"}):
+            assert get_github_username() == "envuser"
+
+    def test_falls_back_to_api(self):
+        """Test fallback to API when env var not set."""
+        from src.board.github_api import get_github_username
+
+        fixture = load_fixture("user_response")
+
+        with patch.dict("os.environ", {}, clear=False):
+            # Clear GITHUB_USERNAME
+            import os
+            original_username = os.environ.pop("GITHUB_USERNAME", None)
+            try:
+                with patch.object(httpx.Client, "get") as mock_get:
+                    mock_get.return_value = MockResponse(fixture)
+                    assert get_github_username() == "testuser"
+            finally:
+                if original_username:
+                    os.environ["GITHUB_USERNAME"] = original_username
+
+    def test_falls_back_to_gh_cli(self):
+        """Test fallback to gh CLI when API fails."""
+        from src.board.github_api import get_github_username
+
+        with patch.dict("os.environ", {}, clear=False):
+            import os
+            original_username = os.environ.pop("GITHUB_USERNAME", None)
+            original_token = os.environ.pop("GITHUB_TOKEN", None)
+            try:
+                # Simulate API failure (no token)
+                with patch("src.board.github_api._get_username_from_gh_cli") as mock_gh:
+                    mock_gh.return_value = "ghuser"
+                    assert get_github_username() == "ghuser"
+            finally:
+                if original_username:
+                    os.environ["GITHUB_USERNAME"] = original_username
+                if original_token:
+                    os.environ["GITHUB_TOKEN"] = original_token
+
+    def test_gh_cli_returns_username(self):
+        """Test _get_username_from_gh_cli extracts username from gh output."""
+        from src.board.github_api import _get_username_from_gh_cli
+        import subprocess
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "testghuser\n"
+
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            result = _get_username_from_gh_cli()
+            assert result == "testghuser"
+            mock_run.assert_called_once()
+            # Verify correct command
+            call_args = mock_run.call_args
+            assert call_args[0][0] == ["gh", "api", "user", "--jq", ".login"]
+
+    def test_gh_cli_returns_none_on_failure(self):
+        """Test _get_username_from_gh_cli returns None on failure."""
+        from src.board.github_api import _get_username_from_gh_cli
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            assert _get_username_from_gh_cli() is None
+
+    def test_gh_cli_returns_none_when_not_installed(self):
+        """Test _get_username_from_gh_cli returns None when gh not installed."""
+        from src.board.github_api import _get_username_from_gh_cli
+
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            assert _get_username_from_gh_cli() is None
+
+    def test_gh_cli_returns_none_on_timeout(self):
+        """Test _get_username_from_gh_cli returns None on timeout."""
+        from src.board.github_api import _get_username_from_gh_cli
+        import subprocess
+
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("gh", 10)):
+            assert _get_username_from_gh_cli() is None
+
+
 class TestGitHubClientItemParsing:
     """Test item parsing edge cases."""
 

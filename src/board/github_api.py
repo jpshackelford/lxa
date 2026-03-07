@@ -6,6 +6,7 @@ Uses GitHub's REST API for search/notifications and GraphQL for Project operatio
 import logging
 import os
 import re
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -30,20 +31,43 @@ def get_github_token() -> str:
     return token
 
 
+def _get_username_from_gh_cli() -> str | None:
+    """Try to get username using gh CLI."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "user", "--jq", ".login"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return None
+
+
 def get_github_username() -> str | None:
-    """Get GitHub username from environment or by querying API."""
+    """Get GitHub username from environment, API, or gh CLI."""
     # First check environment
     username = os.environ.get("GITHUB_USERNAME")
     if username:
         return username
 
-    # Query API for authenticated user
+    # Try API for authenticated user (requires GITHUB_TOKEN)
     try:
         with GitHubClient() as client:
             return client.get_authenticated_user()
     except Exception as e:
-        logger.warning("Could not determine GitHub username: %s", e)
-        return None
+        logger.debug("Could not get username via API: %s", e)
+
+    # Fall back to gh CLI (works with gh auth login)
+    username = _get_username_from_gh_cli()
+    if username:
+        return username
+
+    logger.warning("Could not determine GitHub username from env, API, or gh CLI")
+    return None
 
 
 @dataclass
