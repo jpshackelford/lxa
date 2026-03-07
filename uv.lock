@@ -1619,6 +1619,8 @@ wheels = [
 name = "lxa"
 source = { editable = "." }
 dependencies = [
+    { name = "chardet" },
+    { name = "charset-normalizer" },
     { name = "httpx" },
     { name = "mdformat" },
     { name = "openhands-sdk" },
@@ -1641,6 +1643,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.36.0" },
+    { name = "chardet", specifier = ">=3.0.2,<6.0.0" },
+    { name = "charset-normalizer", specifier = ">=2.0.0,<4.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mdformat", specifier = ">=0.7" },
     { name = "openhands-sdk", specifier = ">=0.9.0" },

@@ -13,6 +13,12 @@ dependencies = [
     "tomli-w>=1.0.0",
     "httpx>=0.27.0",
     "pyyaml>=6.0.0",
+    # requests 2.32.x has hardcoded version checks that emit warnings if
+    # chardet >= 6.0.0 or charset-normalizer >= 4.0.0. openhands-tools pulls
+    # in chardet transitively via binaryornot. Pin to compatible versions
+    # until requests updates its compatibility checks.
+    "chardet>=3.0.2,<6.0.0",
+    "charset-normalizer>=2.0.0,<4.0.0",
 ]
 
 [project.optional-dependencies]
