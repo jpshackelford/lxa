@@ -73,12 +73,30 @@ def cmd_init(
             console.print(f"[green]✓[/] Created project #{project.number}")
             console.print(f"  URL: {project.url}")
 
-            # Create Status field
+            # Fetch the project to get the default Status field created by GitHub
+            project = client.get_user_project(username, project.number)
+            if not project:
+                console.print("[red]Error:[/] Failed to fetch created project")
+                return 1
+
+            # Update Status field with workflow columns
             console.print("\nConfiguring Status field...")
-            field_id, column_options = client.create_status_field(project.id)
-            project.status_field_id = field_id
-            project.column_option_ids = column_options
-            console.print(f"[green]✓[/] Created Status field with {len(column_options)} columns")
+            if project.status_field_id:
+                column_options = client.update_status_field_options(
+                    project.id, project.status_field_id
+                )
+                project.column_option_ids = column_options
+                console.print(
+                    f"[green]✓[/] Configured Status field with {len(column_options)} columns"
+                )
+            else:
+                # Fallback: create Status field if it doesn't exist (shouldn't happen)
+                field_id, column_options = client.create_status_field(project.id)
+                project.status_field_id = field_id
+                project.column_option_ids = column_options
+                console.print(
+                    f"[green]✓[/] Created Status field with {len(column_options)} columns"
+                )
 
             # Save to config
             config.project_id = project.id
