@@ -520,8 +520,8 @@ All tasks require:
 - [x] tests/tools/markdown/test_parser.py - Tests for parsing headings, nesting,
       TOC detection, numbered vs unnumbered sections
 - [x] src/tools/markdown/tool.py - `MarkdownDocumentTool` base structure
-- [x] src/tools/markdown/tool.py - parse command
-- [x] tests/tools/markdown/test_tool.py - Integration tests for parse command
+- [x] src/tools/markdown/tool.py - overview command
+- [x] tests/tools/markdown/test_tool.py - Integration tests for overview command
 
 ### 4.2 Validation and Renumbering (M2)
 
