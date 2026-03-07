@@ -37,7 +37,6 @@ warnings.filterwarnings(
     "ignore",
     message="There is no current event loop",
     category=DeprecationWarning,
-    module="litellm.*",
 )
 
 from dotenv import load_dotenv
