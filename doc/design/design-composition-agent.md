@@ -398,7 +398,7 @@ commits to feature branch, and can hand off to execution.
 
 #### 4.1.1 Skills
 
-- [ ] .openhands/microagents/design-composition.md - Workflow, precheck, template
+- [x] .openhands/microagents/design-composition.md - Workflow, precheck, template
 - [ ] .openhands/microagents/design-style.md - Language rules, forbidden words
 - [ ] .openhands/microagents/implementation-plan.md - Plan structure, TDD, demos
 - [ ] tests/skills/test_design_skills.py - Verify skills load and contain key
