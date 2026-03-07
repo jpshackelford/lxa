@@ -383,7 +383,7 @@ All tasks require:
 - Passing type checks (`make typecheck`)
 - Passing tests (`make test`)
 
-### 4.1 Design Composition Agent
+### 4.1 Design Composition Agent (M1)
 
 **Goal**: Agent that composes design documents with quality checklist review,
 commits to feature branch, and can hand off to execution.
@@ -398,10 +398,10 @@ commits to feature branch, and can hand off to execution.
 
 #### 4.1.1 Skills
 
-- [ ] .openhands/microagents/design-composition.md - Workflow, precheck, template
-- [ ] .openhands/microagents/design-style.md - Language rules, forbidden words
-- [ ] .openhands/microagents/implementation-plan.md - Plan structure, TDD, demos
-- [ ] tests/skills/test_design_skills.py - Verify skills load and contain key
+- [x] .openhands/microagents/design-composition.md - Workflow, precheck, template
+- [x] .openhands/microagents/design-style.md - Language rules, forbidden words
+- [x] .openhands/microagents/implementation-plan.md - Plan structure, TDD, demos
+- [x] tests/skills/test_design_skills.py - Verify skills load and contain key
       guidance
 
 #### 4.1.2 Agent
