@@ -23,12 +23,36 @@ from src.board.models import (
 logger = logging.getLogger(__name__)
 
 
+def _get_token_from_gh_cli() -> str | None:
+    """Try to get token using gh CLI."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return None
+
+
 def get_github_token() -> str:
-    """Get GitHub token from environment."""
+    """Get GitHub token from environment or gh CLI."""
     token = os.environ.get("GITHUB_TOKEN")
-    if not token:
-        raise ValueError("GITHUB_TOKEN environment variable not set")
-    return token
+    if token:
+        return token
+
+    # Fall back to gh CLI (works with gh auth login)
+    token = _get_token_from_gh_cli()
+    if token:
+        return token
+
+    raise ValueError(
+        "GitHub token not available. Set GITHUB_TOKEN env var or run 'gh auth login'"
+    )
 
 
 def _get_username_from_gh_cli() -> str | None:
@@ -54,7 +78,7 @@ def get_github_username() -> str | None:
     if username:
         return username
 
-    # Try API for authenticated user (requires GITHUB_TOKEN)
+    # Try API for authenticated user (requires token from env or gh CLI)
     try:
         with GitHubClient() as client:
             return client.get_authenticated_user()

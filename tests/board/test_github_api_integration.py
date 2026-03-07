@@ -511,18 +511,79 @@ class TestGitHubClientAuthentication:
             client.close()
 
     def test_missing_token_raises(self):
-        """Test that missing token raises ValueError."""
-        with patch.dict("os.environ", {}, clear=True):
-            # Remove GITHUB_TOKEN from environment
-            import os
+        """Test that missing token raises ValueError when no gh CLI fallback."""
+        import os
 
-            original = os.environ.pop("GITHUB_TOKEN", None)
-            try:
-                with pytest.raises(ValueError, match="GITHUB_TOKEN"):
-                    GitHubClient()
-            finally:
-                if original:
-                    os.environ["GITHUB_TOKEN"] = original
+        original = os.environ.pop("GITHUB_TOKEN", None)
+        try:
+            # Mock gh CLI to return nothing
+            with (
+                patch("src.board.github_api._get_token_from_gh_cli", return_value=None),
+                pytest.raises(ValueError, match="GitHub token not available"),
+            ):
+                GitHubClient()
+        finally:
+            if original:
+                os.environ["GITHUB_TOKEN"] = original
+
+
+class TestGetGitHubToken:
+    """Test get_github_token and gh CLI fallback."""
+
+    def test_returns_env_var_first(self):
+        """Test that GITHUB_TOKEN env var takes priority."""
+        from src.board.github_api import get_github_token
+
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "env-token"}):
+            assert get_github_token() == "env-token"
+
+    def test_falls_back_to_gh_cli(self):
+        """Test fallback to gh CLI when env var not set."""
+        import os
+
+        from src.board.github_api import get_github_token
+
+        original = os.environ.pop("GITHUB_TOKEN", None)
+        try:
+            with patch("src.board.github_api._get_token_from_gh_cli") as mock_gh:
+                mock_gh.return_value = "gh-cli-token"
+                assert get_github_token() == "gh-cli-token"
+        finally:
+            if original:
+                os.environ["GITHUB_TOKEN"] = original
+
+    def test_gh_cli_returns_token(self):
+        """Test _get_token_from_gh_cli extracts token from gh output."""
+        from src.board.github_api import _get_token_from_gh_cli
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "gho_xxxxxxxxxxxx\n"
+
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            result = _get_token_from_gh_cli()
+            assert result == "gho_xxxxxxxxxxxx"
+            mock_run.assert_called_once()
+            call_args = mock_run.call_args
+            assert call_args[0][0] == ["gh", "auth", "token"]
+
+    def test_gh_cli_returns_none_on_failure(self):
+        """Test _get_token_from_gh_cli returns None on failure."""
+        from src.board.github_api import _get_token_from_gh_cli
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            assert _get_token_from_gh_cli() is None
+
+    def test_gh_cli_returns_none_when_not_installed(self):
+        """Test _get_token_from_gh_cli returns None when gh not installed."""
+        from src.board.github_api import _get_token_from_gh_cli
+
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            assert _get_token_from_gh_cli() is None
 
 
 class TestGetGitHubUsername:
