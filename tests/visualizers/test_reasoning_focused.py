@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-import pytest
 from openhands.tools.delegate import DelegationVisualizer
 
 from src.visualizers import (
@@ -98,10 +97,12 @@ class TestExtractSummaryFromAction:
     def test_extracts_summary_from_arguments(self):
         """Test extracting summary from tool call arguments."""
         event = MagicMock()
-        event.tool_call.arguments = json.dumps({
-            "command": "ls",
-            "summary": "List files in directory",
-        })
+        event.tool_call.arguments = json.dumps(
+            {
+                "command": "ls",
+                "summary": "List files in directory",
+            }
+        )
         assert _extract_summary_from_action(event) == "List files in directory"
 
     def test_returns_none_when_no_summary(self):
@@ -177,7 +178,6 @@ class TestCLIVerbosityFlag:
     def test_implement_has_verbosity_argument(self):
         """Test that implement subcommand has --verbosity argument."""
         import argparse
-        from src.__main__ import main
 
         # Parse help to check argument exists
         parser = argparse.ArgumentParser()

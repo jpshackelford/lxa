@@ -24,7 +24,7 @@ Compared to verbose output:
 from __future__ import annotations
 
 import json
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from openhands.sdk.conversation.visualizer.base import ConversationVisualizerBase
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from openhands.sdk.event.base import Event
 
 
-class Verbosity(str, Enum):
+class Verbosity(StrEnum):
     """Verbosity levels for agent output."""
 
     QUIET = "quiet"  # Summaries only
