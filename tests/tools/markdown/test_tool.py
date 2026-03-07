@@ -152,8 +152,8 @@ This is the methods section.
         assert "## 1. Introduction" in updated_content
         assert "## 2. Methods" in updated_content
 
-    def test_parse_document(self):
-        """Test parsing a document and returning structure."""
+    def test_overview_document(self):
+        """Test overview command returns document structure and returning structure."""
         content = """# My Document
 
 ## Table of Contents
@@ -177,10 +177,10 @@ This is the methods section.
         test_file = self.temp_dir / "test.md"
         test_file.write_text(content)
 
-        action = MarkdownAction(command="parse", file="test.md")
+        action = MarkdownAction(command="overview", file="test.md")
         observation = self.executor.execute(action)
 
-        assert observation.command == "parse"
+        assert observation.command == "overview"
         assert observation.file == "test.md"
         assert observation.result == "success"
         assert observation.document_title == "My Document"
@@ -243,10 +243,10 @@ This is the methods section.
         test_file = self.temp_dir / "empty.md"
         test_file.write_text("")
 
-        action = MarkdownAction(command="parse", file="empty.md")
+        action = MarkdownAction(command="overview", file="empty.md")
         observation = self.executor.execute(action)
 
-        assert observation.command == "parse"
+        assert observation.command == "overview"
         assert observation.file == "empty.md"
         assert observation.result == "success"
         assert observation.document_title is None
@@ -318,7 +318,7 @@ This is deeply nested.
         test_file.write_text(content)
 
         # Parse should handle deep nesting
-        action = MarkdownAction(command="parse", file="complex.md")
+        action = MarkdownAction(command="overview", file="complex.md")
         observation = self.executor.execute(action)
 
         assert observation.result == "success"
@@ -521,9 +521,9 @@ class TestMarkdownAction:
         text = action.visualize
         assert "Renumber Sections" in str(text)
 
-        action = MarkdownAction(command="parse", file="test.md")
+        action = MarkdownAction(command="overview", file="test.md")
         text = action.visualize
-        assert "Parse Document Structure" in str(text)
+        assert "Document Structure Overview" in str(text)
 
         action = MarkdownAction(command="toc_update", file="test.md")
         text = action.visualize
@@ -581,17 +581,17 @@ class TestMarkdownObservation:
         assert "Renumbered 5 sections" in str(text)
         assert "TOC skipped" in str(text)
 
-    def test_observation_visualization_parse(self):
-        """Test observation visualization for parse command."""
+    def test_observation_visualization_overview(self):
+        """Test observation visualization for overview command."""
         obs = MarkdownObservation(
-            command="parse",
+            command="overview",
             file="test.md",
             result="success",
             total_sections=3,
             document_title="Test Document",
         )
         text = obs.visualize
-        assert "Parsed 3 sections" in str(text)
+        assert "Document has 3 sections" in str(text)
         assert "Test Document" in str(text)
 
     def test_observation_visualization_error(self):

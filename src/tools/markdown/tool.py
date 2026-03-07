@@ -30,12 +30,15 @@ MARKDOWN_TOOL_DESCRIPTION = """
 Markdown Document Tool for structural editing and formatting of markdown documents.
 
 This tool provides commands for:
+- Overview of document structure (sections, line numbers, hierarchy)
 - Validating document structure (section numbering consistency)
 - Renumbering sections sequentially
-- Parsing and analyzing document structure
 - Managing table of contents (generate, update, remove)
 - Section operations (move, insert, delete, promote, demote)
 - Formatting (rewrap paragraphs, lint, auto-fix issues)
+
+RECOMMENDED WORKFLOW: Start with 'overview' to see the document's hierarchical
+structure and locate sections by number or title before making structural edits.
 
 The tool helps maintain consistent markdown document structure and numbering.
 """.strip()
@@ -43,9 +46,9 @@ The tool helps maintain consistent markdown document structure and numbering.
 # Command visualization metadata: (icon, style, label_template)
 # label_template can use {section} or {heading} placeholders
 ACTION_DISPLAY: dict[str, tuple[str, str, str]] = {
+    "overview": ("📄 ", "blue", "Document Structure Overview"),
     "validate": ("🔍 ", "blue", "Validate Document Structure"),
     "renumber": ("🔢 ", "green", "Renumber Sections"),
-    "parse": ("📄 ", "yellow", "Parse Document Structure"),
     "toc_update": ("📑 ", "cyan", "Update Table of Contents"),
     "toc_remove": ("🗑️ ", "red", "Remove Table of Contents"),
     "move": ("↔️ ", "magenta", "Move Section '{section}'"),
@@ -64,9 +67,9 @@ class MarkdownAction(Action):
     """Action for the markdown document tool."""
 
     command: Literal[
+        "overview",
         "validate",
         "renumber",
-        "parse",
         "toc_update",
         "toc_remove",
         "move",
@@ -80,8 +83,11 @@ class MarkdownAction(Action):
         "cleanup",
     ] = Field(
         description=(
-            "Command to execute: 'validate' checks structure, 'renumber' fixes numbering, "
-            "'parse' shows structure, 'toc_update' generates/updates TOC, 'toc_remove' removes TOC, "
+            "Command to execute: "
+            "'overview' shows document structure with section titles, numbers, and line ranges - "
+            "use this FIRST when working with an unfamiliar document to understand its organization; "
+            "'validate' checks structure, 'renumber' fixes numbering, "
+            "'toc_update' generates/updates TOC, 'toc_remove' removes TOC, "
             "'move' moves a section, 'insert' inserts a new section, 'delete' removes a section, "
             "'promote' increases heading level (### → ##), 'demote' decreases heading level (## → ###), "
             "'rewrap' normalizes line lengths, 'lint' checks for issues, 'fix' auto-fixes issues, "
@@ -130,9 +136,9 @@ class MarkdownObservation(Observation):
     """Observation from the markdown document tool."""
 
     command: Literal[
+        "overview",
         "validate",
         "renumber",
-        "parse",
         "toc_update",
         "toc_remove",
         "move",
@@ -244,8 +250,8 @@ class MarkdownObservation(Observation):
             if self.toc_skipped:
                 text.append(" (TOC skipped)", style="dim")
 
-        elif self.command == "parse":
-            text.append(f"Parsed {self.total_sections} sections", style="blue")
+        elif self.command == "overview":
+            text.append(f"Document has {self.total_sections} sections", style="blue")
             if self.document_title:
                 text.append(f" - Title: {self.document_title}", style="dim")
 
@@ -402,8 +408,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
 
             # Command handlers: read-only commands vs. commands that modify files
             read_only_handlers = {
+                "overview": self._overview_document,
                 "validate": self._validate_document,
-                "parse": self._parse_document,
                 "lint": self._lint_document,
             }
             mutating_handlers = {
@@ -488,8 +494,8 @@ class MarkdownExecutor(ToolExecutor[MarkdownAction, MarkdownObservation]):
             toc_skipped=result.toc_skipped,
         )
 
-    def _parse_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
-        """Parse document and return structure information."""
+    def _overview_document(self, action: MarkdownAction, content: str) -> MarkdownObservation:
+        """Return document structure overview with sections, hierarchy, and line numbers."""
         parser = MarkdownParser()
         result = parser.parse_content(content)
 
