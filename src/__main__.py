@@ -589,6 +589,12 @@ Configuration:
     )
     board_subparsers = board_parser.add_subparsers(dest="board_command", required=True)
 
+    # board list
+    board_subparsers.add_parser(
+        "list",
+        help="List all configured boards",
+    )
+
     # board init
     board_init_parser = board_subparsers.add_parser(
         "init",
@@ -608,6 +614,11 @@ Configuration:
         "--project-number",
         type=int,
         help="Configure existing user project by number",
+    )
+    board_init_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Name for this board in config (default: slugified project name)",
     )
     board_init_parser.add_argument(
         "--dry-run",
@@ -630,6 +641,11 @@ Configuration:
         type=int,
         metavar="DAYS",
         help="Only include items updated in last N days",
+    )
+    board_scan_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
     )
     board_scan_parser.add_argument(
         "--dry-run",
@@ -655,6 +671,11 @@ Configuration:
         help="Force full reconciliation of all items",
     )
     board_sync_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_sync_parser.add_argument(
         "--dry-run",
         "-n",
         action="store_true",
@@ -671,6 +692,11 @@ Configuration:
     board_status_parser = board_subparsers.add_parser(
         "status",
         help="Show current board status",
+    )
+    board_status_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
     )
     board_status_parser.add_argument(
         "--verbose",
@@ -698,18 +724,23 @@ Configuration:
     board_config_parser.add_argument(
         "action",
         nargs="?",
-        choices=["repos", "set"],
-        help="Action: repos (add/remove), set (key value)",
+        choices=["repos", "set", "default"],
+        help="Action: repos (add/remove), set (key value), default (set default board)",
     )
     board_config_parser.add_argument(
         "key",
         nargs="?",
-        help="For repos: add/remove; for set: config key",
+        help="For repos: add/remove; for set: config key; for default: board name",
     )
     board_config_parser.add_argument(
         "value",
         nargs="?",
         help="For repos: owner/repo; for set: value",
+    )
+    board_config_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to configure (default: default board)",
     )
     board_config_parser.add_argument(
         "--show-defaults",
@@ -732,6 +763,11 @@ Configuration:
         "--template",
         "-t",
         help="Use built-in template instead of file",
+    )
+    board_apply_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to apply to (default: default board)",
     )
     board_apply_parser.add_argument(
         "--dry-run",
@@ -765,6 +801,7 @@ Configuration:
             cmd_apply,
             cmd_config,
             cmd_init,
+            cmd_list,
             cmd_macros,
             cmd_scan,
             cmd_status,
@@ -772,11 +809,15 @@ Configuration:
             cmd_templates,
         )
 
+        if args.board_command == "list":
+            return cmd_list()
+
         if args.board_command == "init":
             return cmd_init(
                 create_name=args.create,
                 project_id=args.project_id,
                 project_number=args.project_number,
+                board_name=args.board,
                 dry_run=args.dry_run,
             )
 
@@ -785,6 +826,7 @@ Configuration:
             return cmd_scan(
                 repos=repos,
                 since_days=args.since,
+                board_name=args.board,
                 dry_run=args.dry_run,
                 verbose=args.verbose,
             )
@@ -792,12 +834,14 @@ Configuration:
         if args.board_command == "sync":
             return cmd_sync(
                 full=args.full,
+                board_name=args.board,
                 dry_run=args.dry_run,
                 verbose=args.verbose,
             )
 
         if args.board_command == "status":
             return cmd_status(
+                board_name=args.board,
                 verbose=args.verbose,
                 attention=args.attention,
                 json_output=args.json,
@@ -808,6 +852,7 @@ Configuration:
                 action=args.action,
                 key=args.key,
                 value=args.value,
+                board_name=args.board,
                 show_defaults=args.show_defaults,
             )
 
@@ -815,6 +860,7 @@ Configuration:
             return cmd_apply(
                 config_file=args.config_file,
                 template=args.template,
+                board_name=args.board,
                 dry_run=args.dry_run,
                 prune=args.prune,
             )

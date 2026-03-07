@@ -1,11 +1,28 @@
 """Board configuration management.
 
 Configuration is stored in ~/.lxa/config.toml under the [board] section.
+
+Multi-board configuration structure:
+    [board]
+    default = "my-project"  # Name of the default board
+
+    [board.my-project]
+    project_id = "PVT_xxx"
+    project_number = 5
+    username = "user"
+    repos = ["owner/repo1", "owner/repo2"]
+
+    [board.another-project]
+    project_id = "PVT_yyy"
+    project_number = 6
+    username = "user"
+    repos = ["owner/repo3"]
 """
 
 import contextlib
 import io
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,9 +75,31 @@ def atomic_write(path: Path, content: bytes) -> None:
         raise
 
 
+def slugify(name: str) -> str:
+    """Convert a project name to a valid TOML key (slug).
+
+    Args:
+        name: Project name (e.g., "My Project")
+
+    Returns:
+        Slugified name (e.g., "my-project")
+    """
+    # Lowercase and replace spaces/underscores with hyphens
+    slug = name.lower().strip()
+    slug = re.sub(r"[\s_]+", "-", slug)
+    # Remove non-alphanumeric characters except hyphens
+    slug = re.sub(r"[^a-z0-9-]", "", slug)
+    # Remove leading/trailing hyphens and collapse multiple hyphens
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug or "board"
+
+
 @dataclass
 class BoardConfig:
-    """Board configuration."""
+    """Configuration for a single board."""
+
+    # Board name (used as key in config file)
+    name: str = ""
 
     # GitHub Project ID (GraphQL node ID like "PVT_xxx")
     project_id: str | None = None
@@ -71,8 +110,8 @@ class BoardConfig:
     # GitHub username (for notifications/search)
     username: str | None = None
 
-    # Watched repositories
-    watched_repos: list[str] = field(default_factory=list)
+    # Watched repositories (scoped to this board)
+    repos: list[str] = field(default_factory=list)
 
     # Default scan lookback in days
     scan_lookback_days: int = 90
@@ -115,6 +154,65 @@ class BoardConfig:
         }
         return defaults.get(column_key, column_key)
 
+    # Legacy compatibility - alias repos as watched_repos
+    @property
+    def watched_repos(self) -> list[str]:
+        """Alias for repos (legacy compatibility)."""
+        return self.repos
+
+    @watched_repos.setter
+    def watched_repos(self, value: list[str]) -> None:
+        """Alias for repos (legacy compatibility)."""
+        self.repos = value
+
+
+@dataclass
+class BoardsConfig:
+    """Configuration for all boards."""
+
+    # Name of the default board
+    default: str | None = None
+
+    # All board configurations, keyed by name
+    boards: dict[str, BoardConfig] = field(default_factory=dict)
+
+    def get_board(self, name: str | None = None) -> BoardConfig | None:
+        """Get a board by name, or the default board.
+
+        Args:
+            name: Board name, or None to get the default
+
+        Returns:
+            BoardConfig or None if not found
+        """
+        if name:
+            return self.boards.get(name)
+        if self.default:
+            return self.boards.get(self.default)
+        return None
+
+    def get_default_board(self) -> BoardConfig | None:
+        """Get the default board."""
+        return self.get_board(None)
+
+    def list_boards(self) -> list[str]:
+        """List all board names."""
+        return list(self.boards.keys())
+
+    def set_default(self, name: str) -> bool:
+        """Set the default board.
+
+        Args:
+            name: Board name
+
+        Returns:
+            True if set, False if board doesn't exist
+        """
+        if name not in self.boards:
+            return False
+        self.default = name
+        return True
+
 
 def ensure_lxa_home() -> Path:
     """Ensure ~/.lxa directory exists."""
@@ -122,35 +220,116 @@ def ensure_lxa_home() -> Path:
     return LXA_HOME
 
 
-def load_board_config() -> BoardConfig:
-    """Load board configuration from ~/.lxa/config.toml.
+def _load_raw_config() -> dict:
+    """Load raw config data from file."""
+    if not CONFIG_FILE.exists():
+        return {}
+    with open(CONFIG_FILE, "rb") as f:
+        return tomllib.load(f)
+
+
+def _is_legacy_config(board_data: dict) -> bool:
+    """Check if config is in legacy single-board format."""
+    # Legacy format has project_id directly under [board]
+    # New format has named boards as sub-tables
+    return "project_id" in board_data or "project_number" in board_data
+
+
+def _migrate_legacy_config(board_data: dict) -> dict:
+    """Migrate legacy single-board config to multi-board format.
+
+    Args:
+        board_data: Legacy [board] section data
 
     Returns:
-        BoardConfig with values from config file or defaults.
+        New format data with boards dict
     """
-    if not CONFIG_FILE.exists():
-        return BoardConfig()
-
-    with open(CONFIG_FILE, "rb") as f:
-        data = tomllib.load(f)
-
-    board_data = data.get("board", {})
+    # Extract legacy fields
     repos_data = board_data.get("repos", {})
     columns_data = board_data.get("columns", {})
 
-    return BoardConfig(
-        project_id=board_data.get("project_id"),
-        project_number=board_data.get("project_number"),
-        username=board_data.get("username"),
-        watched_repos=repos_data.get("watched", []),
-        scan_lookback_days=board_data.get("scan_lookback_days", 90),
-        agent_username_pattern=board_data.get("agent_username_pattern", "openhands"),
-        column_names=columns_data,
-    )
+    # Create a board entry from legacy data
+    board_name = "default"
+    board_entry = {
+        "project_id": board_data.get("project_id"),
+        "project_number": board_data.get("project_number"),
+        "username": board_data.get("username"),
+        "repos": repos_data.get("watched", []),
+    }
+
+    # Include non-default settings
+    if board_data.get("scan_lookback_days", 90) != 90:
+        board_entry["scan_lookback_days"] = board_data["scan_lookback_days"]
+    if board_data.get("agent_username_pattern", "openhands") != "openhands":
+        board_entry["agent_username_pattern"] = board_data["agent_username_pattern"]
+    if columns_data:
+        board_entry["columns"] = columns_data
+
+    # Remove None values
+    board_entry = {k: v for k, v in board_entry.items() if v is not None}
+
+    return {
+        "default": board_name,
+        board_name: board_entry,
+    }
 
 
-def save_board_config(config: BoardConfig) -> None:
-    """Save board configuration to ~/.lxa/config.toml.
+def load_boards_config() -> BoardsConfig:
+    """Load all board configurations from ~/.lxa/config.toml.
+
+    Handles migration from legacy single-board format.
+
+    Returns:
+        BoardsConfig with all boards
+    """
+    data = _load_raw_config()
+    board_data = data.get("board", {})
+
+    if not board_data:
+        return BoardsConfig()
+
+    # Check for and migrate legacy format
+    if _is_legacy_config(board_data):
+        board_data = _migrate_legacy_config(board_data)
+
+    # Parse multi-board format
+    default_name = board_data.get("default")
+    boards: dict[str, BoardConfig] = {}
+
+    for key, value in board_data.items():
+        if key == "default":
+            continue
+        if isinstance(value, dict):
+            boards[key] = BoardConfig(
+                name=key,
+                project_id=value.get("project_id"),
+                project_number=value.get("project_number"),
+                username=value.get("username"),
+                repos=value.get("repos", []),
+                scan_lookback_days=value.get("scan_lookback_days", 90),
+                agent_username_pattern=value.get("agent_username_pattern", "openhands"),
+                column_names=value.get("columns", {}),
+            )
+
+    return BoardsConfig(default=default_name, boards=boards)
+
+
+def load_board_config(board_name: str | None = None) -> BoardConfig:
+    """Load a single board configuration.
+
+    Args:
+        board_name: Name of board to load, or None for default
+
+    Returns:
+        BoardConfig (may be empty if board not found)
+    """
+    boards = load_boards_config()
+    board = boards.get_board(board_name)
+    return board if board else BoardConfig()
+
+
+def save_boards_config(config: BoardsConfig) -> None:
+    """Save all board configurations to ~/.lxa/config.toml.
 
     Preserves other sections in the config file.
     Uses atomic write to prevent partial writes.
@@ -158,32 +337,33 @@ def save_board_config(config: BoardConfig) -> None:
     ensure_lxa_home()
 
     # Load existing config to preserve other sections
-    existing_data: dict = {}
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "rb") as f:
-            existing_data = tomllib.load(f)
+    existing_data = _load_raw_config()
 
     # Build board section
     board_data: dict = {}
 
-    if config.project_id:
-        board_data["project_id"] = config.project_id
-    if config.project_number:
-        board_data["project_number"] = config.project_number
-    if config.username:
-        board_data["username"] = config.username
-    if config.scan_lookback_days != 90:
-        board_data["scan_lookback_days"] = config.scan_lookback_days
-    if config.agent_username_pattern != "openhands":
-        board_data["agent_username_pattern"] = config.agent_username_pattern
+    if config.default:
+        board_data["default"] = config.default
 
-    # Repos subsection
-    if config.watched_repos:
-        board_data["repos"] = {"watched": config.watched_repos}
+    for name, board in config.boards.items():
+        entry: dict = {}
 
-    # Columns subsection (only if customized)
-    if config.column_names:
-        board_data["columns"] = config.column_names
+        if board.project_id:
+            entry["project_id"] = board.project_id
+        if board.project_number:
+            entry["project_number"] = board.project_number
+        if board.username:
+            entry["username"] = board.username
+        if board.repos:
+            entry["repos"] = board.repos
+        if board.scan_lookback_days != 90:
+            entry["scan_lookback_days"] = board.scan_lookback_days
+        if board.agent_username_pattern != "openhands":
+            entry["agent_username_pattern"] = board.agent_username_pattern
+        if board.column_names:
+            entry["columns"] = board.column_names
+
+        board_data[name] = entry
 
     # Update existing data
     existing_data["board"] = board_data
@@ -194,39 +374,97 @@ def save_board_config(config: BoardConfig) -> None:
     atomic_write(CONFIG_FILE, buffer.getvalue())
 
 
-def add_watched_repo(repo: str) -> bool:
-    """Add a repository to the watch list.
+def save_board_config(config: BoardConfig, board_name: str | None = None) -> None:
+    """Save a single board configuration.
+
+    Args:
+        config: Board configuration to save
+        board_name: Name to save as (uses config.name if not provided)
+    """
+    name = board_name or config.name
+    if not name:
+        raise ValueError("Board name is required")
+
+    boards = load_boards_config()
+    config.name = name
+    boards.boards[name] = config
+
+    # Set as default if it's the first board
+    if not boards.default:
+        boards.default = name
+
+    save_boards_config(boards)
+
+
+def add_watched_repo(repo: str, board_name: str | None = None) -> bool:
+    """Add a repository to a board's watch list.
 
     Args:
         repo: Repository in "owner/repo" format
+        board_name: Board name, or None for default
 
     Returns:
         True if added, False if already present
     """
-    config = load_board_config()
+    boards = load_boards_config()
+    board = boards.get_board(board_name)
 
-    if repo in config.watched_repos:
+    if not board:
         return False
 
-    config.watched_repos.append(repo)
-    save_board_config(config)
+    if repo in board.repos:
+        return False
+
+    board.repos.append(repo)
+    save_boards_config(boards)
     return True
 
 
-def remove_watched_repo(repo: str) -> bool:
-    """Remove a repository from the watch list.
+def remove_watched_repo(repo: str, board_name: str | None = None) -> bool:
+    """Remove a repository from a board's watch list.
 
     Args:
         repo: Repository in "owner/repo" format
+        board_name: Board name, or None for default
 
     Returns:
         True if removed, False if not present
     """
-    config = load_board_config()
+    boards = load_boards_config()
+    board = boards.get_board(board_name)
 
-    if repo not in config.watched_repos:
+    if not board:
         return False
 
-    config.watched_repos.remove(repo)
-    save_board_config(config)
+    if repo not in board.repos:
+        return False
+
+    board.repos.remove(repo)
+    save_boards_config(boards)
     return True
+
+
+def set_default_board(board_name: str) -> bool:
+    """Set the default board.
+
+    Args:
+        board_name: Name of board to set as default
+
+    Returns:
+        True if set, False if board doesn't exist
+    """
+    boards = load_boards_config()
+    if not boards.set_default(board_name):
+        return False
+    save_boards_config(boards)
+    return True
+
+
+def list_boards() -> list[tuple[str, bool]]:
+    """List all boards with their default status.
+
+    Returns:
+        List of (board_name, is_default) tuples
+    """
+    boards = load_boards_config()
+    return [(name, name == boards.default) for name in boards.list_boards()]

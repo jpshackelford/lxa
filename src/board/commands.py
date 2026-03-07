@@ -12,9 +12,13 @@ from rich.table import Table
 from src.board.cache import BoardCache
 from src.board.config import (
     add_watched_repo,
+    list_boards,
     load_board_config,
+    load_boards_config,
     remove_watched_repo,
     save_board_config,
+    set_default_board,
+    slugify,
 )
 from src.board.github_api import GitHubClient, get_github_username
 from src.board.models import (
@@ -33,6 +37,7 @@ def cmd_init(
     create_name: str | None = None,
     project_id: str | None = None,
     project_number: int | None = None,
+    board_name: str | None = None,
     dry_run: bool = False,
 ) -> int:
     """Initialize or configure a GitHub Project board.
@@ -41,6 +46,7 @@ def cmd_init(
         create_name: Name for new project (if creating)
         project_id: GraphQL ID of existing project
         project_number: Number of existing user project
+        board_name: Name for this board in config (default: slugified project name)
         dry_run: Show what would be done without making changes
 
     Returns:
@@ -48,7 +54,9 @@ def cmd_init(
     """
     console.print(Panel("[bold blue]lxa board init[/]", expand=False))
 
-    config = load_board_config()
+    # For new projects, we don't load existing config
+    # For configuring existing projects, load the specified board or default
+    config = load_board_config(board_name) if not create_name else load_board_config()
     cache = BoardCache()
 
     # Determine username
@@ -63,7 +71,19 @@ def cmd_init(
     with GitHubClient() as client:
         # Case 1: Create new project
         if create_name:
+            # Use provided board name or slugify the project name
+            config_name = board_name or slugify(create_name)
+
+            # Check if board already exists
+            boards = load_boards_config()
+            if config_name in boards.boards:
+                console.print(
+                    f"[yellow]Warning:[/] Board '{config_name}' already exists, will be updated"
+                )
+
             console.print(f"\nCreating project: [cyan]{create_name}[/]")
+            console.print(f"[dim]Config name: {config_name}[/]")
+
             if dry_run:
                 console.print("[yellow]Dry run - would create project[/]")
                 return 0
@@ -98,13 +118,14 @@ def cmd_init(
                     f"[green]✓[/] Created Status field with {len(column_options)} columns"
                 )
 
-            # Save to config
+            # Save to config with board name
+            config.name = config_name
             config.project_id = project.id
             config.project_number = project.number
             config.username = username
-            save_board_config(config)
+            save_board_config(config, config_name)
             cache.cache_project_info(project)
-            console.print("[green]✓[/] Saved configuration")
+            console.print(f"[green]✓[/] Saved configuration as '{config_name}'")
 
             # Show next steps
             console.print("\n[bold]Next steps:[/]")
@@ -196,12 +217,15 @@ def cmd_init(
 
         # Save configuration
         if not dry_run:
+            # Use provided board name, or slugify project title, or keep existing
+            config_name = board_name or config.name or slugify(project.title)
+            config.name = config_name
             config.project_id = project.id
             config.project_number = project.number
             config.username = username
-            save_board_config(config)
+            save_board_config(config, config_name)
             cache.cache_project_info(project)
-            console.print("\n[green]✓[/] Configuration saved")
+            console.print(f"\n[green]✓[/] Configuration saved as '{config_name}'")
 
     return 0
 
@@ -210,6 +234,7 @@ def cmd_scan(
     *,
     repos: list[str] | None = None,
     since_days: int | None = None,
+    board_name: str | None = None,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> int:
@@ -218,6 +243,7 @@ def cmd_scan(
     Args:
         repos: Specific repos to scan (default: watched repos from config)
         since_days: Only include items updated in last N days
+        board_name: Name of board to use (default: default board)
         dry_run: Show what would be done without making changes
         verbose: Show detailed output
 
@@ -226,13 +252,18 @@ def cmd_scan(
     """
     console.print(Panel("[bold blue]lxa board scan[/]", expand=False))
 
-    config = load_board_config()
+    config = load_board_config(board_name)
     cache = BoardCache()
 
     # Validate configuration
     if not config.project_id:
-        console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
+        if board_name:
+            console.print(f"[red]Error:[/] Board '{board_name}' not found.")
+        else:
+            console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
         return 1
+
+    console.print(f"[dim]Board: {config.name}[/]")
 
     username = config.username or get_github_username()
     if not username:
@@ -240,7 +271,7 @@ def cmd_scan(
         return 1
 
     # Determine repos to scan
-    scan_repos = repos or config.watched_repos
+    scan_repos = repos or config.repos
     if not scan_repos:
         console.print("[yellow]Warning:[/] No repos to scan")
         console.print("Add repos with: lxa board config repos add owner/repo")
@@ -377,6 +408,7 @@ def cmd_scan(
 def cmd_sync(
     *,
     full: bool = False,
+    board_name: str | None = None,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> int:
@@ -384,6 +416,7 @@ def cmd_sync(
 
     Args:
         full: Force full reconciliation of all items
+        board_name: Name of board to use (default: default board)
         dry_run: Show what would be done without making changes
         verbose: Show detailed output
 
@@ -392,12 +425,17 @@ def cmd_sync(
     """
     console.print(Panel("[bold blue]lxa board sync[/]", expand=False))
 
-    config = load_board_config()
+    config = load_board_config(board_name)
     cache = BoardCache()
 
     if not config.project_id:
-        console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
+        if board_name:
+            console.print(f"[red]Error:[/] Board '{board_name}' not found.")
+        else:
+            console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
         return 1
+
+    console.print(f"[dim]Board: {config.name}[/]")
 
     username = config.username or get_github_username()
     if not username:
@@ -408,7 +446,7 @@ def cmd_sync(
     if full or not last_sync:
         console.print("[dim]Mode: Full sync[/]")
         # For full sync, delegate to scan
-        return cmd_scan(dry_run=dry_run, verbose=verbose)
+        return cmd_scan(board_name=board_name, dry_run=dry_run, verbose=verbose)
 
     console.print(f"[dim]Last sync: {last_sync}[/]")
     console.print(f"[dim]User: {username}[/]")
@@ -572,6 +610,7 @@ def cmd_sync(
 
 def cmd_status(
     *,
+    board_name: str | None = None,
     verbose: bool = False,
     attention: bool = False,
     json_output: bool = False,
@@ -579,6 +618,7 @@ def cmd_status(
     """Show current board status.
 
     Args:
+        board_name: Name of board to use (default: default board)
         verbose: Show items in each column
         attention: Only show items needing attention
         json_output: Output as JSON
@@ -586,11 +626,14 @@ def cmd_status(
     Returns:
         Exit code (0 for success)
     """
-    config = load_board_config()
+    config = load_board_config(board_name)
     cache = BoardCache()
 
     if not config.project_id:
-        console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
+        if board_name:
+            console.print(f"[red]Error:[/] Board '{board_name}' not found.")
+        else:
+            console.print("[red]Error:[/] No board configured. Run 'lxa board init' first.")
         return 1
 
     # Get counts from cache
@@ -674,14 +717,16 @@ def cmd_config(
     action: str | None = None,
     key: str | None = None,
     value: str | None = None,
+    board_name: str | None = None,
     show_defaults: bool = False,  # noqa: ARG001 - reserved for future use
 ) -> int:
     """View and manage board configuration.
 
     Args:
-        action: Sub-action (repos add, repos remove, set)
+        action: Sub-action (repos add, repos remove, set, default)
         key: Config key for set action
         value: Value for set action or repo for repos action
+        board_name: Name of board to configure (default: default board)
         show_defaults: Show configuration with defaults (reserved)
 
     Returns:
@@ -689,19 +734,28 @@ def cmd_config(
     """
     console.print(Panel("[bold blue]lxa board config[/]", expand=False))
 
-    config = load_board_config()
+    # Handle "default" action to set the default board
+    if action == "default" and key:
+        if set_default_board(key):
+            console.print(f"[green]✓[/] Default board set to: {key}")
+        else:
+            console.print(f"[red]Error:[/] Board '{key}' not found")
+            return 1
+        return 0
+
+    config = load_board_config(board_name)
 
     # Handle repos add/remove
     if action == "repos" and key == "add" and value:
-        if add_watched_repo(value):
-            console.print(f"[green]✓[/] Added: {value}")
+        if add_watched_repo(value, board_name):
+            console.print(f"[green]✓[/] Added to '{config.name}': {value}")
         else:
             console.print(f"[yellow]Already watching:[/] {value}")
         return 0
 
     if action == "repos" and key == "remove" and value:
-        if remove_watched_repo(value):
-            console.print(f"[green]✓[/] Removed: {value}")
+        if remove_watched_repo(value, board_name):
+            console.print(f"[green]✓[/] Removed from '{config.name}': {value}")
         else:
             console.print(f"[yellow]Not watching:[/] {value}")
         return 0
@@ -727,6 +781,14 @@ def cmd_config(
         return 0
 
     # Show configuration
+    boards = load_boards_config()
+
+    # Show board name and default status
+    if config.name:
+        is_default = config.name == boards.default
+        default_marker = " [green](default)[/]" if is_default else ""
+        console.print(f"\n[bold]Board: {config.name}[/]{default_marker}")
+
     table = Table(title="Board Configuration")
     table.add_column("Key", style="cyan")
     table.add_column("Value")
@@ -746,14 +808,55 @@ def cmd_config(
     # Watched repos
     console.print()
     console.print("[bold]Watched Repositories[/]")
-    if config.watched_repos:
-        for repo in config.watched_repos:
+    if config.repos:
+        for repo in config.repos:
             console.print(f"  • {repo}")
     else:
         console.print("  [dim](none)[/]")
 
     console.print()
     console.print("[dim]Config file: ~/.lxa/config.toml[/]")
+
+    return 0
+
+
+def cmd_list() -> int:
+    """List all configured boards.
+
+    Returns:
+        Exit code (0 for success)
+    """
+    console.print(Panel("[bold blue]lxa board list[/]", expand=False))
+
+    boards_list = list_boards()
+
+    if not boards_list:
+        console.print("\n[yellow]No boards configured.[/]")
+        console.print("Create one with: lxa board init --create 'Project Name'")
+        return 0
+
+    console.print()
+    table = Table(title="Configured Boards")
+    table.add_column("Name", style="cyan")
+    table.add_column("Default")
+    table.add_column("Project")
+    table.add_column("Repos")
+
+    for name, is_default in boards_list:
+        config = load_board_config(name)
+        default_marker = "[green]✓[/]" if is_default else ""
+        project_info = (
+            f"#{config.project_number}"
+            if config.project_number
+            else config.project_id or "[dim]-[/]"
+        )
+        repos_count = str(len(config.repos)) if config.repos else "[dim]0[/]"
+        table.add_row(name, default_marker, project_info, repos_count)
+
+    console.print(table)
+
+    console.print()
+    console.print("[dim]Switch default: lxa board config default <name>[/]")
 
     return 0
 
@@ -776,6 +879,7 @@ def cmd_apply(
     *,
     config_file: str | None = None,
     template: str | None = None,
+    board_name: str | None = None,
     dry_run: bool = False,
     prune: bool = False,
 ) -> int:
@@ -788,6 +892,7 @@ def cmd_apply(
     Args:
         config_file: Path to YAML config file (default: ~/.lxa/boards/agent-workflow.yaml)
         template: Use built-in template instead of file
+        board_name: Name of board to apply to (default: default board)
         dry_run: Show what would be done without making changes
         prune: Remove columns not in config
 
@@ -864,10 +969,15 @@ def cmd_apply(
     )
 
     # Load existing board config
-    config = load_board_config()
+    config = load_board_config(board_name)
     if not config.project_id:
-        console.print("\n[red]Error:[/] No board configured. Run 'lxa board init' first.")
+        if board_name:
+            console.print(f"\n[red]Error:[/] Board '{board_name}' not found.")
+        else:
+            console.print("\n[red]Error:[/] No board configured. Run 'lxa board init' first.")
         return 1
+
+    console.print(f"[dim]Board: {config.name}[/]")
 
     cache = BoardCache()
     project = cache.get_project_info(config.project_id)
