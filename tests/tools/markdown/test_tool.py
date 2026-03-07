@@ -1256,4 +1256,3 @@ Clean paragraph.
         text = obs.visualize
         assert "Fixed 3" in str(text)
         assert "1 remaining" in str(text)
-
