@@ -110,7 +110,7 @@ class TestBoardCommandsSmoke:
             lambda: "testuser",
         )
 
-        cmd_init(create_name=None, project_id=None, project_number=None, dry_run=False)
+        cmd_init(create_name=None, project_id=None, project_number=None, board_name=None, dry_run=False)
 
         # Should show usage or error about missing args
         captured = capsys.readouterr()
@@ -123,6 +123,11 @@ class TestBoardCommandsSmoke:
     def test_cmd_config_repos_add(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test adding a repo to watch list."""
         from src.board.commands import cmd_config
+        from src.board.config import BoardConfig, save_board_config
+
+        # First create a board
+        config = BoardConfig(name="test", project_id="PVT_test")
+        save_board_config(config, "test")
 
         result = cmd_config(action="repos", key="add", value="owner/repo")
 
@@ -133,9 +138,11 @@ class TestBoardCommandsSmoke:
     def test_cmd_config_repos_remove(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test removing a repo from watch list."""
         from src.board.commands import cmd_config
+        from src.board.config import BoardConfig, save_board_config
 
-        # First add
-        cmd_config(action="repos", key="add", value="owner/repo")
+        # First create a board with repo
+        config = BoardConfig(name="test", project_id="PVT_test", repos=["owner/repo"])
+        save_board_config(config, "test")
 
         # Then remove
         result = cmd_config(action="repos", key="remove", value="owner/repo")
@@ -147,6 +154,11 @@ class TestBoardCommandsSmoke:
     def test_cmd_config_set(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test setting a config value."""
         from src.board.commands import cmd_config
+        from src.board.config import BoardConfig, save_board_config
+
+        # First create a board
+        config = BoardConfig(name="test", project_id="PVT_test")
+        save_board_config(config, "test")
 
         result = cmd_config(action="set", key="username", value="testuser")
 
@@ -179,11 +191,12 @@ def configured_board_for_status(mock_config_dir):
     from src.board.models import COLUMN_BACKLOG, ItemType, ProjectInfo
 
     config = BoardConfig(
+        name="test",
         project_id="PVT_test",
         project_number=1,
         username="testuser",
     )
-    save_board_config(config)
+    save_board_config(config, "test")
 
     cache = BoardCache(db_path=mock_config_dir / "board-cache.db")
     project = ProjectInfo(

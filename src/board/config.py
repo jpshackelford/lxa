@@ -249,7 +249,8 @@ def _migrate_legacy_config(board_data: dict) -> dict:
     columns_data = board_data.get("columns", {})
 
     # Create a board entry from legacy data
-    board_name = "default"
+    # Use "main" as the board name to avoid collision with "default" key
+    board_name = "main"
     board_entry = {
         "project_id": board_data.get("project_id"),
         "project_number": board_data.get("project_number"),

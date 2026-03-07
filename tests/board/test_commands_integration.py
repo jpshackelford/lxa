@@ -61,12 +61,13 @@ def configured_board(mock_config_dir):
     """Set up a configured board with cached project info."""
     # Create config
     config = BoardConfig(
+        name="test-board",
         project_id="PVT_kwDOTest123",
         project_number=2,
         username="testuser",
-        watched_repos=["owner/repo"],
+        repos=["owner/repo"],
     )
-    save_board_config(config)
+    save_board_config(config, "test-board")
 
     # Create cache with project info
     cache = BoardCache(db_path=mock_config_dir / "board-cache.db")
@@ -366,9 +367,9 @@ class TestCmdConfigIntegration:
 
     def test_config_add_repo(self, mock_config_dir):  # noqa: ARG002
         """Test adding a watched repo."""
-        # Start with empty config
-        config = BoardConfig()
-        save_board_config(config)
+        # Start with a board (required for adding repos)
+        config = BoardConfig(name="test", project_id="PVT_test")
+        save_board_config(config, "test")
 
         from src.board.commands import cmd_config
 
@@ -380,7 +381,7 @@ class TestCmdConfigIntegration:
         from src.board.config import load_board_config
 
         updated = load_board_config()
-        assert "new/repo" in updated.watched_repos
+        assert "new/repo" in updated.repos
 
 
 class TestErrorHandling:
