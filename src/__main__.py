@@ -33,7 +33,12 @@ if "LOG_LEVEL" not in os.environ:
 # LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
 # when no event loop is running. This is harmless but noisy.
 # See: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_event_loop
-warnings.filterwarnings("ignore", message="There is no current event loop")
+warnings.filterwarnings(
+    "ignore",
+    message="There is no current event loop",
+    category=DeprecationWarning,
+    module="litellm.*",
+)
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
