@@ -1,9 +1,5 @@
 """Tests for board configuration management."""
 
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 from src.board.config import (
@@ -15,7 +11,6 @@ from src.board.config import (
     load_boards_config,
     remove_watched_repo,
     save_board_config,
-    save_boards_config,
     set_default_board,
     slugify,
 )
@@ -136,13 +131,13 @@ def temp_config_dir(tmp_path, monkeypatch):
 class TestLoadSaveConfig:
     """Tests for loading and saving configuration."""
 
-    def test_load_empty_config(self, temp_config_dir):
+    def test_load_empty_config(self, temp_config_dir):  # noqa: ARG002
         """Loading when no config file exists returns empty config."""
         config = load_boards_config()
         assert config.default is None
         assert config.boards == {}
 
-    def test_save_and_load_single_board(self, temp_config_dir):
+    def test_save_and_load_single_board(self, temp_config_dir):  # noqa: ARG002
         """Save and load a single board configuration."""
         board = BoardConfig(
             name="test-project",
@@ -162,7 +157,7 @@ class TestLoadSaveConfig:
         assert loaded.username == "testuser"
         assert loaded.repos == ["owner/repo1", "owner/repo2"]
 
-    def test_save_and_load_multiple_boards(self, temp_config_dir):
+    def test_save_and_load_multiple_boards(self, temp_config_dir):  # noqa: ARG002
         """Save and load multiple board configurations."""
         board1 = BoardConfig(name="project-a", project_id="PVT_111", repos=["a/repo"])
         board2 = BoardConfig(name="project-b", project_id="PVT_222", repos=["b/repo"])
@@ -176,7 +171,7 @@ class TestLoadSaveConfig:
         assert "project-a" in boards.boards
         assert "project-b" in boards.boards
 
-    def test_load_default_board(self, temp_config_dir):
+    def test_load_default_board(self, temp_config_dir):  # noqa: ARG002
         """load_board_config with no name returns default board."""
         board1 = BoardConfig(name="first", project_id="PVT_111")
         board2 = BoardConfig(name="second", project_id="PVT_222")
@@ -188,7 +183,7 @@ class TestLoadSaveConfig:
         default = load_board_config()
         assert default.name == "first"
 
-    def test_first_board_becomes_default(self, temp_config_dir):
+    def test_first_board_becomes_default(self, temp_config_dir):  # noqa: ARG002
         """First board saved automatically becomes the default."""
         board = BoardConfig(name="my-board", project_id="PVT_123")
         save_board_config(board, "my-board")
@@ -196,7 +191,7 @@ class TestLoadSaveConfig:
         boards = load_boards_config()
         assert boards.default == "my-board"
 
-    def test_preserves_other_config_sections(self, temp_config_dir):
+    def test_preserves_other_config_sections(self, temp_config_dir):  # noqa: ARG002
         """Saving board config preserves other sections in the file."""
         tmp_path, config_file = temp_config_dir
 
@@ -216,7 +211,7 @@ class TestLoadSaveConfig:
 class TestLegacyMigration:
     """Tests for migrating legacy single-board config format."""
 
-    def test_migrate_legacy_config(self, temp_config_dir):
+    def test_migrate_legacy_config(self, temp_config_dir):  # noqa: ARG002
         """Migrate legacy config format to new multi-board format."""
         tmp_path, config_file = temp_config_dir
 
@@ -247,7 +242,7 @@ watched = ["legacy/repo1", "legacy/repo2"]
         assert board.repos == ["legacy/repo1", "legacy/repo2"]
         assert board.scan_lookback_days == 30
 
-    def test_legacy_detection(self, temp_config_dir):
+    def test_legacy_detection(self, temp_config_dir):  # noqa: ARG002
         """Detect legacy config by presence of project_id at top level."""
         tmp_path, config_file = temp_config_dir
 
@@ -270,7 +265,7 @@ project_id = "PVT_new"
 class TestRepoManagement:
     """Tests for add/remove watched repos."""
 
-    def test_add_watched_repo(self, temp_config_dir):
+    def test_add_watched_repo(self, temp_config_dir):  # noqa: ARG002
         """Add a repo to watched list."""
         board = BoardConfig(name="test", project_id="PVT_123")
         save_board_config(board, "test")
@@ -281,7 +276,7 @@ class TestRepoManagement:
         config = load_board_config("test")
         assert "owner/repo" in config.repos
 
-    def test_add_duplicate_repo(self, temp_config_dir):
+    def test_add_duplicate_repo(self, temp_config_dir):  # noqa: ARG002
         """Adding duplicate repo returns False."""
         board = BoardConfig(name="test", project_id="PVT_123", repos=["owner/repo"])
         save_board_config(board, "test")
@@ -289,7 +284,7 @@ class TestRepoManagement:
         result = add_watched_repo("owner/repo")
         assert result is False
 
-    def test_add_repo_to_specific_board(self, temp_config_dir):
+    def test_add_repo_to_specific_board(self, temp_config_dir):  # noqa: ARG002
         """Add repo to a specific board, not default."""
         board1 = BoardConfig(name="first", project_id="PVT_111")
         board2 = BoardConfig(name="second", project_id="PVT_222")
@@ -304,7 +299,7 @@ class TestRepoManagement:
         assert "owner/repo" not in first.repos
         assert "owner/repo" in second.repos
 
-    def test_remove_watched_repo(self, temp_config_dir):
+    def test_remove_watched_repo(self, temp_config_dir):  # noqa: ARG002
         """Remove a repo from watched list."""
         board = BoardConfig(name="test", project_id="PVT_123", repos=["owner/repo"])
         save_board_config(board, "test")
@@ -315,7 +310,7 @@ class TestRepoManagement:
         config = load_board_config("test")
         assert "owner/repo" not in config.repos
 
-    def test_remove_nonexistent_repo(self, temp_config_dir):
+    def test_remove_nonexistent_repo(self, temp_config_dir):  # noqa: ARG002
         """Removing nonexistent repo returns False."""
         board = BoardConfig(name="test", project_id="PVT_123")
         save_board_config(board, "test")
@@ -323,7 +318,7 @@ class TestRepoManagement:
         result = remove_watched_repo("owner/repo")
         assert result is False
 
-    def test_add_repo_no_board(self, temp_config_dir):
+    def test_add_repo_no_board(self, temp_config_dir):  # noqa: ARG002
         """Adding repo when no board exists returns False."""
         result = add_watched_repo("owner/repo")
         assert result is False
@@ -332,7 +327,7 @@ class TestRepoManagement:
 class TestDefaultBoard:
     """Tests for setting and getting default board."""
 
-    def test_set_default_board(self, temp_config_dir):
+    def test_set_default_board(self, temp_config_dir):  # noqa: ARG002
         """Set a board as default."""
         board1 = BoardConfig(name="first", project_id="PVT_111")
         board2 = BoardConfig(name="second", project_id="PVT_222")
@@ -345,7 +340,7 @@ class TestDefaultBoard:
         boards = load_boards_config()
         assert boards.default == "second"
 
-    def test_set_nonexistent_default(self, temp_config_dir):
+    def test_set_nonexistent_default(self, temp_config_dir):  # noqa: ARG002
         """Setting nonexistent board as default returns False."""
         board = BoardConfig(name="test", project_id="PVT_123")
         save_board_config(board, "test")
@@ -353,7 +348,7 @@ class TestDefaultBoard:
         result = set_default_board("nonexistent")
         assert result is False
 
-    def test_list_boards_with_default(self, temp_config_dir):
+    def test_list_boards_with_default(self, temp_config_dir):  # noqa: ARG002
         """list_boards returns tuples with default flag."""
         board1 = BoardConfig(name="alpha", project_id="PVT_111")
         board2 = BoardConfig(name="beta", project_id="PVT_222")
@@ -376,7 +371,7 @@ class TestDefaultBoard:
 class TestNonDefaultSettings:
     """Tests for non-default configuration values."""
 
-    def test_saves_non_default_scan_lookback(self, temp_config_dir):
+    def test_saves_non_default_scan_lookback(self, temp_config_dir):  # noqa: ARG002
         """Non-default scan_lookback_days is saved."""
         board = BoardConfig(name="test", project_id="PVT_123", scan_lookback_days=30)
         save_board_config(board, "test")
@@ -384,7 +379,7 @@ class TestNonDefaultSettings:
         loaded = load_board_config("test")
         assert loaded.scan_lookback_days == 30
 
-    def test_saves_non_default_agent_pattern(self, temp_config_dir):
+    def test_saves_non_default_agent_pattern(self, temp_config_dir):  # noqa: ARG002
         """Non-default agent_username_pattern is saved."""
         board = BoardConfig(
             name="test", project_id="PVT_123", agent_username_pattern="mybot"
@@ -394,7 +389,7 @@ class TestNonDefaultSettings:
         loaded = load_board_config("test")
         assert loaded.agent_username_pattern == "mybot"
 
-    def test_saves_column_names(self, temp_config_dir):
+    def test_saves_column_names(self, temp_config_dir):  # noqa: ARG002
         """Custom column names are saved."""
         board = BoardConfig(
             name="test",
@@ -406,7 +401,7 @@ class TestNonDefaultSettings:
         loaded = load_board_config("test")
         assert loaded.column_names == {"backlog": "My Backlog", "done": "Completed"}
 
-    def test_default_values_not_saved(self, temp_config_dir):
+    def test_default_values_not_saved(self, temp_config_dir):  # noqa: ARG002
         """Default values are not written to file."""
         tmp_path, config_file = temp_config_dir
 
