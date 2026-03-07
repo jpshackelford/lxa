@@ -781,12 +781,13 @@ class GitHubClient:
         """Update the Status field to have all workflow columns.
 
         Args:
-            project_id: GraphQL ID of the project
+            project_id: GraphQL ID of the project (unused, kept for API compatibility)
             field_id: GraphQL ID of the Status field
 
         Returns:
             Dict of {column_name: option_id}
         """
+        _ = project_id  # Not needed for this mutation, but kept for API consistency
         options = []
         for col_name in get_default_columns():
             options.append(
@@ -798,9 +799,8 @@ class GitHubClient:
             )
 
         mutation = """
-        mutation($projectId: ID!, $fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+        mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
             updateProjectV2Field(input: {
-                projectId: $projectId
                 fieldId: $fieldId
                 singleSelectOptions: $options
             }) {
@@ -816,9 +816,7 @@ class GitHubClient:
             }
         }
         """
-        data = self.graphql(
-            mutation, {"projectId": project_id, "fieldId": field_id, "options": options}
-        )
+        data = self.graphql(mutation, {"fieldId": field_id, "options": options})
         field = data["updateProjectV2Field"]["projectV2Field"]
         return {opt["name"]: opt["id"] for opt in field["options"]}
 
@@ -831,21 +829,21 @@ class GitHubClient:
         """Update the Status field with custom column definitions.
 
         Args:
-            project_id: GraphQL ID of the project
+            project_id: GraphQL ID of the project (unused, kept for API compatibility)
             field_id: GraphQL ID of the Status field
             columns: List of (name, color, description) tuples
 
         Returns:
             Dict of {column_name: option_id}
         """
+        _ = project_id  # Not needed for this mutation, but kept for API consistency
         options = [
             {"name": name, "color": color, "description": desc} for name, color, desc in columns
         ]
 
         mutation = """
-        mutation($projectId: ID!, $fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+        mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
             updateProjectV2Field(input: {
-                projectId: $projectId
                 fieldId: $fieldId
                 singleSelectOptions: $options
             }) {
@@ -861,9 +859,7 @@ class GitHubClient:
             }
         }
         """
-        data = self.graphql(
-            mutation, {"projectId": project_id, "fieldId": field_id, "options": options}
-        )
+        data = self.graphql(mutation, {"fieldId": field_id, "options": options})
         field = data["updateProjectV2Field"]["projectV2Field"]
         return {opt["name"]: opt["id"] for opt in field["options"]}
 
