@@ -123,6 +123,57 @@ lxa reconcile .pr/design.md --dry-run  # Preview changes
 lxa reconcile .pr/design.md            # Apply changes
 ```
 
+### Board Management
+
+Track AI-assisted development across multiple repositories with GitHub Projects:
+
+```bash
+# Create a new board
+lxa board init --create "My Agent Board"
+
+# Add repos to watch
+lxa board config repos add owner/repo1
+lxa board config repos add owner/repo2
+
+# Scan for your issues/PRs and populate board
+lxa board scan
+
+# Incremental sync using notifications
+lxa board sync
+
+# Check what needs attention
+lxa board status --attention
+```
+
+The board automatically organizes items into workflow columns based on their state:
+
+```
+Icebox → Backlog → Agent Coding → Human Review → Agent Refinement
+                              → Final Review → Approved → Done / Closed
+```
+
+See [Board Management](doc/reference/board-management.md) for detailed documentation.
+
+#### Debugging API Calls
+
+Enable API logging to capture all GitHub API requests and responses:
+
+```bash
+# Enable API logging
+export LXA_LOG_API=1
+
+# Optionally set custom log directory
+export LXA_LOG_API_DIR=/path/to/logs
+
+# Run any board command - all API calls will be logged
+lxa board scan --dry-run
+
+# Logs saved to ~/.lxa/api_logs/ as:
+# 0001_request.json, 0001_response.json, 0002_request.json, ...
+```
+
+This is useful for debugging API issues and generating test fixture data.
+
 ## Development
 
 ```bash
@@ -157,5 +208,6 @@ make test-cov
 | Document | Description |
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
+| [Board Management](doc/reference/board-management.md) | GitHub Projects board for tracking development workflow |
 | [Squash Commit Messages](doc/reference/squash-commit-messages.md) | Auto-generated commit messages for PR merges |
 | [PR Refinement](doc/reference/pr-refinement.md) | Two-phase code review and refinement loop |
