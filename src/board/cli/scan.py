@@ -90,9 +90,7 @@ def cmd_scan(
 
         # Search for user's items
         console.print("\nSearching for your issues and PRs...")
-        all_items, search_errors = search_user_items(
-            client, scan_repos, username, since_date
-        )
+        all_items, search_errors = search_user_items(client, scan_repos, username, since_date)
 
         for error in search_errors:
             result.errors.append(error)

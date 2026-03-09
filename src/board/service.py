@@ -65,18 +65,14 @@ def validate_board_config(
 
     if require_project and not config.project_id:
         if board_name:
-            return ValidationResult(
-                success=False, error=f"Board '{board_name}' not found."
-            )
+            return ValidationResult(success=False, error=f"Board '{board_name}' not found.")
         return ValidationResult(
             success=False, error="No board configured. Run 'lxa board init' first."
         )
 
     username = config.username or get_github_username()
     if not username:
-        return ValidationResult(
-            success=False, error="Could not determine GitHub username"
-        )
+        return ValidationResult(success=False, error="Could not determine GitHub username")
 
     return ValidationResult(success=True, config=config, username=username)
 
@@ -183,9 +179,7 @@ def add_item_to_board(
     # Set status column
     option_id = project.column_option_ids.get(column)
     if option_id and project.status_field_id:
-        client.update_item_status(
-            project.id, board_item_id, project.status_field_id, option_id
-        )
+        client.update_item_status(project.id, board_item_id, project.status_field_id, option_id)
 
     # Update cache
     cache.upsert_item(
@@ -244,9 +238,7 @@ def scan_repos(
         existing_refs = fetch_existing_board_items(client, project.id)
 
         # Search for items
-        all_items, search_errors = search_user_items(
-            client, scan_repos_list, username, since_date
-        )
+        all_items, search_errors = search_user_items(client, scan_repos_list, username, since_date)
         result.errors.extend(search_errors)
 
         # Process each item

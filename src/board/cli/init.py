@@ -78,9 +78,7 @@ def cmd_init(
 
         # Case 4: Use configured project
         if config.project_id:
-            return _configure_existing(
-                client, cache, config, board_name, username, dry_run
-            )
+            return _configure_existing(client, cache, config, board_name, username, dry_run)
 
         if config.project_number:
             return _configure_by_number(
@@ -128,9 +126,7 @@ def _create_new_project(
     # Update Status field with workflow columns
     console.print("\nConfiguring Status field...")
     if project.status_field_id:
-        column_options = client.update_status_field_options(
-            project.id, project.status_field_id
-        )
+        column_options = client.update_status_field_options(project.id, project.status_field_id)
         project.column_option_ids = column_options
         print_success(f"Configured Status field with {len(column_options)} columns")
     else:
@@ -203,10 +199,7 @@ def _finish_configure(
         print_success(f"Status field exists with {len(project.column_option_ids)} options")
 
         # Check if all columns exist
-        missing = [
-            col for col in get_default_columns()
-            if col not in project.column_option_ids
-        ]
+        missing = [col for col in get_default_columns() if col not in project.column_option_ids]
 
         if missing:
             console.print(f"[yellow]Missing columns:[/] {', '.join(missing)}")
