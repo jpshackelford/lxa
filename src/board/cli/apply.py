@@ -46,10 +46,6 @@ def cmd_apply(
         Exit code (0 for success)
     """
     from src.board.rules import validate_rules
-    from src.board.yaml_config import (
-        load_board_definition,
-        load_board_from_string,
-    )
 
     print_command_header("lxa board apply")
 

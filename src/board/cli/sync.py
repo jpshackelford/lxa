@@ -74,7 +74,7 @@ def cmd_sync(
         try:
             notifications = client.get_notifications(since=last_sync, participating=True)
         except Exception as e:
-            raise CommandError(f"Error fetching notifications: {e}")
+            raise CommandError(f"Error fetching notifications: {e}") from e
 
         console.print(f"Found {len(notifications)} new notifications")
 

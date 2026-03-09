@@ -3,12 +3,10 @@
 import json
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from src.board.cache import BoardCache
 from src.board.cli._helpers import (
-    CommandError,
     handle_command_error,
     load_and_validate_config,
     print_command_header,

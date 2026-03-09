@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from src.board.cache import BoardCache
-from src.board.config import BoardConfig, load_board_config, save_board_config
+from src.board.config import BoardConfig, load_board_config
 from src.board.github_api import GitHubClient, get_github_username
 from src.board.models import Item, ProjectInfo, SyncResult
 from src.board.state import determine_column
