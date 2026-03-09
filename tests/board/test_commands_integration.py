@@ -157,11 +157,11 @@ class TestCmdScanIntegration:
 
         monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
-            "src.board.commands.get_github_username",
+            "src.board.cli._helpers.get_github_username",
             lambda: "testuser",
         )
 
-        from src.board.commands import cmd_scan
+        from src.board.cli import cmd_scan
 
         result = cmd_scan(dry_run=False, verbose=False)
 
@@ -223,11 +223,11 @@ class TestCmdScanIntegration:
 
         monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
-            "src.board.commands.get_github_username",
+            "src.board.cli._helpers.get_github_username",
             lambda: "testuser",
         )
 
-        from src.board.commands import cmd_scan
+        from src.board.cli import cmd_scan
 
         result = cmd_scan(dry_run=False, verbose=False)
 
@@ -264,11 +264,11 @@ class TestCmdScanIntegration:
 
         monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
         monkeypatch.setattr(
-            "src.board.commands.get_github_username",
+            "src.board.cli._helpers.get_github_username",
             lambda: "testuser",
         )
 
-        from src.board.commands import cmd_scan
+        from src.board.cli import cmd_scan
 
         result = cmd_scan(dry_run=True, verbose=False)
 
@@ -315,7 +315,7 @@ class TestCmdStatusIntegration:
             column=COLUMN_HUMAN_REVIEW,
         )
 
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=False, attention=False, json_output=False)
 
@@ -340,7 +340,7 @@ class TestCmdStatusIntegration:
             column=COLUMN_BACKLOG,
         )
 
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=False, attention=False, json_output=True)
 
@@ -356,7 +356,7 @@ class TestCmdConfigIntegration:
 
     def test_config_shows_current_settings(self, configured_board, capsys):  # noqa: ARG002
         """Test that config shows current settings."""
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
 
         result = cmd_config()
 
@@ -371,7 +371,7 @@ class TestCmdConfigIntegration:
         config = BoardConfig(name="test", project_id="PVT_test")
         save_board_config(config, "test")
 
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
 
         result = cmd_config(action="repos", key="add", value="new/repo")
 
@@ -389,7 +389,7 @@ class TestErrorHandling:
 
     def test_scan_without_config_fails(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that scan fails gracefully without configuration."""
-        from src.board.commands import cmd_scan
+        from src.board.cli import cmd_scan
 
         result = cmd_scan(dry_run=False)
 
@@ -417,11 +417,11 @@ class TestErrorHandling:
             patch.object(httpx.Client, "post", mock_post),
         ):
             monkeypatch.setattr(
-                "src.board.commands.get_github_username",
+                "src.board.cli._helpers.get_github_username",
                 lambda: "testuser",
             )
 
-            from src.board.commands import cmd_scan
+            from src.board.cli import cmd_scan
 
             # Should handle error without crashing
             result = cmd_scan(dry_run=False)

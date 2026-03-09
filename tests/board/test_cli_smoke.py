@@ -38,7 +38,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_status_without_config(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that cmd_status fails gracefully without config."""
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=False, attention=False, json_output=False)
 
@@ -49,7 +49,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_config_runs(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that cmd_config runs without crashing."""
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
 
         result = cmd_config()
 
@@ -59,7 +59,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_templates_runs(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that cmd_templates runs without crashing."""
-        from src.board.commands import cmd_templates
+        from src.board.cli import cmd_templates
 
         result = cmd_templates()
 
@@ -69,7 +69,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_macros_runs(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that cmd_macros runs without crashing."""
-        from src.board.commands import cmd_macros
+        from src.board.cli import cmd_macros
 
         result = cmd_macros()
 
@@ -80,7 +80,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_scan_without_config_fails_gracefully(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that scan fails gracefully without configuration."""
-        from src.board.commands import cmd_scan
+        from src.board.cli import cmd_scan
 
         result = cmd_scan(dry_run=False)
 
@@ -91,7 +91,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_sync_without_config_fails_gracefully(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test that sync fails gracefully without configuration."""
-        from src.board.commands import cmd_sync
+        from src.board.cli import cmd_sync
 
         result = cmd_sync(full=False, dry_run=False, verbose=False)
 
@@ -102,11 +102,11 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_init_without_args_shows_usage(self, mock_config_dir, capsys, monkeypatch):  # noqa: ARG002
         """Test that init without args shows usage info."""
-        from src.board.commands import cmd_init
+        from src.board.cli import cmd_init
 
         # Mock get_github_username to avoid API call
         monkeypatch.setattr(
-            "src.board.commands.get_github_username",
+            "src.board.cli.init.get_github_username",
             lambda: "testuser",
         )
 
@@ -124,7 +124,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_config_repos_add(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test adding a repo to watch list."""
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
         from src.board.config import BoardConfig, save_board_config
 
         # First create a board
@@ -139,7 +139,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_config_repos_remove(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test removing a repo from watch list."""
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
         from src.board.config import BoardConfig, save_board_config
 
         # First create a board with repo
@@ -155,7 +155,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_config_set(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test setting a config value."""
-        from src.board.commands import cmd_config
+        from src.board.cli import cmd_config
         from src.board.config import BoardConfig, save_board_config
 
         # First create a board
@@ -170,7 +170,7 @@ class TestBoardCommandsSmoke:
 
     def test_cmd_apply_dry_run(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test apply with dry run (no project configured)."""
-        from src.board.commands import cmd_apply
+        from src.board.cli import cmd_apply
 
         result = cmd_apply(
             config_file=None,
@@ -230,7 +230,7 @@ class TestBoardCommandsWithConfig:
 
     def test_cmd_status_json_output(self, configured_board_for_status, capsys):  # noqa: ARG002
         """Test status command with JSON output."""
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=False, attention=False, json_output=True)
 
@@ -245,7 +245,7 @@ class TestBoardCommandsWithConfig:
 
     def test_cmd_status_verbose(self, configured_board_for_status, capsys):  # noqa: ARG002
         """Test status command with verbose output."""
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=True, attention=False, json_output=False)
 
@@ -255,7 +255,7 @@ class TestBoardCommandsWithConfig:
 
     def test_cmd_status_attention_filter(self, configured_board_for_status):  # noqa: ARG002
         """Test status command with attention filter."""
-        from src.board.commands import cmd_status
+        from src.board.cli import cmd_status
 
         result = cmd_status(verbose=False, attention=True, json_output=False)
 

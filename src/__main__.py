@@ -797,7 +797,7 @@ Configuration:
 
     # Handle board command
     if args.command == "board":
-        from src.board.commands import (
+        from src.board.cli import (
             cmd_apply,
             cmd_config,
             cmd_init,
