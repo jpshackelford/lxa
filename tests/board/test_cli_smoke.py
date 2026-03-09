@@ -122,6 +122,79 @@ class TestBoardCommandsSmoke:
             or "No project specified" in captured.out
         )
 
+    def test_cmd_init_create_does_not_inherit_repos_from_default(
+        self,
+        mock_config_dir,  # noqa: ARG002
+        monkeypatch,
+    ):
+        """Test that creating a new board doesn't inherit repos from default board.
+
+        Regression test for bug where new boards would inherit repos from the
+        default board configuration.
+        """
+        from unittest.mock import MagicMock
+
+        from src.board.config import BoardConfig, load_board_config, save_board_config
+
+        # First create a default board with some repos
+        default_config = BoardConfig(
+            name="main",
+            project_id="PVT_default",
+            project_number=1,
+            username="testuser",
+            repos=["owner/repo1", "owner/repo2"],
+        )
+        save_board_config(default_config, "main")
+
+        # Verify default board has repos
+        loaded_default = load_board_config("main")
+        assert loaded_default.repos == ["owner/repo1", "owner/repo2"]
+
+        # Mock GitHubClient and API calls
+        mock_client = MagicMock()
+        mock_client.get_user_id.return_value = "U_test"
+        mock_project = MagicMock()
+        mock_project.number = 2
+        mock_project.id = "PVT_new"
+        mock_project.url = "https://github.com/users/testuser/projects/2"
+        mock_project.title = "New Project"
+        mock_project.status_field_id = "PVTF_new"
+        mock_project.column_option_ids = {"Backlog": "opt1"}
+        mock_client.create_project.return_value = mock_project
+        mock_client.get_user_project.return_value = mock_project
+        mock_client.update_status_field_options.return_value = {"Backlog": "opt1"}
+
+        monkeypatch.setattr(
+            "src.board.cli.init.get_github_username",
+            lambda: "testuser",
+        )
+
+        # Make GitHubClient a context manager that returns our mock
+        mock_context = MagicMock()
+        mock_context.__enter__ = MagicMock(return_value=mock_client)
+        mock_context.__exit__ = MagicMock(return_value=False)
+        monkeypatch.setattr(
+            "src.board.cli.init.GitHubClient",
+            lambda: mock_context,
+        )
+
+        # Create a new board
+        from src.board.cli import cmd_init
+
+        result = cmd_init(
+            create_name="New Project",
+            project_id=None,
+            project_number=None,
+            board_name="new-project",
+            dry_run=False,
+        )
+
+        assert result == 0
+
+        # The new board should NOT have repos from the default board
+        new_board = load_board_config("new-project")
+        assert new_board.repos == [], f"New board inherited repos from default: {new_board.repos}"
+
     def test_cmd_config_repos_add(self, mock_config_dir, capsys):  # noqa: ARG002
         """Test adding a repo to watch list."""
         from src.board.cli import cmd_config
