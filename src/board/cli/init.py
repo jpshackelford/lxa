@@ -11,6 +11,7 @@ from src.board.cli._helpers import (
     print_warning,
 )
 from src.board.config import (
+    BoardConfig,
     load_board_config,
     load_boards_config,
     save_board_config,
@@ -44,8 +45,8 @@ def cmd_init(
     """
     print_command_header("lxa board init")
 
-    # For new projects, we don't load existing config
-    config = load_board_config(board_name) if not create_name else load_board_config()
+    # For new projects, start with empty config (don't inherit repos from default)
+    config = load_board_config(board_name) if not create_name else BoardConfig()
     cache = BoardCache()
 
     # Determine username
