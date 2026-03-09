@@ -52,6 +52,7 @@ def cmd_scan(
     print_command_header("lxa board scan")
 
     config, username = load_and_validate_config(board_name)
+    assert username is not None  # guaranteed by load_and_validate_config
     cache = BoardCache()
 
     print_info(f"Board: {config.name}", dim=True)

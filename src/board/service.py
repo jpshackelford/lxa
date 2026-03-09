@@ -94,8 +94,10 @@ def get_project_with_cache(
         client: GitHub client
 
     Returns:
-        ProjectInfo or None if not found
+        ProjectInfo or None if not found/not configured
     """
+    if not config.project_id:
+        return None
     project = cache.get_project_info(config.project_id)
     if not project:
         project = client.get_project_by_id(config.project_id)
@@ -180,7 +182,7 @@ def add_item_to_board(
 
     # Set status column
     option_id = project.column_option_ids.get(column)
-    if option_id:
+    if option_id and project.status_field_id:
         client.update_item_status(
             project.id, board_item_id, project.status_field_id, option_id
         )
@@ -207,7 +209,6 @@ def scan_repos(
     repos: list[str] | None = None,
     since_days: int | None = None,
     dry_run: bool = False,
-    on_progress: callable = None,
 ) -> SyncResult:
     """Scan repositories for issues/PRs and add to board.
 
@@ -219,7 +220,6 @@ def scan_repos(
         repos: Specific repos to scan (default: config.repos)
         since_days: Only include items updated in last N days
         dry_run: Don't actually add items
-        on_progress: Optional callback for progress updates
 
     Returns:
         SyncResult with operation statistics
@@ -357,7 +357,7 @@ def sync_board(
                     result.items_added += 1
 
                 option_id = project.column_option_ids.get(new_column)
-                if option_id and board_item_id:
+                if option_id and board_item_id and project.status_field_id:
                     client.update_item_status(
                         project.id, board_item_id, project.status_field_id, option_id
                     )
@@ -432,7 +432,7 @@ def _parse_notification_items(
 class BoardStatusData:
     """Data for board status display."""
 
-    project_id: str
+    project_id: str | None
     last_sync: datetime | None
     column_counts: dict[str, int]
     items_by_column: dict[str, list] | None = None

@@ -47,10 +47,6 @@ def cmd_apply(
     """
     from src.board.rules import validate_rules
     from src.board.yaml_config import (
-        get_default_board_path,
-        get_template,
-        init_default_board,
-        list_templates,
         load_board_definition,
         load_board_from_string,
     )
@@ -85,6 +81,8 @@ def cmd_apply(
     print_info(f"Board: {config.name}", dim=True)
 
     cache = BoardCache()
+    if not config.project_id:
+        raise CommandError("No project configured. Run 'lxa board init' first.")
     project = cache.get_project_info(config.project_id)
     if not project:
         raise CommandError("Project not in cache. Run 'lxa board init' first.")
