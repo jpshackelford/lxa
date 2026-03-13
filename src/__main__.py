@@ -10,6 +10,8 @@ Or via the installed command:
     lxa implement                            # Uses .pr/design.md
     lxa implement --keep-design              # Uses doc/design/<feature>.md
     lxa implement --design-path custom.md    # Uses custom path
+    lxa implement --loop --refine --auto-merge --multi-pr --base-branch v2
+                                             # Multi-PR autonomous mode
     lxa reconcile .pr/design.md              # Update design doc with code refs
     lxa refine https://github.com/owner/repo/pull/42              # Refine PR
     lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
@@ -60,6 +62,7 @@ from src.agents.orchestrator import (
 )
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
+from src.ralph.multi_pr import MultiPRConfig, MultiPRLoopRunner
 from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
@@ -424,6 +427,56 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def run_multi_pr_loop(
+    design_doc: Path,
+    workspace: Path,
+    *,
+    base_branch: str = "main",
+    refinement_config: RefinementConfig | None = None,
+    max_iterations_per_milestone: int = 10,
+    max_refinement_rounds: int = 3,
+) -> int:
+    """Run Multi-PR autonomous execution mode.
+
+    Creates a separate PR per milestone, auto-merges after refinement passes,
+    syncs with base branch, and continues to the next milestone.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+        base_branch: Target branch for PRs
+        refinement_config: Configuration for code review refinement loop
+        max_iterations_per_milestone: Max iterations per milestone
+        max_refinement_rounds: Max refinement attempts per milestone
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Multi-PR Autonomous Mode")
+    except ExecutionSetupError:
+        return 1
+
+    multi_pr_config = MultiPRConfig(enabled=True, base_branch=base_branch)
+    refinement_config = refinement_config or RefinementConfig(
+        enabled=True, auto_merge=True
+    )
+
+    runner = MultiPRLoopRunner(
+        llm=ctx.llm,
+        design_doc_path=ctx.design_doc,
+        workspace=ctx.workspace,
+        platform=ctx.platform,
+        multi_pr_config=multi_pr_config,
+        refinement_config=refinement_config,
+        max_iterations_per_milestone=max_iterations_per_milestone,
+        max_refinement_rounds=max_refinement_rounds,
+    )
+
+    result = runner.run()
+    return 0 if result.completed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -538,6 +591,17 @@ Configuration:
         type=int,
         default=5,
         help="Maximum refinement iterations (default: 5)",
+    )
+    implement_parser.add_argument(
+        "--multi-pr",
+        action="store_true",
+        help="Create separate PR per milestone, auto-merge after refinement",
+    )
+    implement_parser.add_argument(
+        "--base-branch",
+        type=str,
+        default="main",
+        help="Target branch for PRs in multi-PR mode (default: main)",
     )
 
     # Reconcile subcommand
@@ -935,6 +999,23 @@ Configuration:
 
     # Run in loop mode or single execution
     if args.loop:
+        # Multi-PR mode: separate PR per milestone with auto-merge
+        if args.multi_pr:
+            return run_multi_pr_loop(
+                design_doc,
+                workspace,
+                base_branch=args.base_branch,
+                refinement_config=RefinementConfig(
+                    enabled=True,  # Always enable refinement in multi-PR mode
+                    auto_merge=True,  # Always auto-merge in multi-PR mode
+                    allow_merge=args.allow_merge,
+                    min_iterations=args.min_iterations,
+                    max_iterations=args.max_refine_iterations,
+                ),
+                max_iterations_per_milestone=args.max_iterations,
+                max_refinement_rounds=args.max_refine_iterations,
+            )
+        # Standard Ralph Loop mode
         return run_ralph_loop(
             design_doc,
             workspace,
