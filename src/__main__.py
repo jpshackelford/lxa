@@ -1272,6 +1272,18 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # board sync-config (separate from board sync which syncs items)
+    board_sync_config_parser = board_subparsers.add_parser(
+        "sync-config",
+        help="Sync board configuration with GitHub Gist",
+    )
+    board_sync_config_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
@@ -1285,6 +1297,7 @@ Configuration:
             cmd_scan,
             cmd_status,
             cmd_sync,
+            cmd_sync_config,
             cmd_templates,
         )
 
@@ -1318,6 +1331,11 @@ Configuration:
                 board_name=args.board,
                 dry_run=args.dry_run,
                 verbose=args.verbose,
+            )
+
+        if args.board_command == "sync-config":
+            return cmd_sync_config(
+                dry_run=args.dry_run,
             )
 
         if args.board_command == "status":
