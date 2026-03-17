@@ -64,6 +64,12 @@ lxa board scan
 # Scan specific repos
 lxa board scan --repos owner/repo1,owner/repo2
 
+# Auto-discover repos: scan all repos owned by a user
+lxa board scan --user jpshackelford --since 21
+
+# Auto-discover repos: scan all repos in an organization
+lxa board scan --org my-org --since 14
+
 # Only include items updated in the last 30 days
 lxa board scan --since 30
 
@@ -76,6 +82,32 @@ The scan uses GitHub's Search API to find items where you are:
 - An assignee
 - Mentioned
 - Requested for review
+
+#### Auto-Discovery Mode
+
+The `--user` and `--org` flags enable auto-discovery mode, which finds all
+repositories with recent activity rather than requiring pre-configured repo
+lists. This is useful when you work across many repos and don't want to
+manually add each one.
+
+```bash
+# Find all your recent work in your personal repos
+lxa board scan --user myusername --since 21
+
+# Track work across an entire organization
+lxa board scan --org my-company --since 14
+```
+
+With `--verbose`, auto-discovery mode shows which repos were found:
+
+```
+Discovered 5 repos with activity:
+  myuser/repo1: 3 items
+  myuser/repo2: 7 items
+  myuser/repo3: 1 items
+```
+
+Note: `--repos`, `--user`, and `--org` are mutually exclusive.
 
 ### `lxa board sync`
 

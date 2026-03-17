@@ -1106,6 +1106,16 @@ Configuration:
         help="Comma-separated list of repos to scan (default: watched repos)",
     )
     board_scan_parser.add_argument(
+        "--user",
+        metavar="USERNAME",
+        help="Scan all repos owned by this user (auto-discovers repos with activity)",
+    )
+    board_scan_parser.add_argument(
+        "--org",
+        metavar="ORGNAME",
+        help="Scan all repos in this organization (auto-discovers repos with activity)",
+    )
+    board_scan_parser.add_argument(
         "--since",
         type=int,
         metavar="DAYS",
@@ -1294,6 +1304,8 @@ Configuration:
             repos = args.repos.split(",") if args.repos else None
             return cmd_scan(
                 repos=repos,
+                scan_user=args.user,
+                scan_org=args.org,
                 since_days=args.since,
                 board_name=args.board,
                 dry_run=args.dry_run,

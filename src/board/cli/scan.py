@@ -22,6 +22,7 @@ from src.board.service import (
     fetch_existing_board_items,
     get_project_with_cache,
     search_user_items,
+    search_user_items_by_owner,
 )
 from src.board.state import determine_column, explain_column
 
@@ -32,6 +33,8 @@ console = Console()
 def cmd_scan(
     *,
     repos: list[str] | None = None,
+    scan_user: str | None = None,
+    scan_org: str | None = None,
     since_days: int | None = None,
     board_name: str | None = None,
     dry_run: bool = False,
@@ -41,6 +44,8 @@ def cmd_scan(
 
     Args:
         repos: Specific repos to scan (default: watched repos from config)
+        scan_user: Scan all repos owned by this user (auto-discovers repos)
+        scan_org: Scan all repos in this organization (auto-discovers repos)
         since_days: Only include items updated in last N days
         board_name: Name of board to use (default: default board)
         dry_run: Show what would be done without making changes
@@ -57,19 +62,16 @@ def cmd_scan(
 
     print_info(f"Board: {config.name}", dim=True)
 
-    # Determine repos to scan
-    scan_repos = repos or config.repos
-    if not scan_repos:
-        print_warning("No repos to scan")
-        console.print("Add repos with: lxa board config repos add owner/repo")
-        return 0
+    # Validate mutually exclusive options
+    if sum(bool(x) for x in [repos, scan_user, scan_org]) > 1:
+        print_error("Only one of --repos, --user, or --org can be specified")
+        return 1
 
     # Calculate date range
     lookback = since_days or config.scan_lookback_days
     since_date = datetime.now(tz=UTC) - timedelta(days=lookback)
 
     print_info(f"User: {username}", dim=True)
-    print_info(f"Repos: {len(scan_repos)}", dim=True)
     print_info(f"Since: {since_date.date()}", dim=True)
 
     if dry_run:
@@ -88,16 +90,50 @@ def cmd_scan(
         existing_refs = fetch_existing_board_items(client, project.id)
         print_info(f"Found {len(existing_refs)} existing items", dim=True)
 
-        # Search for user's items
+        # Search for user's items - choose search strategy
         console.print("\nSearching for your issues and PRs...")
-        all_items, search_errors = search_user_items(client, scan_repos, username, since_date)
+
+        if scan_user or scan_org:
+            # User/org-wide discovery mode
+            owner = scan_user or scan_org
+            owner_type = "user" if scan_user else "org"
+            print_info(f"Scanning all {owner_type}:{owner} repos", dim=True)
+            all_items, search_errors = search_user_items_by_owner(
+                client, username, owner, owner_type, since_date
+            )
+        elif repos:
+            # Explicit repos specified on command line
+            print_info(f"Repos: {len(repos)}", dim=True)
+            all_items, search_errors = search_user_items(client, repos, username, since_date)
+        elif config.repos:
+            # Use watched repos from config
+            print_info(f"Repos: {len(config.repos)}", dim=True)
+            all_items, search_errors = search_user_items(
+                client, config.repos, username, since_date
+            )
+        else:
+            print_warning("No repos to scan")
+            console.print(
+                "Add repos with: lxa board config repos add owner/repo\n"
+                "Or use --user USERNAME or --org ORGNAME to auto-discover repos"
+            )
+            return 0
 
         for error in search_errors:
             result.errors.append(error)
             print_error(error)
 
-        if verbose:
+        if verbose and not (scan_user or scan_org):
+            scan_repos = repos or config.repos
             for repo in scan_repos:
+                repo_items = [i for i in all_items if i.repo == repo]
+                print_info(f"  {repo}: {len(repo_items)} items", dim=True)
+
+        # Show discovered repos when using user/org mode
+        if verbose and (scan_user or scan_org):
+            discovered_repos = sorted(set(item.repo for item in all_items))
+            print_info(f"Discovered {len(discovered_repos)} repos with activity:", dim=True)
+            for repo in discovered_repos:
                 repo_items = [i for i in all_items if i.repo == repo]
                 print_info(f"  {repo}: {len(repo_items)} items", dim=True)
 
