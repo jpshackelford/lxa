@@ -204,6 +204,60 @@ List available macros for rule conditions in YAML configs.
 lxa board macros
 ```
 
+### `lxa board sync-config`
+
+Sync board configuration with a private GitHub Gist for persistence across
+ephemeral environments.
+
+```bash
+# Sync config (bidirectional merge)
+lxa board sync-config
+
+# Preview what would happen
+lxa board sync-config --dry-run
+```
+
+This command enables you to persist your board configuration to GitHub, so you
+can restore it in new sessions (e.g., when using ephemeral environments like
+OpenHands Cloud).
+
+**How it works:**
+
+1. First sync creates a private gist named `lxa-config.toml`
+2. Subsequent syncs merge local ↔ remote using timestamps
+3. Newer configuration wins for each board
+4. Deleted boards are tracked via tombstones (propagate across syncs)
+5. Gist is auto-discovered by filename convention
+
+**Example workflow:**
+
+```bash
+# Session 1: Initial setup
+lxa board init --create "My Board"
+lxa board scan --user myuser --since 21
+lxa board sync-config
+# → Saved to gist: https://gist.github.com/myuser/abc123
+
+# Session 2: New ephemeral environment
+lxa board sync-config
+# → Found config gist, restored 1 board(s)
+# → Ready to use immediately!
+```
+
+**Merge behavior:**
+
+| Scenario | Outcome |
+|----------|---------|
+| Board only in local | Added to gist |
+| Board only in gist | Restored locally |
+| Board in both, local newer | Local version uploaded |
+| Board in both, gist newer | Gist version downloaded |
+| Board deleted locally | Deletion propagates to gist |
+| Board deleted in gist | Deletion propagates locally |
+
+**Required token:** Needs `gist` scope. Set `GIST_TOKEN` environment variable
+(or use `GITHUB_TOKEN` if it has gist scope).
+
 ## Workflow Columns
 
 Items are automatically assigned to columns based on their state:
