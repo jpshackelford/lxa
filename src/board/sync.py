@@ -58,7 +58,9 @@ class SyncResult:
         return [a for a in self.actions if a.action == "unchanged"]
 
 
-def merge_configs(local: BoardsConfig, remote: BoardsConfig) -> tuple[BoardsConfig, list[SyncAction]]:
+def merge_configs(
+    local: BoardsConfig, remote: BoardsConfig
+) -> tuple[BoardsConfig, list[SyncAction]]:
     """Merge local and remote configurations.
 
     Implements the merge algorithm:

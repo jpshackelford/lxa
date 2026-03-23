@@ -185,10 +185,7 @@ def search_user_items_by_owner(
     # We need to search for each type separately and combine results
     for item_type in ["issue", "pr"]:
         query = (
-            f"involves:{username} "
-            f"{owner_type}:{owner} "
-            f"updated:>={since_date.date()} "
-            f"is:{item_type}"
+            f"involves:{username} {owner_type}:{owner} updated:>={since_date.date()} is:{item_type}"
         )
         try:
             search_result = client.search_issues_graphql(query)

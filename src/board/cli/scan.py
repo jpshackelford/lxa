@@ -110,9 +110,7 @@ def cmd_scan(
         elif config.repos:
             # Use watched repos from config
             print_info(f"Repos: {len(config.repos)}", dim=True)
-            all_items, search_errors = search_user_items(
-                client, config.repos, username, since_date
-            )
+            all_items, search_errors = search_user_items(client, config.repos, username, since_date)
         else:
             print_warning("No repos to scan")
             console.print(

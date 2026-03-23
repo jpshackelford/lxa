@@ -48,9 +48,7 @@ class TestSearchUserItems:
         client.search_issues_graphql.return_value = mock_search_result
 
         since_date = datetime.now(tz=UTC) - timedelta(days=7)
-        items, errors = search_user_items(
-            client, ["testuser/repo1"], "testuser", since_date
-        )
+        items, errors = search_user_items(client, ["testuser/repo1"], "testuser", since_date)
 
         assert len(items) == 2
         assert len(errors) == 0
@@ -81,9 +79,7 @@ class TestSearchUserItems:
         client.search_issues_graphql.side_effect = Exception("API rate limit exceeded")
 
         since_date = datetime.now(tz=UTC) - timedelta(days=7)
-        items, errors = search_user_items(
-            client, ["testuser/repo1"], "testuser", since_date
-        )
+        items, errors = search_user_items(client, ["testuser/repo1"], "testuser", since_date)
 
         assert len(items) == 0
         assert len(errors) == 1
@@ -126,9 +122,7 @@ class TestSearchUserItemsByOwner:
         client.search_issues_graphql.return_value = mock_search_result
 
         since_date = datetime.now(tz=UTC) - timedelta(days=7)
-        items, errors = search_user_items_by_owner(
-            client, "testuser", "myorg", "org", since_date
-        )
+        items, errors = search_user_items_by_owner(client, "testuser", "myorg", "org", since_date)
 
         # Should be called twice: once for issues, once for PRs
         assert client.search_issues_graphql.call_count == 2
@@ -169,9 +163,7 @@ class TestSearchUserItemsByOwner:
         client.search_issues_graphql.return_value = mock_search_result
 
         since_date = datetime(2024, 3, 1, tzinfo=UTC)
-        search_user_items_by_owner(
-            client, "testuser", "testuser", "user", since_date
-        )
+        search_user_items_by_owner(client, "testuser", "testuser", "user", since_date)
 
         calls = client.search_issues_graphql.call_args_list
         query = calls[0][0][0]
