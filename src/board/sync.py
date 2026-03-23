@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from src.board.config import (
-    BoardConfig,
     BoardsConfig,
     load_boards_config,
     save_boards_config,

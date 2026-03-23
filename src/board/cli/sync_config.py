@@ -7,7 +7,6 @@ from src.board.cli._helpers import (
     print_command_header,
     print_error,
     print_info,
-    print_warning,
 )
 from src.board.sync import sync_config
 

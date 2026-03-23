@@ -1,7 +1,7 @@
 """Tests for board service layer functions."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -181,12 +181,12 @@ class TestSearchUserItemsByOwner:
 class TestCmdScanWithUserOrg:
     """Tests for cmd_scan with --user and --org flags."""
 
-    def test_scan_mutually_exclusive_options(self, tmp_path, monkeypatch):
-        """Test that --repos, --user, and --org are mutually exclusive."""
+    @pytest.fixture
+    def setup_board_config(self, tmp_path, monkeypatch):
+        """Set up temporary config for cmd_scan tests."""
         import src.board.cache as cache_module
         import src.board.config as config_module
 
-        # Set up temporary config
         config_dir = tmp_path / ".lxa"
         config_dir.mkdir()
         monkeypatch.setattr(config_module, "LXA_HOME", config_dir)
@@ -195,21 +195,55 @@ class TestCmdScanWithUserOrg:
         monkeypatch.setattr(cache_module, "CACHE_FILE", config_dir / "board-cache.db")
         monkeypatch.setenv("GITHUB_TOKEN", "test-token-fake")
 
-        # Create a board config
         from src.board.config import BoardConfig, save_board_config
 
         config = BoardConfig(name="test", project_id="PVT_test", project_number=1)
         save_board_config(config, "test")
 
+    def test_repos_and_user_mutually_exclusive(self, setup_board_config):  # noqa: ARG002
+        """Test that --repos and --user are mutually exclusive."""
         from src.board.cli.scan import cmd_scan
 
-        # Try to use multiple options
         result = cmd_scan(
             repos=["owner/repo"],
             scan_user="testuser",
             scan_org=None,
             dry_run=True,
         )
+        assert result == 1
 
-        # Should return error code
+    def test_repos_and_org_mutually_exclusive(self, setup_board_config):  # noqa: ARG002
+        """Test that --repos and --org are mutually exclusive."""
+        from src.board.cli.scan import cmd_scan
+
+        result = cmd_scan(
+            repos=["owner/repo"],
+            scan_user=None,
+            scan_org="myorg",
+            dry_run=True,
+        )
+        assert result == 1
+
+    def test_user_and_org_mutually_exclusive(self, setup_board_config):  # noqa: ARG002
+        """Test that --user and --org are mutually exclusive."""
+        from src.board.cli.scan import cmd_scan
+
+        result = cmd_scan(
+            repos=None,
+            scan_user="testuser",
+            scan_org="myorg",
+            dry_run=True,
+        )
+        assert result == 1
+
+    def test_all_three_mutually_exclusive(self, setup_board_config):  # noqa: ARG002
+        """Test that --repos, --user, and --org are all mutually exclusive."""
+        from src.board.cli.scan import cmd_scan
+
+        result = cmd_scan(
+            repos=["owner/repo"],
+            scan_user="testuser",
+            scan_org="myorg",
+            dry_run=True,
+        )
         assert result == 1

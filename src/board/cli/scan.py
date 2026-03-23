@@ -95,7 +95,9 @@ def cmd_scan(
 
         if scan_user or scan_org:
             # User/org-wide discovery mode
-            owner = scan_user or scan_org
+            # Note: scan_user/scan_org cannot both be None here due to outer if condition
+            owner = scan_user if scan_user else scan_org
+            assert owner is not None  # Type guard: one of scan_user/scan_org must be set
             owner_type = "user" if scan_user else "org"
             print_info(f"Scanning all {owner_type}:{owner} repos", dim=True)
             all_items, search_errors = search_user_items_by_owner(
@@ -131,7 +133,7 @@ def cmd_scan(
 
         # Show discovered repos when using user/org mode
         if verbose and (scan_user or scan_org):
-            discovered_repos = sorted(set(item.repo for item in all_items))
+            discovered_repos = sorted({item.repo for item in all_items})
             print_info(f"Discovered {len(discovered_repos)} repos with activity:", dim=True)
             for repo in discovered_repos:
                 repo_items = [i for i in all_items if i.repo == repo]
