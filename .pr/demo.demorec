@@ -53,11 +53,29 @@ Sleep 4s
 # @narrate:after "Config persists across sessions via GitHub Gist."
 Sleep 2s
 
-# Browse to the newly created board to see the results
+# Browse to the board to see the results in kanban view
 @mode browser
-# @narrate:before "Let's view our new board on GitHub."
-Navigate "https://github.com/users/jpshackelford/projects/12/views/1"
-Sleep 5s
+# @narrate:before "Let's view the board on GitHub to see our auto-discovered items."
+Navigate "https://github.com/users/jpshackelford/projects/12"
+Sleep 4s
 
-# @narrate:after "The auto-discovered items are organized by workflow status."
+# @narrate:after "Here's our board in kanban view. On the left we see Icebox and Backlog columns with open issues."
 Sleep 3s
+
+# Scroll right to show more columns
+Scroll right 400
+Sleep 2s
+# @narrate:after "Scrolling right we see Agent Coding and Human Review columns for items needing attention."
+Sleep 3s
+
+# Scroll more to show the rest
+Scroll right 400
+Sleep 2s
+# @narrate:after "And here are Final Review, Approved, Done, and Closed columns tracking the full workflow."
+Sleep 3s
+
+# Scroll back to show the full picture
+Scroll left 300
+Sleep 2s
+# @narrate:after "Each item was auto-discovered and placed based on its GitHub state."
+Sleep 2s
