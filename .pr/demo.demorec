@@ -1,5 +1,5 @@
 # PR #59 Demo: Auto-Discovery Scan Feature
-# Demonstrates the --user flag for automatic repo discovery
+# Demonstrates the --user and --org flags for automatic repo discovery
 
 Output demo_video.mp4
 Set Width 1280
@@ -12,25 +12,22 @@ Set Height 720
 Set Theme "Dracula"
 
 # Show the new --user flag in help
-# @narrate:before "Let's see the new auto-discovery scan feature in action."
+# @narrate:before "Let's explore the new auto-discovery scan feature added in PR 59."
 Type "lxa board scan --help"
 Enter
-Sleep 3s
+Sleep 4s
 
-# Run the auto-discovery scan with verbose output
-# @narrate:before "Now let's scan all repos owned by a user with the new --user flag."
-Type "lxa board scan --user jpshackelford --since 30 --verbose --dry-run"
-Enter
-Sleep 8s
-
-# @narrate:after "The feature automatically discovers repos with activity and shows item counts per repo."
+# Highlight the key new flags
+# @narrate:after "Notice the new --user and --org flags that auto-discover repos with activity."
 Sleep 3s
 
 # Show the sync-config feature
-# @narrate:before "PR 59 also adds config sync with GitHub Gist for ephemeral environments."
+Clear
+Sleep 0.5s
+# @narrate:before "PR 59 also adds a sync-config command for ephemeral environments."
 Type "lxa board sync-config --help"
 Enter
-Sleep 3s
+Sleep 4s
 
-# @narrate:after "This lets you persist your board configuration across sessions."
+# @narrate:after "This syncs your board configuration with a private GitHub Gist."
 Sleep 2s

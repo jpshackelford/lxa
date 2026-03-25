@@ -1,26 +1,20 @@
 1
-00:00:00,001 --> 00:00:03,745
-Let's see the new auto-discovery scan
-feature in action.
+00:00:00,003 --> 00:00:04,995
+Let's explore the new auto-discovery scan
+feature added in PR 59.
 
 2
-00:00:08,185 --> 00:00:12,553
-Now let's scan all repos owned by a user
-with the new --user flag.
+00:00:13,430 --> 00:00:18,446
+Notice the new --user and --org flags that
+auto-discover repos with activity.
 
 3
-00:00:27,380 --> 00:00:33,188
-The feature automatically discovers repos
-with activity and shows item counts per
-repo.
+00:00:19,060 --> 00:00:24,244
+PR 59 also adds a sync-config command for
+ephemeral environments.
 
 4
-00:00:33,194 --> 00:00:38,882
-PR 59 also adds config sync with GitHub
-Gist for ephemeral environments.
-
-5
-00:00:45,724 --> 00:00:49,924
-This lets you persist your board
-configuration across sessions.
+00:00:32,064 --> 00:00:36,288
+This syncs your board configuration with a
+private GitHub Gist.
 
