@@ -1,20 +1,48 @@
 1
-00:00:00,003 --> 00:00:04,995
-Let's explore the new auto-discovery scan
-feature added in PR 59.
+00:00:00,004 --> 00:00:06,748
+PR 59 adds auto-discovery flags to lxa
+board scan. Let's see them in action.
 
 2
-00:00:13,430 --> 00:00:18,446
-Notice the new --user and --org flags that
-auto-discover repos with activity.
+00:00:14,413 --> 00:00:19,669
+The --user and --org flags auto-discover
+repos without manual configuration.
 
 3
-00:00:19,060 --> 00:00:24,244
-PR 59 also adds a sync-config command for
-ephemeral environments.
+00:00:20,282 --> 00:00:22,970
+Let's create a new project board.
 
 4
-00:00:32,064 --> 00:00:36,288
-This syncs your board configuration with a
-private GitHub Gist.
+00:00:33,505 --> 00:00:37,009
+The board is created with workflow columns
+ready.
+
+5
+00:00:37,617 --> 00:00:42,849
+Now the magic: scan with --user to
+auto-discover all repos with activity.
+
+6
+00:00:58,550 --> 00:01:04,190
+Without specifying any repositories, it
+found and added items automatically.
+
+7
+00:01:04,802 --> 00:01:10,178
+PR 59 also adds Gist-based config sync for
+ephemeral environments.
+
+8
+00:01:18,134 --> 00:01:22,022
+Config persists across sessions via GitHub
+Gist.
+
+9
+00:01:22,402 --> 00:01:25,066
+Let's view our new board on GitHub.
+
+10
+00:01:34,861 --> 00:01:39,301
+The auto-discovered items are organized by
+workflow status.
 

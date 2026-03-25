@@ -1,5 +1,5 @@
 # PR #59 Demo: Auto-Discovery Scan Feature
-# Demonstrates the --user and --org flags for automatic repo discovery
+# Demonstrates the --user flag discovering repos and populating a board
 
 Output demo_video.mp4
 Set Width 1280
@@ -11,23 +11,53 @@ Set Height 720
 @terminal:rows 30
 Set Theme "Dracula"
 
-# Show the new --user flag in help
-# @narrate:before "Let's explore the new auto-discovery scan feature added in PR 59."
-Type "lxa board scan --help"
+# First show the help to highlight the new flags
+# @narrate:before "PR 59 adds auto-discovery flags to lxa board scan. Let's see them in action."
+Type "lxa board scan --help | grep -A2 'user\|org'"
 Enter
-Sleep 4s
+Sleep 3s
 
-# Highlight the key new flags
-# @narrate:after "Notice the new --user and --org flags that auto-discover repos with activity."
+# @narrate:after "The --user and --org flags auto-discover repos without manual configuration."
+Sleep 2s
+
+# Create a fresh board for the demo
+Clear
+Sleep 0.5s
+# @narrate:before "Let's create a new project board."
+Type "lxa board init --create 'Video Demo Board'"
+Enter
+Sleep 6s
+
+# @narrate:after "The board is created with workflow columns ready."
+Sleep 2s
+
+# Now run the actual scan - without verbose since output is long
+Clear
+Sleep 0.5s
+# @narrate:before "Now the magic: scan with --user to auto-discover all repos with activity."
+Type "lxa board scan --user jpshackelford --since 7"
+Enter
+Sleep 10s
+
+# @narrate:after "Without specifying any repositories, it found and added items automatically."
 Sleep 3s
 
 # Show the sync-config feature
 Clear
 Sleep 0.5s
-# @narrate:before "PR 59 also adds a sync-config command for ephemeral environments."
-Type "lxa board sync-config --help"
+# @narrate:before "PR 59 also adds Gist-based config sync for ephemeral environments."
+Type "lxa board sync-config --dry-run"
 Enter
 Sleep 4s
 
-# @narrate:after "This syncs your board configuration with a private GitHub Gist."
+# @narrate:after "Config persists across sessions via GitHub Gist."
 Sleep 2s
+
+# Browse to the newly created board to see the results
+@mode browser
+# @narrate:before "Let's view our new board on GitHub."
+Navigate "https://github.com/users/jpshackelford/projects/12/views/1"
+Sleep 5s
+
+# @narrate:after "The auto-discovered items are organized by workflow status."
+Sleep 3s
