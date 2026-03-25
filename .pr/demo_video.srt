@@ -1,39 +1,39 @@
 1
-00:00:00,006 --> 00:00:06,750
+00:00:00,004 --> 00:00:06,748
 PR 59 adds auto-discovery flags to lxa
 board scan. Let's see them in action.
 
 2
-00:00:14,428 --> 00:00:19,684
+00:00:14,440 --> 00:00:19,696
 The --user and --org flags auto-discover
 repos without manual configuration.
 
 3
-00:00:20,293 --> 00:00:22,981
+00:00:20,308 --> 00:00:22,996
 Let's create a new project board.
 
 4
-00:00:33,531 --> 00:00:37,035
+00:00:33,543 --> 00:00:37,047
 The board is created with workflow columns
 ready.
 
 5
-00:00:37,643 --> 00:00:42,875
+00:00:37,660 --> 00:00:42,892
 Now the magic: scan with --user to
 auto-discover all repos with activity.
 
 6
-00:00:58,590 --> 00:01:04,230
+00:00:58,601 --> 00:01:04,241
 Without specifying any repositories, it
 found and added items automatically.
 
 7
-00:01:04,845 --> 00:01:10,221
+00:01:04,850 --> 00:01:10,226
 PR 59 also adds Gist-based config sync for
 ephemeral environments.
 
 8
-00:01:18,184 --> 00:01:22,072
+00:01:18,183 --> 00:01:22,071
 Config persists across sessions via GitHub
 Gist.
 
@@ -43,25 +43,25 @@ Let's view the board on GitHub to see our
 auto-discovered items.
 
 10
-00:01:36,305 --> 00:01:43,385
+00:01:36,430 --> 00:01:43,510
 Here's our board in kanban view. On the
 left we see Icebox and Backlog columns
 with open issues.
 
 11
-00:01:48,699 --> 00:01:54,435
+00:01:48,829 --> 00:01:54,565
 Scrolling right we see Agent Coding and
 Human Review columns for items needing
 attention.
 
 12
-00:01:59,746 --> 00:02:05,866
+00:01:59,877 --> 00:02:05,997
 And here are Final Review, Approved, Done,
 and Closed columns tracking the full
 workflow.
 
 13
-00:02:10,179 --> 00:02:14,691
+00:02:10,311 --> 00:02:14,823
 Each item was auto-discovered and placed
 based on its GitHub state.
 
