@@ -14,7 +14,6 @@ from src.board.cli._helpers import (
     print_info,
     print_success,
 )
-from src.board.config import BoardConfig
 from src.board.github_api import GitHubClient
 from src.board.service import (
     add_item_to_board,
