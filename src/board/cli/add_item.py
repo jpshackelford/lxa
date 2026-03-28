@@ -107,8 +107,7 @@ def parse_item_ref(ref: str, board_repos: list[str]) -> ItemRef:
         return _resolve_number_ref(number, board_repos)
 
     raise ItemRefParseError(
-        f"Invalid item reference: '{ref}'. "
-        "Use formats: #123, repo#123, owner/repo#123, or full URL"
+        f"Invalid item reference: '{ref}'. Use formats: #123, repo#123, owner/repo#123, or full URL"
     )
 
 
@@ -142,15 +141,13 @@ def _resolve_repo_ref(repo_name: str, number: int, board_repos: list[str]) -> It
     if len(matches) == 0:
         repo_list = ", ".join(board_repos)
         raise ItemRefParseError(
-            f"'{repo_name}' does not match any board repo. "
-            f"Board repos: {repo_list}"
+            f"'{repo_name}' does not match any board repo. Board repos: {repo_list}"
         )
 
     if len(matches) > 1:
         match_list = ", ".join(matches)
         raise ItemRefParseError(
-            f"'{repo_name}' matches multiple repos: {match_list}. "
-            "Use full format: owner/repo#123"
+            f"'{repo_name}' matches multiple repos: {match_list}. Use full format: owner/repo#123"
         )
 
     owner, repo = matches[0].split("/")
