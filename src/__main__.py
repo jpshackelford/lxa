@@ -821,11 +821,40 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # board add-item
+    board_add_item_parser = board_subparsers.add_parser(
+        "add-item",
+        help="Manually add issues/PRs to the board",
+    )
+    board_add_item_parser.add_argument(
+        "item_refs",
+        nargs="+",
+        metavar="ITEM",
+        help="Item reference(s): URL, owner/repo#123, repo#123, or #123",
+    )
+    board_add_item_parser.add_argument(
+        "--column",
+        metavar="NAME",
+        help="Target column (default: determined by rules)",
+    )
+    board_add_item_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_add_item_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
     if args.command == "board":
         from src.board.cli import (
+            cmd_add_item,
             cmd_apply,
             cmd_config,
             cmd_init,
@@ -898,6 +927,14 @@ Configuration:
 
         if args.board_command == "macros":
             return cmd_macros()
+
+        if args.board_command == "add-item":
+            return cmd_add_item(
+                item_refs=args.item_refs,
+                column=args.column,
+                board_name=args.board,
+                dry_run=args.dry_run,
+            )
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
