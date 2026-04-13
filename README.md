@@ -148,7 +148,11 @@ lxa pr list --reviewer me
 lxa pr list owner/repo#123 owner/repo#456
 ```
 
-History codes show the PR lifecycle: `o` (opened), `C` (changes requested), `F` (fixes pushed), `c` (comment), `A` (approved), `m` (merged), `k` (killed/closed).
+The table shows:
+- **History**: Compact codes showing PR lifecycle - `o` (opened), `C` (changes requested), `F` (fixes pushed), `c` (comment), `A` (approved), `m` (merged), `k` (killed/closed)
+- **CI**: Build status (green/red/pending/conflict)
+- **State**: `draft`, `ready`, `merged`, or `closed`
+- **💬**: Count of unresolved review threads
 
 ### Repository Management
 
