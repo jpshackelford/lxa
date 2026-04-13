@@ -1,55 +1,107 @@
-"""Configuration for PR module."""
+"""Configuration for PR module.
+
+Uses the shared board config infrastructure so repos are shared
+between `pr` and `board` commands. A "board" can exist with just
+repos (for pr list) or with a full GitHub Project (for board sync).
+"""
 
 import logging
-from pathlib import Path
+
+from src.board.config import (
+    BoardConfig,
+    BoardsConfig,
+    add_watched_repo,
+    load_board_config,
+    load_boards_config,
+    remove_watched_repo,
+    save_board_config,
+    save_boards_config,
+)
 
 logger = logging.getLogger(__name__)
 
-# Default config location
-CONFIG_DIR = Path.home() / ".lxa"
-PR_CONFIG_FILE = CONFIG_DIR / "pr_config.yaml"
 
+def get_repos(board_name: str | None = None) -> list[str]:
+    """Get repos from a board config.
 
-def load_monitored_repos() -> list[str]:
-    """Load list of monitored repos from config.
+    Args:
+        board_name: Board name, or None for default
 
     Returns:
         List of repo strings in "owner/repo" format
     """
-    if not PR_CONFIG_FILE.exists():
-        logger.debug("No PR config file found at %s", PR_CONFIG_FILE)
-        return []
-
-    try:
-        import yaml
-
-        with open(PR_CONFIG_FILE) as f:
-            config = yaml.safe_load(f) or {}
-        return config.get("monitored_repos", [])
-    except Exception as e:
-        logger.warning("Failed to load PR config: %s", e)
-        return []
+    config = load_board_config(board_name)
+    return config.repos
 
 
-def save_monitored_repos(repos: list[str]) -> None:
-    """Save list of monitored repos to config.
+def add_repo(repo: str, board_name: str | None = None) -> bool:
+    """Add a repo to a board's watch list.
+
+    Creates the board if it doesn't exist.
 
     Args:
-        repos: List of repo strings in "owner/repo" format
+        repo: Repository in "owner/repo" format
+        board_name: Board name, or None for default
+
+    Returns:
+        True if added, False if already present
     """
-    import yaml
+    boards = load_boards_config()
+    
+    # Get or create board
+    target_name = board_name or boards.default or "default"
+    board = boards.boards.get(target_name)
+    
+    if not board:
+        # Create new board with just repos (no project_id)
+        board = BoardConfig(name=target_name, repos=[])
+        boards.boards[target_name] = board
+        if not boards.default:
+            boards.default = target_name
+    
+    # Check if already present
+    if repo in board.repos:
+        return False
+    
+    board.repos.append(repo)
+    save_boards_config(boards)
+    return True
 
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    config = {}
-    if PR_CONFIG_FILE.exists():
-        try:
-            with open(PR_CONFIG_FILE) as f:
-                config = yaml.safe_load(f) or {}
-        except Exception:
-            pass
+def remove_repo(repo: str, board_name: str | None = None) -> bool:
+    """Remove a repo from a board's watch list.
 
-    config["monitored_repos"] = repos
+    Args:
+        repo: Repository in "owner/repo" format
+        board_name: Board name, or None for default
 
-    with open(PR_CONFIG_FILE, "w") as f:
-        yaml.safe_dump(config, f, default_flow_style=False)
+    Returns:
+        True if removed, False if not present
+    """
+    return remove_watched_repo(repo, board_name)
+
+
+def list_repos(board_name: str | None = None) -> list[str]:
+    """List repos in a board.
+
+    Args:
+        board_name: Board name, or None for default
+
+    Returns:
+        List of repo strings
+    """
+    return get_repos(board_name)
+
+
+def list_boards_with_repos() -> list[tuple[str, bool, list[str]]]:
+    """List all boards with their repos.
+
+    Returns:
+        List of (board_name, is_default, repos) tuples
+    """
+    boards = load_boards_config()
+    result = []
+    for name, board in boards.boards.items():
+        is_default = name == boards.default
+        result.append((name, is_default, board.repos))
+    return result

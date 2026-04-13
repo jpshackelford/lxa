@@ -824,7 +824,7 @@ Configuration:
     # pr command
     pr_parser = subparsers.add_parser(
         "pr",
-        help="PR history visualization commands",
+        help="PR history visualization and repo management",
     )
     pr_subparsers = pr_parser.add_subparsers(dest="pr_command", required=True)
 
@@ -866,9 +866,11 @@ Configuration:
         help="Filter by state (can be specified multiple times)",
     )
     pr_list_parser.add_argument(
-        "--all-repos",
-        action="store_true",
-        help="Use all monitored repos from config",
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Use repos from specified board (implies using board repos)",
     )
     pr_list_parser.add_argument(
         "--limit",
@@ -876,6 +878,64 @@ Configuration:
         type=int,
         default=100,
         help="Maximum number of PRs to show (default: 100)",
+    )
+
+    # pr add-repo
+    pr_add_repo_parser = pr_subparsers.add_parser(
+        "add-repo",
+        help="Add repos to watch list",
+    )
+    pr_add_repo_parser.add_argument(
+        "repos",
+        nargs="+",
+        metavar="OWNER/REPO",
+        help="Repos to add",
+    )
+    pr_add_repo_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to add repos to (default: default board)",
+    )
+
+    # pr remove-repo
+    pr_remove_repo_parser = pr_subparsers.add_parser(
+        "remove-repo",
+        help="Remove repos from watch list",
+    )
+    pr_remove_repo_parser.add_argument(
+        "repos",
+        nargs="+",
+        metavar="OWNER/REPO",
+        help="Repos to remove",
+    )
+    pr_remove_repo_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to remove repos from (default: default board)",
+    )
+
+    # pr repos
+    pr_repos_parser = pr_subparsers.add_parser(
+        "repos",
+        help="List repos in watch list",
+    )
+    pr_repos_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to list repos from (default: default board)",
+    )
+    pr_repos_parser.add_argument(
+        "--all",
+        "-a",
+        dest="all_boards",
+        action="store_true",
+        help="Show repos from all boards",
     )
 
     args = parser.parse_args(argv)
@@ -958,17 +1018,38 @@ Configuration:
 
     # Handle pr command
     if args.command == "pr":
-        from src.pr.cli import cmd_list as pr_cmd_list
+        from src.pr.cli import cmd_add_repo, cmd_list as pr_cmd_list, cmd_remove_repo, cmd_repos
 
         if args.pr_command == "list":
+            # If --board is specified, use board repos
+            use_board = args.board_name is not None
             return pr_cmd_list(
                 author=args.author,
                 reviewer=args.reviewer,
                 repos=args.repos,
                 pr_refs=args.pr_refs if args.pr_refs else None,
                 states=args.states,
-                all_repos=args.all_repos,
+                board_name=args.board_name,
+                use_board=use_board,
                 limit=args.limit,
+            )
+
+        if args.pr_command == "add-repo":
+            return cmd_add_repo(
+                args.repos,
+                board_name=args.board_name,
+            )
+
+        if args.pr_command == "remove-repo":
+            return cmd_remove_repo(
+                args.repos,
+                board_name=args.board_name,
+            )
+
+        if args.pr_command == "repos":
+            return cmd_repos(
+                board_name=args.board_name,
+                all_boards=args.all_boards,
             )
 
     # Handle reconcile command (simple path handling)
