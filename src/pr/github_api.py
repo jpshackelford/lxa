@@ -48,6 +48,7 @@ fragment PRFields on PullRequest {
                 author { login }
                 state
                 createdAt
+                comments { totalCount }
             }
             ... on IssueComment {
                 author { login }

@@ -144,13 +144,15 @@ def _parse_timeline_item(
         actor = item.get("author", {}).get("login", "ghost")
         timestamp = _parse_datetime(item["createdAt"])
         state = item.get("state")
+        has_inline_comments = item.get("comments", {}).get("totalCount", 0) > 0
 
         if state == "APPROVED":
             action = ActionType.APPROVED
         elif state == "CHANGES_REQUESTED":
             action = ActionType.REVIEW
         elif state == "COMMENTED":
-            action = ActionType.COMMENT
+            # Treat as REVIEW if it has inline code comments, otherwise COMMENT
+            action = ActionType.REVIEW if has_inline_comments else ActionType.COMMENT
         else:
             return None
 
