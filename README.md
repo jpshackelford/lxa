@@ -144,8 +144,13 @@ lxa pr list -t
 lxa pr list --author octocat
 lxa pr list --reviewer me
 
-# View specific PRs
+# View specific PRs (by ref or URL)
 lxa pr list owner/repo#123 owner/repo#456
+lxa pr list https://github.com/owner/repo/pull/123
+
+# Pipe PR URLs from stdin (one per line)
+cat pr-urls.txt | lxa pr list
+echo "https://github.com/owner/repo/pull/123" | lxa pr list --title
 ```
 
 The table shows:

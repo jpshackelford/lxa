@@ -864,12 +864,16 @@ Configuration:
     pr_list_parser = pr_subparsers.add_parser(
         "list",
         help="List PRs with history visualization",
+        description="List PRs with history visualization. "
+        "Accepts PR references as arguments or piped via stdin (one per line). "
+        "Both owner/repo#number and GitHub PR URLs are supported.",
     )
     pr_list_parser.add_argument(
         "pr_refs",
         nargs="*",
         metavar="OWNER/REPO#NUM",
-        help="Specific PR references to show",
+        help="Specific PR references (owner/repo#number or GitHub PR URL). "
+        "Can also be piped via stdin, one per line.",
     )
     pr_list_parser.add_argument(
         "--author",
@@ -1102,11 +1106,18 @@ Configuration:
                 if args.include_closed:
                     states.append("closed")
 
+            # Collect PR refs from command line args
+            pr_refs = list(args.pr_refs) if args.pr_refs else []
+
+            # Read PR URLs from stdin if piped
+            if not sys.stdin.isatty():
+                pr_refs.extend(_read_pr_refs_from_stdin())
+
             return pr_cmd_list(
                 author=args.author,
                 reviewer=args.reviewer,
                 repos=args.repos,
-                pr_refs=args.pr_refs if args.pr_refs else None,
+                pr_refs=pr_refs if pr_refs else None,
                 states=states,
                 board_name=args.board_name,
                 limit=args.limit,
@@ -1203,6 +1214,36 @@ def find_git_root(start_path: Path) -> Path:
             return current
         current = current.parent
     return start_path
+
+
+def _read_pr_refs_from_stdin() -> list[str]:
+    """Read PR references from stdin, converting URLs to owner/repo#number format.
+
+    Accepts both formats:
+    - GitHub PR URLs: https://github.com/owner/repo/pull/123
+    - Direct refs: owner/repo#123
+
+    Returns:
+        List of PR references in owner/repo#number format
+    """
+    refs = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check if it's a GitHub PR URL
+        if line.startswith("https://github.com/"):
+            try:
+                repo_slug, pr_number = parse_pr_url(line)
+                refs.append(f"{repo_slug}#{pr_number}")
+            except ValueError:
+                console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
+        else:
+            # Assume it's already in owner/repo#number format
+            refs.append(line)
+
+    return refs
 
 
 if __name__ == "__main__":
