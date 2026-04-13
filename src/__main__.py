@@ -539,6 +539,18 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    implement_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    implement_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'implement')",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -608,6 +620,122 @@ Configuration:
         choices=["auto", "self-review", "respond"],
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
+    )
+    refine_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    refine_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'refine')",
+    )
+
+    # Job subcommand (with nested subcommands)
+    job_parser = subparsers.add_parser(
+        "job",
+        help="Manage background jobs",
+    )
+    job_subparsers = job_parser.add_subparsers(dest="job_command", required=True)
+
+    # job list
+    job_list_parser = job_subparsers.add_parser(
+        "list",
+        help="List all jobs",
+    )
+    job_list_parser.add_argument(
+        "--running",
+        "-r",
+        action="store_true",
+        help="Only show running jobs",
+    )
+    job_list_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=None,
+        help="Maximum number of jobs to show",
+    )
+    job_list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # job status
+    job_status_parser = job_subparsers.add_parser(
+        "status",
+        help="Show detailed job status",
+    )
+    job_status_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # job logs
+    job_logs_parser = job_subparsers.add_parser(
+        "logs",
+        help="View job output logs",
+    )
+    job_logs_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_logs_parser.add_argument(
+        "--lines",
+        "-n",
+        type=int,
+        default=None,
+        help="Number of lines to show (tail)",
+    )
+    job_logs_parser.add_argument(
+        "--follow",
+        "-f",
+        action="store_true",
+        help="Follow log output in real-time",
+    )
+
+    # job stop
+    job_stop_parser = job_subparsers.add_parser(
+        "stop",
+        help="Stop a running job",
+    )
+    job_stop_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_stop_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=5,
+        help="Seconds to wait before force kill (default: 5)",
+    )
+
+    # job clean
+    job_clean_parser = job_subparsers.add_parser(
+        "clean",
+        help="Clean up old job files",
+    )
+    job_clean_parser.add_argument(
+        "--older-than",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        help="Only delete jobs older than this many days",
+    )
+    job_clean_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be deleted without deleting",
     )
 
     # Board subcommand (with nested subcommands)
@@ -899,6 +1027,48 @@ Configuration:
         if args.board_command == "macros":
             return cmd_macros()
 
+    # Handle job command
+    if args.command == "job":
+        from src.jobs.cli import (
+            cmd_clean,
+            cmd_list,
+            cmd_logs,
+            cmd_status,
+            cmd_stop,
+        )
+
+        if args.job_command == "list":
+            return cmd_list(
+                running_only=args.running,
+                limit=args.limit,
+                json_output=args.json,
+            )
+
+        if args.job_command == "status":
+            return cmd_status(
+                job_id=args.job_id,
+                json_output=args.json,
+            )
+
+        if args.job_command == "logs":
+            return cmd_logs(
+                job_id=args.job_id,
+                lines=args.lines,
+                follow=args.follow,
+            )
+
+        if args.job_command == "stop":
+            return cmd_stop(
+                job_id=args.job_id,
+                timeout=args.timeout,
+            )
+
+        if args.job_command == "clean":
+            return cmd_clean(
+                older_than_days=args.older_than,
+                dry_run=args.dry_run,
+            )
+
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
         design_doc = args.design_doc.resolve()
@@ -908,6 +1078,34 @@ Configuration:
     # Handle refine command
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+
+        # Handle background mode
+        if args.background:
+            from src.jobs import spawn_lxa_command
+
+            # Build the command without --background flag
+            cmd = ["refine", args.pr_url]
+            if args.workspace:
+                cmd.extend(["--workspace", str(args.workspace)])
+            if args.auto_merge:
+                cmd.append("--auto-merge")
+            if args.allow_merge != "acceptable":
+                cmd.extend(["--allow-merge", args.allow_merge])
+            if args.min_iterations != 1:
+                cmd.extend(["--min-iterations", str(args.min_iterations)])
+            if args.max_iterations != 5:
+                cmd.extend(["--max-iterations", str(args.max_iterations)])
+            if args.phase != "auto":
+                cmd.extend(["--phase", args.phase])
+
+            job = spawn_lxa_command(
+                lxa_command=cmd,
+                cwd=workspace,
+                job_name=args.job_name or "refine",
+            )
+            console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+            return 0
+
         return run_refine(
             pr_url=args.pr_url,
             workspace=workspace,
@@ -932,6 +1130,43 @@ Configuration:
         config = load_config(workspace)
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
+
+    # Handle background mode
+    if args.background:
+        from src.jobs import spawn_lxa_command
+
+        # Build the command without --background flag
+        cmd = ["implement"]
+        if args.design_path:
+            cmd.extend(["--design-path", str(args.design_path)])
+        elif args.design_doc:
+            cmd.append(str(args.design_doc))
+        if args.workspace:
+            cmd.extend(["--workspace", str(args.workspace)])
+        if args.keep_design:
+            cmd.append("--keep-design")
+        if args.loop:
+            cmd.append("--loop")
+        if args.max_iterations != 20:
+            cmd.extend(["--max-iterations", str(args.max_iterations)])
+        if args.refine:
+            cmd.append("--refine")
+        if args.auto_merge:
+            cmd.append("--auto-merge")
+        if args.allow_merge != "acceptable":
+            cmd.extend(["--allow-merge", args.allow_merge])
+        if args.min_iterations != 1:
+            cmd.extend(["--min-iterations", str(args.min_iterations)])
+        if args.max_refine_iterations != 5:
+            cmd.extend(["--max-refine-iterations", str(args.max_refine_iterations)])
+
+        job = spawn_lxa_command(
+            lxa_command=cmd,
+            cwd=workspace,
+            job_name=args.job_name or "implement",
+        )
+        console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+        return 0
 
     # Run in loop mode or single execution
     if args.loop:
