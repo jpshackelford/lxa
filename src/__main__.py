@@ -821,6 +821,63 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # pr command
+    pr_parser = subparsers.add_parser(
+        "pr",
+        help="PR history visualization commands",
+    )
+    pr_subparsers = pr_parser.add_subparsers(dest="pr_command", required=True)
+
+    # pr list
+    pr_list_parser = pr_subparsers.add_parser(
+        "list",
+        help="List PRs with history visualization",
+    )
+    pr_list_parser.add_argument(
+        "pr_refs",
+        nargs="*",
+        metavar="OWNER/REPO#NUM",
+        help="Specific PR references to show",
+    )
+    pr_list_parser.add_argument(
+        "--author",
+        "-a",
+        metavar="USER",
+        help="Filter by PR author (use 'me' for current user)",
+    )
+    pr_list_parser.add_argument(
+        "--reviewer",
+        "-r",
+        metavar="USER",
+        help="Filter by requested reviewer (use 'me' for current user)",
+    )
+    pr_list_parser.add_argument(
+        "--repo",
+        dest="repos",
+        action="append",
+        metavar="OWNER/REPO",
+        help="Filter by repo (can be specified multiple times)",
+    )
+    pr_list_parser.add_argument(
+        "--state",
+        dest="states",
+        action="append",
+        choices=["open", "merged", "closed"],
+        help="Filter by state (can be specified multiple times)",
+    )
+    pr_list_parser.add_argument(
+        "--all-repos",
+        action="store_true",
+        help="Use all monitored repos from config",
+    )
+    pr_list_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of PRs to show (default: 100)",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
@@ -898,6 +955,21 @@ Configuration:
 
         if args.board_command == "macros":
             return cmd_macros()
+
+    # Handle pr command
+    if args.command == "pr":
+        from src.pr.cli import cmd_list as pr_cmd_list
+
+        if args.pr_command == "list":
+            return pr_cmd_list(
+                author=args.author,
+                reviewer=args.reviewer,
+                repos=args.repos,
+                pr_refs=args.pr_refs if args.pr_refs else None,
+                states=args.states,
+                all_repos=args.all_repos,
+                limit=args.limit,
+            )
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
