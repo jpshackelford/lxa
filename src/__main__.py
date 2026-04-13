@@ -825,6 +825,22 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # board rename
+    board_rename_parser = board_subparsers.add_parser(
+        "rename",
+        help="Rename a board",
+    )
+    board_rename_parser.add_argument(
+        "old_name",
+        metavar="OLD_NAME",
+        help="Current board name",
+    )
+    board_rename_parser.add_argument(
+        "new_name",
+        metavar="NEW_NAME",
+        help="New board name",
+    )
+
     # pr command
     pr_parser = subparsers.add_parser(
         "pr",
@@ -965,6 +981,7 @@ Configuration:
             cmd_init,
             cmd_list,
             cmd_macros,
+            cmd_rename,
             cmd_scan,
             cmd_status,
             cmd_sync,
@@ -1032,6 +1049,9 @@ Configuration:
 
         if args.board_command == "macros":
             return cmd_macros()
+
+        if args.board_command == "rename":
+            return cmd_rename(args.old_name, args.new_name)
 
     # Handle pr command
     if args.command == "pr":

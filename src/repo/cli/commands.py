@@ -2,7 +2,7 @@
 
 from rich.console import Console
 
-from src.repo.config import add_repo, list_boards_with_repos, list_repos, remove_repo
+from src.repo.config import UNNAMED_BOARD_PREFIX, add_repo, list_boards_with_repos, list_repos, remove_repo
 
 console = Console()
 
@@ -36,13 +36,21 @@ def cmd_add(
     added = []
     skipped = []
     target_board = None
+    created_board = False
 
     for repo in repos:
-        was_added, target_board = add_repo(repo, board_name, set_default)
-        if was_added:
+        result = add_repo(repo, board_name, set_default)
+        target_board = result.board_name
+        created_board = created_board or result.created_board
+        if result.added:
             added.append(repo)
         else:
             skipped.append(repo)
+
+    # Show board creation message if we created an unnamed board
+    if created_board and target_board and target_board.startswith(UNNAMED_BOARD_PREFIX):
+        console.print(f"[blue]Created board:[/] {target_board}")
+        console.print(f"[dim]Rename with: lxa board rename \"{target_board}\" \"New Name\"[/]")
 
     if added:
         for repo in added:

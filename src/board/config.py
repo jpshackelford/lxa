@@ -469,3 +469,34 @@ def list_boards() -> list[tuple[str, bool]]:
     """
     boards = load_boards_config()
     return [(name, name == boards.default) for name in boards.list_boards()]
+
+
+def rename_board(old_name: str, new_name: str) -> bool:
+    """Rename a board.
+
+    Args:
+        old_name: Current board name
+        new_name: New board name
+
+    Returns:
+        True if renamed, False if old_name not found or new_name exists
+    """
+    boards = load_boards_config()
+
+    if old_name not in boards.boards:
+        return False
+
+    if new_name in boards.boards:
+        return False
+
+    # Get the board and update its name
+    board = boards.boards.pop(old_name)
+    board.name = new_name
+    boards.boards[new_name] = board
+
+    # Update default if needed
+    if boards.default == old_name:
+        boards.default = new_name
+
+    save_boards_config(boards)
+    return True
