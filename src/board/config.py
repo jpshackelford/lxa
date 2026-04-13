@@ -500,3 +500,33 @@ def rename_board(old_name: str, new_name: str) -> bool:
 
     save_boards_config(boards)
     return True
+
+
+def delete_board(name: str) -> tuple[bool, str | None]:
+    """Delete a board.
+
+    Args:
+        name: Board name to delete
+
+    Returns:
+        Tuple of (success, error_message)
+    """
+    boards = load_boards_config()
+
+    if name not in boards.boards:
+        return False, f"Board '{name}' not found"
+
+    # Don't allow deleting the last board? Or allow it?
+    # For now, allow deleting any board
+
+    del boards.boards[name]
+
+    # If we deleted the default, pick a new default
+    if boards.default == name:
+        if boards.boards:
+            boards.default = next(iter(boards.boards.keys()))
+        else:
+            boards.default = None
+
+    save_boards_config(boards)
+    return True, None

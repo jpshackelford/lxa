@@ -841,6 +841,18 @@ Configuration:
         help="New board name",
     )
 
+    # board rm/delete
+    board_delete_parser = board_subparsers.add_parser(
+        "rm",
+        aliases=["delete"],
+        help="Delete a board",
+    )
+    board_delete_parser.add_argument(
+        "name",
+        metavar="NAME",
+        help="Board name to delete",
+    )
+
     # pr command
     pr_parser = subparsers.add_parser(
         "pr",
@@ -978,6 +990,7 @@ Configuration:
         from src.board.cli import (
             cmd_apply,
             cmd_config,
+            cmd_delete,
             cmd_init,
             cmd_list,
             cmd_macros,
@@ -1052,6 +1065,9 @@ Configuration:
 
         if args.board_command == "rename":
             return cmd_rename(args.old_name, args.new_name)
+
+        if args.board_command in ("rm", "delete"):
+            return cmd_delete(args.name)
 
     # Handle pr command
     if args.command == "pr":

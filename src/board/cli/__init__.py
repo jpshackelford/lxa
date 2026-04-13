@@ -7,6 +7,7 @@ business logic to the service layer.
 
 from src.board.cli.apply import cmd_apply
 from src.board.cli.config_cmd import cmd_config
+from src.board.cli.delete import cmd_delete
 from src.board.cli.init import cmd_init
 from src.board.cli.list_cmd import cmd_list
 from src.board.cli.rename import cmd_rename
@@ -18,6 +19,7 @@ from src.board.cli.templates import cmd_macros, cmd_templates
 __all__ = [
     "cmd_apply",
     "cmd_config",
+    "cmd_delete",
     "cmd_init",
     "cmd_list",
     "cmd_macros",
