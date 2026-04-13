@@ -29,6 +29,10 @@ from pathlib import Path
 if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
+# Suppress OpenHands SDK banner by default
+if "OPENHANDS_SUPPRESS_BANNER" not in os.environ:
+    os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
+
 # Suppress LiteLLM's asyncio deprecation warning.
 # LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
 # when no event loop is running. The warning fires during cleanup/shutdown.
