@@ -884,37 +884,50 @@ Configuration:
         help="Maximum number of PRs to show (default: 100)",
     )
 
-    # pr add-repo
-    pr_add_repo_parser = pr_subparsers.add_parser(
-        "add-repo",
-        help="Add repos to watch list",
+    # repo command
+    repo_parser = subparsers.add_parser(
+        "repo",
+        help="Manage watched repositories",
     )
-    pr_add_repo_parser.add_argument(
+    repo_subparsers = repo_parser.add_subparsers(dest="repo_command", required=True)
+
+    # repo add
+    repo_add_parser = repo_subparsers.add_parser(
+        "add",
+        help="Add repos to a board",
+    )
+    repo_add_parser.add_argument(
         "repos",
         nargs="+",
         metavar="OWNER/REPO",
         help="Repos to add",
     )
-    pr_add_repo_parser.add_argument(
+    repo_add_parser.add_argument(
         "--board",
         "-b",
         dest="board_name",
         metavar="NAME",
-        help="Board to add repos to (default: default board)",
+        help="Board to add repos to (creates if doesn't exist)",
+    )
+    repo_add_parser.add_argument(
+        "--set-default",
+        "-d",
+        action="store_true",
+        help="Set this board as the default",
     )
 
-    # pr remove-repo
-    pr_remove_repo_parser = pr_subparsers.add_parser(
-        "remove-repo",
-        help="Remove repos from watch list",
+    # repo remove
+    repo_remove_parser = repo_subparsers.add_parser(
+        "remove",
+        help="Remove repos from a board",
     )
-    pr_remove_repo_parser.add_argument(
+    repo_remove_parser.add_argument(
         "repos",
         nargs="+",
         metavar="OWNER/REPO",
         help="Repos to remove",
     )
-    pr_remove_repo_parser.add_argument(
+    repo_remove_parser.add_argument(
         "--board",
         "-b",
         dest="board_name",
@@ -922,19 +935,19 @@ Configuration:
         help="Board to remove repos from (default: default board)",
     )
 
-    # pr repos
-    pr_repos_parser = pr_subparsers.add_parser(
-        "repos",
-        help="List repos in watch list",
+    # repo list
+    repo_list_parser = repo_subparsers.add_parser(
+        "list",
+        help="List repos in a board",
     )
-    pr_repos_parser.add_argument(
+    repo_list_parser.add_argument(
         "--board",
         "-b",
         dest="board_name",
         metavar="NAME",
         help="Board to list repos from (default: default board)",
     )
-    pr_repos_parser.add_argument(
+    repo_list_parser.add_argument(
         "--all",
         "-a",
         dest="all_boards",
@@ -1022,7 +1035,7 @@ Configuration:
 
     # Handle pr command
     if args.command == "pr":
-        from src.pr.cli import cmd_add_repo, cmd_list as pr_cmd_list, cmd_remove_repo, cmd_repos
+        from src.pr.cli import cmd_list as pr_cmd_list
 
         if args.pr_command == "list":
             return pr_cmd_list(
@@ -1035,20 +1048,25 @@ Configuration:
                 limit=args.limit,
             )
 
-        if args.pr_command == "add-repo":
-            return cmd_add_repo(
+    # Handle repo command
+    if args.command == "repo":
+        from src.repo.cli import cmd_add, cmd_list as repo_cmd_list, cmd_remove
+
+        if args.repo_command == "add":
+            return cmd_add(
+                args.repos,
+                board_name=args.board_name,
+                set_default=args.set_default,
+            )
+
+        if args.repo_command == "remove":
+            return cmd_remove(
                 args.repos,
                 board_name=args.board_name,
             )
 
-        if args.pr_command == "remove-repo":
-            return cmd_remove_repo(
-                args.repos,
-                board_name=args.board_name,
-            )
-
-        if args.pr_command == "repos":
-            return cmd_repos(
+        if args.repo_command == "list":
+            return repo_cmd_list(
                 board_name=args.board_name,
                 all_boards=args.all_boards,
             )

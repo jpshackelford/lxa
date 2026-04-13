@@ -1,23 +1,24 @@
-"""PR repo management commands."""
+"""Repo management CLI commands."""
 
 from rich.console import Console
-from rich.table import Table
 
-from src.pr.config import add_repo, list_boards_with_repos, list_repos, remove_repo
+from src.repo.config import add_repo, list_boards_with_repos, list_repos, remove_repo
 
 console = Console()
 
 
-def cmd_add_repo(
+def cmd_add(
     repos: list[str],
     *,
     board_name: str | None = None,
+    set_default: bool = False,
 ) -> int:
-    """Add repos to watch list.
+    """Add repos to a board.
 
     Args:
         repos: Repository names in "owner/repo" format
-        board_name: Board name, or None for default
+        board_name: Board name (creates if doesn't exist)
+        set_default: Set this board as the default
 
     Returns:
         Exit code (0 for success)
@@ -34,32 +35,35 @@ def cmd_add_repo(
 
     added = []
     skipped = []
+    target_board = None
 
     for repo in repos:
-        if add_repo(repo, board_name):
+        was_added, target_board = add_repo(repo, board_name, set_default)
+        if was_added:
             added.append(repo)
         else:
             skipped.append(repo)
 
-    board_display = board_name or "default"
-
     if added:
         for repo in added:
-            console.print(f"[green]✓[/] Added {repo} to {board_display}")
+            console.print(f"[green]✓[/] Added {repo} to {target_board}")
 
     if skipped:
         for repo in skipped:
-            console.print(f"[dim]  {repo} already in {board_display}[/]")
+            console.print(f"[dim]  {repo} already in {target_board}[/]")
+
+    if set_default and target_board:
+        console.print(f"[green]✓[/] Set {target_board} as default board")
 
     return 0
 
 
-def cmd_remove_repo(
+def cmd_remove(
     repos: list[str],
     *,
     board_name: str | None = None,
 ) -> int:
-    """Remove repos from watch list.
+    """Remove repos from a board.
 
     Args:
         repos: Repository names in "owner/repo" format
@@ -94,12 +98,12 @@ def cmd_remove_repo(
     return 0
 
 
-def cmd_repos(
+def cmd_list(
     *,
     board_name: str | None = None,
     all_boards: bool = False,
 ) -> int:
-    """List repos in watch list.
+    """List repos in a board.
 
     Args:
         board_name: Board name, or None for default
@@ -112,7 +116,7 @@ def cmd_repos(
         boards = list_boards_with_repos()
         if not boards:
             console.print("[dim]No boards configured.[/]")
-            console.print("[dim]Run 'lxa pr add-repo owner/repo' to add repos.[/]")
+            console.print("[dim]Run 'lxa repo add owner/repo' to add repos.[/]")
             return 0
 
         for name, is_default, repos in boards:
@@ -129,7 +133,7 @@ def cmd_repos(
     if not repos:
         board_display = board_name or "default"
         console.print(f"[dim]No repos in {board_display}.[/]")
-        console.print("[dim]Run 'lxa pr add-repo owner/repo' to add repos.[/]")
+        console.print("[dim]Run 'lxa repo add owner/repo' to add repos.[/]")
         return 0
 
     for repo in repos:
