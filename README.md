@@ -114,6 +114,33 @@ lxa implement --loop --refine --auto-merge
 lxa implement --loop --refine --allow-merge good_taste --max-refine-iterations 10
 ```
 
+### Multi-PR Autonomous Mode
+
+Create separate PRs per milestone with automatic merge and continuation:
+
+```bash
+# Run with separate PR per milestone, auto-merge after refinement
+lxa implement --loop --multi-pr
+
+# Target a specific base branch (e.g., a release branch)
+lxa implement --loop --multi-pr --base-branch v2
+
+# Full autonomous overnight execution
+lxa implement --loop --refine --auto-merge --multi-pr --base-branch main
+```
+
+The Multi-PR mode:
+1. Creates a feature branch for each milestone (e.g., `milestone-1`, `milestone-2`)
+2. Runs orchestrator iterations until the milestone is complete
+3. Creates/updates the PR targeting the base branch
+4. Runs the refinement loop (self-review + respond phases)
+5. Squash-merges the PR when refinement passes
+6. Pulls the latest base branch and creates a new branch for the next milestone
+7. Repeats until all milestones are complete
+
+This enables overnight autonomous execution where multiple phases are implemented,
+reviewed, and merged serially, resulting in a clean commit history on the base branch.
+
 ### Reconciliation (Post-merge)
 
 Update design documents to reference implemented code:
