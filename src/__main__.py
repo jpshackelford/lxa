@@ -891,11 +891,22 @@ Configuration:
         help="Filter by repo (can be specified multiple times)",
     )
     pr_list_parser.add_argument(
-        "--state",
-        dest="states",
-        action="append",
-        choices=["open", "merged", "closed"],
-        help="Filter by state (can be specified multiple times)",
+        "--all",
+        dest="all_states",
+        action="store_true",
+        help="Show all states (open, merged, closed). Default shows only open.",
+    )
+    pr_list_parser.add_argument(
+        "--merged",
+        dest="include_merged",
+        action="store_true",
+        help="Include merged PRs",
+    )
+    pr_list_parser.add_argument(
+        "--closed",
+        dest="include_closed",
+        action="store_true",
+        help="Include closed PRs",
     )
     pr_list_parser.add_argument(
         "--board",
@@ -1074,12 +1085,22 @@ Configuration:
         from src.pr.cli import cmd_list as pr_cmd_list
 
         if args.pr_command == "list":
+            # Build states list based on flags
+            if args.all_states:
+                states = ["open", "merged", "closed"]
+            else:
+                states = ["open"]
+                if args.include_merged:
+                    states.append("merged")
+                if args.include_closed:
+                    states.append("closed")
+
             return pr_cmd_list(
                 author=args.author,
                 reviewer=args.reviewer,
                 repos=args.repos,
                 pr_refs=args.pr_refs if args.pr_refs else None,
-                states=args.states,
+                states=states,
                 board_name=args.board_name,
                 limit=args.limit,
             )

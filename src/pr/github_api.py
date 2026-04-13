@@ -203,18 +203,40 @@ class PRClient:
         return PRListResult(prs=prs, total_count=len(prs))
 
     def _build_state_filter(self, states: list[str]) -> str:
-        """Build state filter for search query."""
-        filters = []
-        for state in states:
-            state_lower = state.lower()
-            if state_lower == "open":
-                filters.append("is:open")
-            elif state_lower == "merged":
-                filters.append("is:merged")
-            elif state_lower == "closed":
-                # Closed but not merged
-                filters.append("is:closed is:unmerged")
-        return " ".join(filters)
+        """Build state filter for search query.
+        
+        GitHub search doesn't support OR, so:
+        - Single state: use that filter
+        - All states: no filter (return empty)
+        - Multiple but not all: we approximate with the most inclusive
+        """
+        states_set = {s.lower() for s in states}
+        
+        # If all three states, no filter needed
+        if states_set == {"open", "merged", "closed"}:
+            return ""
+        
+        # Single state filters
+        if states_set == {"open"}:
+            return "is:open"
+        if states_set == {"merged"}:
+            return "is:merged"
+        if states_set == {"closed"}:
+            return "is:closed is:unmerged"
+        
+        # Two states - approximate
+        if "open" in states_set and "merged" in states_set:
+            # Can't express "open OR merged" directly
+            # Return empty and filter client-side, or just don't filter
+            return ""
+        if "open" in states_set and "closed" in states_set:
+            # "unmerged" covers both open and closed-unmerged
+            return "is:unmerged"
+        if "merged" in states_set and "closed" in states_set:
+            # "closed" covers both merged and closed-unmerged  
+            return "is:closed"
+        
+        return ""
 
     def _search_prs(
         self,
