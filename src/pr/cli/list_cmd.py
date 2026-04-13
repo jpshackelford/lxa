@@ -19,6 +19,7 @@ def cmd_list(
     states: list[str] | None = None,
     board_name: str | None = None,
     limit: int = 100,
+    show_title: bool = False,
 ) -> int:
     """List PRs with history visualization.
 
@@ -30,6 +31,7 @@ def cmd_list(
         states: Filter by state (open, merged, closed)
         board_name: Board to get repos from (default: default board)
         limit: Maximum number of PRs to show
+        show_title: Include PR titles in output
 
     Returns:
         Exit code (0 for success)
@@ -67,7 +69,7 @@ def cmd_list(
                 console.print("[dim]No PRs found.[/]")
                 return 0
 
-            _print_pr_table(result.prs)
+            _print_pr_table(result.prs, show_title=show_title)
 
             if result.has_more:
                 console.print(f"\n[dim]Showing {len(result.prs)} of {result.total_count} PRs[/]")
@@ -100,12 +102,14 @@ def _get_repos(
     return board_repos if board_repos else None
 
 
-def _print_pr_table(prs: list[PRInfo]) -> None:
+def _print_pr_table(prs: list[PRInfo], *, show_title: bool = False) -> None:
     """Print PRs in a formatted table."""
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
 
     table.add_column("Repo", style="cyan", no_wrap=True)
     table.add_column("PR", justify="right", no_wrap=True)
+    if show_title:
+        table.add_column("Title", no_wrap=True, overflow="ellipsis", max_width=35)
     table.add_column("History", no_wrap=True)
     table.add_column("CI", no_wrap=True)
     table.add_column("State", no_wrap=True)
@@ -113,15 +117,20 @@ def _print_pr_table(prs: list[PRInfo]) -> None:
     table.add_column("Last", no_wrap=True)
 
     for pr in prs:
-        table.add_row(
+        row = [
             pr.repo,
             f"#{pr.number}",
+        ]
+        if show_title:
+            row.append(pr.title or "")
+        row.extend([
             _format_history(pr.history),
             _format_ci_status(pr.ci_status),
             _format_state(pr.state),
             _format_duration(pr.age_seconds),
             _format_relative_time(pr.last_activity_seconds),
-        )
+        ])
+        table.add_row(*row)
 
     console.print(table)
 

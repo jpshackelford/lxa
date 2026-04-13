@@ -922,6 +922,13 @@ Configuration:
         default=100,
         help="Maximum number of PRs to show (default: 100)",
     )
+    pr_list_parser.add_argument(
+        "--title",
+        "-t",
+        dest="show_title",
+        action="store_true",
+        help="Show PR titles",
+    )
 
     # repo command
     repo_parser = subparsers.add_parser(
@@ -1103,6 +1110,7 @@ Configuration:
                 states=states,
                 board_name=args.board_name,
                 limit=args.limit,
+                show_title=args.show_title,
             )
 
     # Handle repo command
