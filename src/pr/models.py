@@ -59,6 +59,8 @@ class PRInfo:
     closed_at: datetime | None
     last_activity: datetime
     author: str
+    is_draft: bool = False
+    unresolved_thread_count: int = 0
 
     @property
     def age_seconds(self) -> float:

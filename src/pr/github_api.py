@@ -14,11 +14,17 @@ fragment PRFields on PullRequest {
     number
     title
     state
+    isDraft
     createdAt
     closedAt
     mergeable
     author { login }
     repository { nameWithOwner }
+    reviewThreads(first: 100) {
+        nodes {
+            isResolved
+        }
+    }
     commits(last: 1) {
         nodes {
             commit {

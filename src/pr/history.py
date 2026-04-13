@@ -22,6 +22,10 @@ def process_pr_data(pr_data: dict, reference_user: str) -> PRInfo:
     author = pr_data["author"]["login"] if pr_data["author"] else "ghost"
     created_at = _parse_datetime(pr_data["createdAt"])
     closed_at = _parse_datetime(pr_data["closedAt"]) if pr_data.get("closedAt") else None
+    is_draft = pr_data.get("isDraft", False)
+
+    # Count unresolved review threads
+    unresolved_thread_count = _count_unresolved_threads(pr_data)
 
     # Determine state
     state = _determine_state(pr_data)
@@ -47,6 +51,8 @@ def process_pr_data(pr_data: dict, reference_user: str) -> PRInfo:
         closed_at=closed_at,
         last_activity=last_activity,
         author=author,
+        is_draft=is_draft,
+        unresolved_thread_count=unresolved_thread_count,
     )
 
 
@@ -55,6 +61,12 @@ def _parse_datetime(dt_str: str) -> datetime:
     # Handle both with and without microseconds
     dt_str = dt_str.replace("Z", "+00:00")
     return datetime.fromisoformat(dt_str)
+
+
+def _count_unresolved_threads(pr_data: dict) -> int:
+    """Count unresolved review threads."""
+    threads = pr_data.get("reviewThreads", {}).get("nodes", [])
+    return sum(1 for t in threads if t and not t.get("isResolved", True))
 
 
 def _determine_state(pr_data: dict) -> PRState:

@@ -113,6 +113,7 @@ def _print_pr_table(prs: list[PRInfo], *, show_title: bool = False) -> None:
     table.add_column("History", no_wrap=True)
     table.add_column("CI", no_wrap=True)
     table.add_column("State", no_wrap=True)
+    table.add_column("💬", justify="right", no_wrap=True)
     table.add_column("Age", no_wrap=True)
     table.add_column("Last", no_wrap=True)
 
@@ -126,7 +127,8 @@ def _print_pr_table(prs: list[PRInfo], *, show_title: bool = False) -> None:
         row.extend([
             _format_history(pr.history),
             _format_ci_status(pr.ci_status),
-            _format_state(pr.state),
+            _format_state(pr.state, pr.is_draft),
+            _format_unresolved_threads(pr.unresolved_thread_count),
             _format_duration(pr.age_seconds),
             _format_relative_time(pr.last_activity_seconds),
         ])
@@ -156,14 +158,23 @@ def _format_ci_status(status: CIStatus) -> str:
         return "[dim]--[/]"
 
 
-def _format_state(state: PRState) -> str:
+def _format_state(state: PRState, is_draft: bool = False) -> str:
     """Format PR state with color."""
     if state == PRState.MERGED:
         return "[magenta]merged[/]"
     elif state == PRState.CLOSED:
         return "[dim]closed[/]"
+    elif is_draft:
+        return "[dim]draft[/]"
     else:
-        return "[green]open[/]"
+        return "[green]ready[/]"
+
+
+def _format_unresolved_threads(count: int) -> str:
+    """Format unresolved thread count."""
+    if count == 0:
+        return "[dim]--[/]"
+    return f"[yellow]{count}[/]"
 
 
 def _format_duration(seconds: float) -> str:
