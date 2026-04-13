@@ -1025,8 +1025,6 @@ Configuration:
         from src.pr.cli import cmd_add_repo, cmd_list as pr_cmd_list, cmd_remove_repo, cmd_repos
 
         if args.pr_command == "list":
-            # If --board is specified, use board repos
-            use_board = args.board_name is not None
             return pr_cmd_list(
                 author=args.author,
                 reviewer=args.reviewer,
@@ -1034,7 +1032,6 @@ Configuration:
                 pr_refs=args.pr_refs if args.pr_refs else None,
                 states=args.states,
                 board_name=args.board_name,
-                use_board=use_board,
                 limit=args.limit,
             )
 

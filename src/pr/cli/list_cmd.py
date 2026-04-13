@@ -18,7 +18,6 @@ def cmd_list(
     pr_refs: list[str] | None = None,
     states: list[str] | None = None,
     board_name: str | None = None,
-    use_board: bool = False,
     limit: int = 100,
 ) -> int:
     """List PRs with history visualization.
@@ -30,7 +29,6 @@ def cmd_list(
         pr_refs: Specific PR references (owner/repo#number format)
         states: Filter by state (open, merged, closed)
         board_name: Board to get repos from (default: default board)
-        use_board: Use repos from board config
         limit: Maximum number of PRs to show
 
     Returns:
@@ -44,11 +42,11 @@ def cmd_list(
                 result = client.get_prs_by_ref(pr_refs)
             elif reviewer:
                 # Use case 2: PRs requesting review
-                target_repos = _get_repos(repos, board_name, use_board)
+                target_repos = _get_repos(repos, board_name)
                 result = client.list_prs_for_reviewer(reviewer, repos=target_repos, limit=limit)
             elif author:
                 # Use case 1 & 4: PRs by author
-                target_repos = _get_repos(repos, board_name, use_board)
+                target_repos = _get_repos(repos, board_name)
                 result = client.list_prs_by_author(
                     author,
                     repos=target_repos,
@@ -56,8 +54,8 @@ def cmd_list(
                     limit=limit,
                 )
             else:
-                # Default: current user's PRs from board repos (if use_board) or all
-                target_repos = _get_repos(repos, board_name, use_board)
+                # Default: current user's PRs from default board's repos
+                target_repos = _get_repos(repos, board_name)
                 result = client.list_prs_by_author(
                     "me",
                     repos=target_repos,
@@ -84,19 +82,22 @@ def cmd_list(
 def _get_repos(
     repos: list[str] | None,
     board_name: str | None,
-    use_board: bool,
 ) -> list[str] | None:
-    """Get list of repos to query."""
+    """Get list of repos to query.
+    
+    Priority:
+    1. Explicit --repo flags
+    2. Board repos (from --board or default board)
+    3. None (all GitHub)
+    """
     if repos:
         return repos
 
-    if use_board:
-        from src.pr.config import get_repos
+    # Always try to use board repos by default
+    from src.pr.config import get_repos
 
-        board_repos = get_repos(board_name)
-        return board_repos if board_repos else None
-
-    return None
+    board_repos = get_repos(board_name)
+    return board_repos if board_repos else None
 
 
 def _print_pr_table(prs: list[PRInfo]) -> None:
