@@ -304,6 +304,53 @@ class TestQuietVisualizer:
         viz = QuietVisualizer()
         assert viz._name is None
 
+    def test_timestamps_default_to_false(self):
+        """Test that show_timestamps defaults to False."""
+        viz = QuietVisualizer()
+        assert viz._show_timestamps is False
+
+    def test_timestamps_can_be_enabled(self):
+        """Test that show_timestamps can be enabled."""
+        viz = QuietVisualizer(show_timestamps=True)
+        assert viz._show_timestamps is True
+
+    def test_format_line_without_timestamps(self):
+        """Test _format_line without timestamps."""
+        viz = QuietVisualizer(show_timestamps=False)
+        result = viz._format_line("test message")
+        assert result == "test message"
+
+    def test_format_line_with_timestamps(self):
+        """Test _format_line with timestamps includes time prefix."""
+        viz = QuietVisualizer(show_timestamps=True)
+        result = viz._format_line("test message")
+        # Should start with a timestamp in [HH:MM:SS] format (with Rich escaping)
+        assert "[dim]\\[" in result  # Start of timestamp
+        assert "test message" in result
+
+    def test_format_line_with_agent_name(self):
+        """Test _format_line includes agent name prefix."""
+        viz = QuietVisualizer(name="SubAgent", show_timestamps=False)
+        result = viz._format_line("test message")
+        assert "[dim]\\[SubAgent][/dim]" in result
+        assert "test message" in result
+
+
+class TestGetVisualizerTimestamps:
+    """Tests for get_visualizer with timestamps parameter."""
+
+    def test_show_timestamps_passed_to_quiet_visualizer(self):
+        """Test that show_timestamps is passed to QuietVisualizer."""
+        viz = get_visualizer(Verbosity.QUIET, show_timestamps=True)
+        assert isinstance(viz, QuietVisualizer)
+        assert viz._show_timestamps is True
+
+    def test_show_timestamps_default_is_false(self):
+        """Test that show_timestamps defaults to False."""
+        viz = get_visualizer(Verbosity.QUIET)
+        assert isinstance(viz, QuietVisualizer)
+        assert viz._show_timestamps is False
+
 
 class TestCLIVerbosityFlag:
     """Test that CLI verbosity flag is properly configured."""

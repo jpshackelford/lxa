@@ -11,12 +11,18 @@ Example output with ReasoningFocusedVisualizer:
     → Review the main module: Reading src/main.py
       Let me check how the entry point is structured.
 
+Example output with QuietVisualizer (timestamps enabled for background jobs):
+    [14:27:23] Clone the repository: $ git clone https://github.com/...
+    [14:27:25] Check project structure: $ ls -la
+    [14:27:26] ✓ Task completed successfully
+
 Compared to verbose output which shows full file contents, all parameters, etc.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -34,6 +40,7 @@ from openhands.sdk.event import (
     SystemPromptEvent,
 )
 from openhands.sdk.event.condenser import Condensation, CondensationRequest
+from openhands.sdk.tool.builtins.finish import FinishAction
 from openhands.tools.file_editor.definition import FileEditorAction
 from openhands.tools.terminal.definition import TerminalAction
 from rich.console import Console, Group
@@ -210,6 +217,9 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
             → Summary                      (for other actions with summary)
             → [tool_name]                  (fallback when no summary)
 
+        For sub-agents (delegation), prefix with agent name in brackets:
+            [Research Agent] → Summary: $ command
+
         Followed by truncated reasoning/thought content.
         """
         content = Text()
@@ -218,6 +228,10 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
         summary = _extract_summary_from_action(event)
         detail = _extract_action_detail(event)
         tool_name = event.tool_name
+
+        # For sub-agents, prefix with agent name in brackets
+        if self._name:
+            content.append(f"[{self._name}] ", style="dim cyan")
 
         # Build the summary line with optional detail
         content.append("→ ", style="bold cyan")
@@ -246,11 +260,10 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
         if not content.plain.strip():
             return None
 
-        # Build the block with minimal decoration
-        agent_name = self._name or "Agent"
+        # Build the block without title (content already has agent prefix if needed)
         return build_event_block(
             content=content,
-            title=agent_name,
+            title="",
             title_color=_ACTION_COLOR,
             subtitle=self._format_metrics_subtitle(),
         )
@@ -278,53 +291,125 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
 
 
 class QuietVisualizer(ConversationVisualizerBase):
-    """Minimal visualizer that shows only action summaries.
+    """Minimal visualizer that shows action summaries, messages, and finish.
 
     Ideal for CI/CD, headless execution, or log-focused monitoring.
+    Shows timestamps when enabled (useful for background job logs).
     """
 
     _console: Console
     _name: str | None
+    _show_timestamps: bool
 
-    def __init__(self, name: str | None = None):
+    def __init__(self, name: str | None = None, *, show_timestamps: bool = False):
         """Initialize the quiet visualizer.
 
         Args:
-            name: Agent name to prefix output with.
+            name: Agent name to prefix output with (for sub-agents only).
+            show_timestamps: If True, prefix each line with [HH:MM:SS] timestamp.
         """
         super().__init__()
         self._console = Console()
         self._name = name
+        self._show_timestamps = show_timestamps
+
+    def _format_line(self, message: str, *, style: str | None = None) -> str:
+        """Format a line with optional timestamp and agent prefix.
+
+        Args:
+            message: The message to format.
+            style: Optional Rich style to apply to the message.
+
+        Returns:
+            Formatted string ready for console.print().
+        """
+        parts = []
+
+        # Timestamp prefix for background jobs
+        if self._show_timestamps:
+            ts = datetime.now().strftime("%H:%M:%S")
+            parts.append(f"[dim]\\[{ts}][/dim]")
+
+        # Agent name prefix for sub-agents (delegation)
+        if self._name:
+            parts.append(f"[dim]\\[{self._name}][/dim]")
+
+        # The message itself
+        if style:
+            parts.append(f"[{style}]{message}[/{style}]")
+        else:
+            parts.append(message)
+
+        return " ".join(parts)
 
     def on_event(self, event: Event) -> None:
-        """Display only action summaries with contextual details."""
-        if not isinstance(event, ActionEvent):
+        """Display action summaries, user/agent messages, and finish messages."""
+        if isinstance(event, ActionEvent):
+            self._handle_action(event)
+        elif isinstance(event, MessageEvent):
+            self._handle_message(event)
+
+    def _handle_action(self, event: ActionEvent) -> None:
+        """Handle action events - show summary or finish message."""
+        action = event.action
+
+        # Handle finish action specially - show the completion message
+        if isinstance(action, FinishAction) and action.message:
+            self._console.print(self._format_line(f"✓ {action.message}", style="green"))
             return
 
+        # Regular actions: show summary with optional detail
         summary = _extract_summary_from_action(event)
         detail = _extract_action_detail(event)
-        prefix = f"[dim]{self._name}:[/] " if self._name else ""
 
         if summary and detail:
-            self._console.print(f"{prefix}{summary}[dim]: {detail}[/]")
+            line = f"{summary}[dim]: {detail}[/dim]"
         elif summary:
-            self._console.print(f"{prefix}{summary}")
+            line = summary
         elif detail:
-            self._console.print(f"{prefix}{detail}")
+            line = detail
         else:
             # Fall back to tool name
-            self._console.print(f"{prefix}[dim][{event.tool_name}][/]")
+            line = f"[dim]\\[{event.tool_name}][/dim]"
+
+        self._console.print(self._format_line(line))
+
+    def _handle_message(self, event: MessageEvent) -> None:
+        """Handle message events - show user and assistant messages."""
+        if not event.llm_message:
+            return
+
+        content = str(event.visualize).strip()
+        if not content:
+            return
+
+        role = event.llm_message.role
+
+        if role == "user":
+            # User messages: show with "You:" prefix
+            # Truncate long user messages for quiet mode
+            if len(content) > 200:
+                content = content[:197] + "..."
+            self._console.print(self._format_line(f"[bold]You:[/bold] {content}"))
+        elif role == "assistant":
+            # Assistant messages (not from actions): show with "Agent:" prefix
+            if len(content) > 200:
+                content = content[:197] + "..."
+            self._console.print(self._format_line(f"[bold]Agent:[/bold] {content}"))
 
 
 def get_visualizer(
     verbosity: Verbosity | str = Verbosity.NORMAL,
     name: str | None = None,
+    *,
+    show_timestamps: bool = False,
 ) -> ConversationVisualizerBase:
     """Get the appropriate visualizer based on verbosity level.
 
     Args:
         verbosity: The verbosity level (quiet, normal, verbose).
-        name: Agent name to display in output.
+        name: Agent name to display in output (for sub-agents/delegation).
+        show_timestamps: If True, prefix lines with timestamps (for background jobs).
 
     Returns:
         A visualizer configured for the requested verbosity level.
@@ -334,7 +419,7 @@ def get_visualizer(
         verbosity = Verbosity(verbosity)
 
     if verbosity == Verbosity.QUIET:
-        return QuietVisualizer(name=name)
+        return QuietVisualizer(name=name, show_timestamps=show_timestamps)
     elif verbosity == Verbosity.VERBOSE:
         # Import here to avoid circular dependency
         from openhands.tools.delegate import DelegationVisualizer

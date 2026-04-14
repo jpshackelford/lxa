@@ -202,6 +202,8 @@ def run_orchestrator(
     design_doc: Path,
     workspace: Path,
     verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the orchestrator agent.
 
@@ -209,6 +211,7 @@ def run_orchestrator(
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
         verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -230,8 +233,9 @@ def run_orchestrator(
     console.print()
 
     # Create conversation with verbosity-appropriate visualizer
+    # Don't pass agent name - it's redundant for the main agent
     # Persistence to ~/.lxa/conversations for history
-    visualizer = get_visualizer(verbosity, name="Orchestrator")
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
@@ -455,6 +459,8 @@ def run_task(
     workspace: Path,
     llm: LLM | None = None,
     verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
 ) -> int:
     """Run a prompt-driven task using a simple agent.
 
@@ -467,6 +473,7 @@ def run_task(
         llm: Optional LLM instance (defaults to get_llm() if not provided).
             Useful for testing with a mock LLM.
         verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for error/stuck)
@@ -506,7 +513,8 @@ def run_task(
     console.print()
 
     # Create conversation with verbosity-appropriate visualizer and persistence
-    visualizer = get_visualizer(verbosity, name="TaskRunner")
+    # Don't pass agent name - it's redundant for the main agent
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
@@ -834,6 +842,11 @@ Configuration:
         ),
     )
     implement_parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
+    )
+    implement_parser.add_argument(
         "--background",
         "-b",
         action="store_true",
@@ -927,6 +940,11 @@ Configuration:
         ),
     )
     refine_parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
+    )
+    refine_parser.add_argument(
         "--background",
         "-b",
         action="store_true",
@@ -974,6 +992,11 @@ Configuration:
             "normal (reasoning + summaries), verbose (all details). "
             "Default: quiet for --background, normal otherwise"
         ),
+    )
+    run_parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
     )
     run_parser.add_argument(
         "--background",
@@ -1480,6 +1503,10 @@ Configuration:
             if "--verbosity" not in cmd and "-v" not in cmd:
                 cmd = cmd + ["--verbosity", verbosity.value]
 
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
+
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
 
@@ -1492,7 +1519,7 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        # TODO: pass verbosity to run_refine when it supports it
+        # TODO: pass verbosity and timestamps to run_refine when it supports it
         return run_refine(
             pr_url=args.pr_url,
             workspace=workspace,
@@ -1545,6 +1572,10 @@ Configuration:
             if "--verbosity" not in cmd and "-v" not in cmd:
                 cmd = cmd + ["--verbosity", verbosity.value]
 
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
+
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
 
@@ -1557,7 +1588,12 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        return run_task(task=task, workspace=workspace, verbosity=verbosity)
+        return run_task(
+            task=task,
+            workspace=workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -1589,6 +1625,10 @@ Configuration:
         if "--verbosity" not in cmd and "-v" not in cmd:
             cmd = cmd + ["--verbosity", verbosity.value]
 
+        # Add --timestamps for background jobs (unless user already specified)
+        if "--timestamps" not in cmd:
+            cmd = cmd + ["--timestamps"]
+
         # Rewrite paths to be relative for isolated workspace
         cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
 
@@ -1615,9 +1655,15 @@ Configuration:
                 max_iterations=args.max_refine_iterations,
             ),
             verbosity=verbosity,
+            # TODO: pass show_timestamps when run_ralph_loop supports it
         )
     else:
-        return run_orchestrator(design_doc, workspace, verbosity=verbosity)
+        return run_orchestrator(
+            design_doc,
+            workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
 
 def find_git_root(start_path: Path) -> Path:
