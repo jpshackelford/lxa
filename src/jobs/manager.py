@@ -51,6 +51,12 @@ def refresh_job_status(job: Job, jobs_dir: Path | None = None) -> Job:
     If the job was marked as RUNNING but the process is no longer running,
     update the status to FAILED (since we don't know the exit code).
 
+    Note: Known limitation - if a job's process completes successfully but the
+    wrapper crashes before updating metadata (e.g., power loss, OOM kill), this
+    function will incorrectly mark the job as FAILED since the PID is gone but
+    status is still RUNNING. This is a pragmatic tradeoff vs. more complex
+    two-phase commit or separate status-writer processes.
+
     Args:
         job: Job to refresh
         jobs_dir: Jobs directory for saving updates
