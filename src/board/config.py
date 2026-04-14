@@ -103,6 +103,13 @@ def slugify(name: str) -> str:
     return slug or "board"
 
 
+class BoardScope:
+    """Board scope types."""
+
+    USER = "user"
+    PROJECT = "project"
+
+
 @dataclass
 class BoardConfig:
     """Configuration for a single board."""
@@ -134,9 +141,24 @@ class BoardConfig:
     # Sync metadata: when this board config was last updated
     updated_at: datetime | None = None
 
+    # Board scope: "user" (default, current behavior) or "project"
+    scope: str = BoardScope.USER
+
+    # The anchor item that defines the project (for project-scoped boards)
+    # URL to a GitHub issue/PR that serves as the project overview
+    overview_item: str | None = None
+
+    # Human-readable project mission (for agent context and smart scanning)
+    mission: str | None = None
+
     def touch(self) -> None:
         """Update the updated_at timestamp to now."""
         self.updated_at = datetime.now(tz=UTC)
+
+    @property
+    def is_project_scoped(self) -> bool:
+        """Check if this is a project-scoped board."""
+        return self.scope == BoardScope.PROJECT
 
     def get_column_name(self, column_key: str) -> str:
         """Get the column name, using custom mapping if set."""
@@ -150,6 +172,7 @@ class BoardConfig:
             COLUMN_FINAL_REVIEW,
             COLUMN_HUMAN_REVIEW,
             COLUMN_ICEBOX,
+            COLUMN_TRIAGE,
         )
 
         # Use custom mapping if provided
@@ -158,6 +181,7 @@ class BoardConfig:
 
         # Default mapping
         defaults = {
+            "triage": COLUMN_TRIAGE,
             "icebox": COLUMN_ICEBOX,
             "backlog": COLUMN_BACKLOG,
             "agent_coding": COLUMN_AGENT_CODING,
@@ -402,6 +426,9 @@ def load_boards_config() -> BoardsConfig:
                 agent_username_pattern=value.get("agent_username_pattern", "openhands"),
                 column_names=value.get("columns", {}),
                 updated_at=_parse_datetime(value.get("_updated_at")),
+                scope=value.get("scope", BoardScope.USER),
+                overview_item=value.get("overview_item"),
+                mission=value.get("mission"),
             )
 
     return BoardsConfig(
@@ -480,6 +507,12 @@ def save_boards_config(config: BoardsConfig) -> None:
             entry["columns"] = board.column_names
         if board.updated_at:
             entry["_updated_at"] = _format_datetime(board.updated_at)
+        if board.scope != BoardScope.USER:
+            entry["scope"] = board.scope
+        if board.overview_item:
+            entry["overview_item"] = board.overview_item
+        if board.mission:
+            entry["mission"] = board.mission
 
         board_data[name] = entry
 

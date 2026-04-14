@@ -32,6 +32,10 @@ agent_pattern: "openhands"
 
 # Column definitions - order determines display order on board
 columns:
+  - name: Triage
+    color: GRAY
+    description: "Items pending review for relevance to project"
+
   - name: Icebox
     color: GRAY
     description: "Auto-closed due to inactivity; awaiting triage"

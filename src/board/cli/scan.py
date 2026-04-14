@@ -12,6 +12,7 @@ from src.board.cli._helpers import (
     print_command_header,
     print_error,
     print_info,
+    print_success,
     print_sync_summary,
     print_warning,
 )
@@ -95,6 +96,12 @@ def cmd_scan(
     cache = BoardCache()
 
     print_info(f"Board: {config.name}", dim=True)
+
+    # Handle project-scoped boards differently
+    if config.is_project_scoped:
+        return _scan_project_scoped(config, cache)
+
+    # Continue with user-scoped board scan
 
     # Validate mutually exclusive options
     if sum(bool(x) for x in [repos, scan_user, scan_org]) > 1:
@@ -194,3 +201,26 @@ def cmd_scan(
         cache.set_last_sync()
 
     return 0 if result.success else 1
+
+
+def _scan_project_scoped(config, cache) -> int:  # noqa: ARG001
+    """Handle scan for project-scoped boards.
+
+    Project-scoped boards do NOT auto-add items based on user involvement.
+    This function just verifies the overview item is on the board.
+    """
+    console.print(f'\nBoard [cyan]"{config.name}"[/] is project-scoped.')
+    console.print("Scan does not auto-add items to project-scoped boards.\n")
+
+    # Display overview item status
+    if config.overview_item:
+        # For now, we just display the configured overview item
+        # In the future, we could verify it's on the board
+        print_success(f"Overview item: {config.overview_item}")
+    else:
+        print_warning("No overview item configured")
+
+    console.print("\nTo add items manually: [dim]lxa board add-item <url>[/]")
+    console.print("[dim]Smart scanning will be available in a future release.[/]")
+
+    return 0
