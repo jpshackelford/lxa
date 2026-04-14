@@ -555,6 +555,38 @@ def _filter_background_args(argv: list[str]) -> list[str]:
     return result
 
 
+def _rewrite_single_path(
+    path_str: str, workspace: Path, description: str
+) -> tuple[str, str | None]:
+    """Rewrite a single path and return (new_path, warning_or_none).
+
+    Args:
+        path_str: The path string to rewrite
+        workspace: The workspace directory
+        description: Description of what this path represents (for warnings)
+
+    Returns:
+        Tuple of (rewritten_path, warning_message_or_none)
+    """
+    path = Path(path_str).resolve()
+    try:
+        rel_path = path.relative_to(workspace)
+        if path_str != str(rel_path):
+            warning = (
+                f"Rewriting {description} path for isolated workspace: "
+                f"{path_str} -> {rel_path}"
+            )
+            return str(rel_path), warning
+        return path_str, None
+    except ValueError:
+        warning = (
+            f"WARNING: {description} path '{path_str}' is outside workspace. "
+            f"The file will be copied to the isolated workspace, but changes "
+            f"will NOT be synced back to the original location."
+        )
+        return path_str, warning
+
+
 def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[list[str], list[str]]:
     """Rewrite absolute paths in argv to be relative to workspace.
 
@@ -591,27 +623,11 @@ def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[lis
         if arg in path_flags and i + 1 < len(argv):
             flag = arg
             path_str = argv[i + 1]
-            path = Path(path_str).resolve()
-
-            # Try to make path relative to workspace
-            try:
-                rel_path = path.relative_to(workspace)
-                if path_str != str(rel_path):
-                    warnings.append(
-                        f"Rewriting {path_flags[flag]} path for isolated workspace: "
-                        f"{path_str} -> {rel_path}"
-                    )
-                result.append(flag)
-                result.append(str(rel_path))
-            except ValueError:
-                # Path is not under workspace - this is problematic
-                warnings.append(
-                    f"WARNING: {path_flags[flag]} path '{path_str}' is outside workspace. "
-                    f"The file will be copied to the isolated workspace, but changes "
-                    f"will NOT be synced back to the original location."
-                )
-                result.append(flag)
-                result.append(path_str)
+            new_path, warning = _rewrite_single_path(path_str, workspace, path_flags[flag])
+            if warning:
+                warnings.append(warning)
+            result.append(flag)
+            result.append(new_path)
             i += 2
             continue
 
@@ -619,23 +635,10 @@ def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[lis
         for flag, desc in path_flags.items():
             if arg.startswith(f"{flag}="):
                 path_str = arg[len(flag) + 1 :]
-                path = Path(path_str).resolve()
-
-                try:
-                    rel_path = path.relative_to(workspace)
-                    if path_str != str(rel_path):
-                        warnings.append(
-                            f"Rewriting {desc} path for isolated workspace: "
-                            f"{path_str} -> {rel_path}"
-                        )
-                    result.append(f"{flag}={rel_path}")
-                except ValueError:
-                    warnings.append(
-                        f"WARNING: {desc} path '{path_str}' is outside workspace. "
-                        f"The file will be copied to the isolated workspace, but changes "
-                        f"will NOT be synced back to the original location."
-                    )
-                    result.append(arg)
+                new_path, warning = _rewrite_single_path(path_str, workspace, desc)
+                if warning:
+                    warnings.append(warning)
+                result.append(f"{flag}={new_path}")
                 break
         else:
             # Not a path flag, keep as-is
