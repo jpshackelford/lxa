@@ -290,6 +290,32 @@ class TestReasoningFocusedVisualizer:
         result = viz._create_event_block(event)
         assert result is None
 
+    def test_handles_finish_action(self):
+        """Test that FinishAction creates a finish block."""
+        from openhands.sdk.event import ActionEvent
+        from openhands.sdk.tool.builtins.finish import FinishAction
+
+        viz = ReasoningFocusedVisualizer(name="Test")
+
+        # Create a mock ActionEvent with a FinishAction
+        finish_action = MagicMock(spec=FinishAction)
+        finish_action.message = "Task completed successfully"
+
+        event = MagicMock(spec=ActionEvent)
+        event.__class__ = ActionEvent
+        event.action = finish_action
+
+        result = viz._create_event_block(event)
+        # Should return a Group (not None)
+        assert result is not None
+
+    def test_create_finish_block_content(self):
+        """Test that _create_finish_block creates correct content."""
+        viz = ReasoningFocusedVisualizer(name="Test")
+        result = viz._create_finish_block("Task done!")
+        # Should return a Group
+        assert result is not None
+
 
 class TestQuietVisualizer:
     """Tests for QuietVisualizer."""

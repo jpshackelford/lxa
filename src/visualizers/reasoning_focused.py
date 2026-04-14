@@ -191,6 +191,9 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
             return None
 
         if isinstance(event, ActionEvent):
+            # Handle finish action specially - show completion message prominently
+            if isinstance(event.action, FinishAction) and event.action.message:
+                return self._create_finish_block(event.action.message)
             return self._create_reasoning_block(event)
 
         if isinstance(event, ObservationEvent):
@@ -287,6 +290,19 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
             content=content,
             title="Result",
             title_color="yellow",
+        )
+
+    def _create_finish_block(self, message: str) -> Group:
+        """Create a block for the finish action completion message."""
+        content = Text()
+        content.append("✓ ", style="bold green")
+        content.append(message, style="green")
+        content.append("\n")
+
+        return build_event_block(
+            content=content,
+            title="",
+            title_color="green",
         )
 
 
