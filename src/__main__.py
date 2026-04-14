@@ -5,6 +5,8 @@ Usage:
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
     python -m src refine <PR_URL>            # Refine existing PR
+    python -m src run -t "Your task here"    # Run task from prompt
+    python -m src run -f task.txt            # Run task from file
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
@@ -13,11 +15,15 @@ Or via the installed command:
     lxa reconcile .pr/design.md              # Update design doc with code refs
     lxa refine https://github.com/owner/repo/pull/42              # Refine PR
     lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
+    lxa run -t "Write a hello world script"  # Run task from prompt
+    lxa run -f task.txt                      # Run task from file
+    lxa run -t "Fix the bug" --background    # Run task in background
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 from dataclasses import dataclass
@@ -27,6 +33,17 @@ from pathlib import Path
 # Users can override with LOG_LEVEL=INFO or LOG_LEVEL=DEBUG
 if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
+
+# Suppress LiteLLM's asyncio deprecation warning.
+# LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
+# when no event loop is running. The warning fires during cleanup/shutdown.
+# Creating a default event loop prevents the deprecation warning.
+# See: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_event_loop
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    # No running loop - create one so get_event_loop() won't warn
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 from dotenv import load_dotenv
 from openhands.sdk import LLM, Conversation
@@ -48,7 +65,8 @@ from src.agents.orchestrator import (
 )
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
+from src.global_config import get_conversations_dir
+from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
 from src.visualizers import Verbosity, get_visualizer
@@ -76,7 +94,12 @@ def _register_agents() -> None:
     )
 
 
-CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
+def _get_conversations_dir() -> str:
+    """Get the conversations directory from global config."""
+    return str(get_conversations_dir())
+
+
+CONVERSATIONS_DIR = _get_conversations_dir()
 
 
 def get_llm():
@@ -207,7 +230,7 @@ def run_orchestrator(
     console.print()
 
     # Create conversation with verbosity-appropriate visualizer
-    # Persistence to ~/.openhands/conversations for history
+    # Persistence to ~/.lxa/conversations for history
     visualizer = get_visualizer(verbosity, name="Orchestrator")
     conversation = Conversation(
         agent=agent,
@@ -218,6 +241,11 @@ def run_orchestrator(
 
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
 
     initial_message = f"""\
 Start milestone execution for this project.
@@ -422,6 +450,243 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def run_task(
+    task: str,
+    workspace: Path,
+    llm: LLM | None = None,
+) -> int:
+    """Run a prompt-driven task using a simple agent.
+
+    This provides headless-style execution similar to OpenHands CLI,
+    allowing a task to be specified via command line or file.
+
+    Args:
+        task: The task/prompt to execute
+        workspace: Path to the workspace (git repository root)
+        llm: Optional LLM instance (defaults to get_llm() if not provided).
+            Useful for testing with a mock LLM.
+
+    Returns:
+        Exit code (0 for success, 1 for error/stuck)
+    """
+    from openhands.sdk import Agent, Tool
+    from openhands.sdk.conversation.state import ConversationExecutionStatus
+    from openhands.tools.file_editor import FileEditorTool
+    from openhands.tools.task_tracker import TaskTrackerTool
+    from openhands.tools.terminal import TerminalTool
+
+    console.print(Panel("[bold blue]LXA - Task Runner[/]", expand=False))
+    console.print()
+
+    # Verify workspace is a git repo (optional, but provides context)
+    if not (workspace / ".git").exists():
+        console.print(f"[yellow]Warning:[/] Not a git repository: {workspace}")
+        console.print("[dim]Continuing without git context...[/]")
+        console.print()
+
+    # Get LLM (use provided or create from environment)
+    if llm is None:
+        llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    console.print()
+
+    # Create a simple agent with standard tools
+    tools = [
+        Tool(name=FileEditorTool.name),
+        Tool(name=TerminalTool.name),
+        Tool(name=TaskTrackerTool.name),
+    ]
+
+    agent = Agent(llm=llm, tools=tools)
+
+    console.print("[bold cyan]Starting task execution...[/]")
+    console.print()
+
+    # Create conversation with visualizer and persistence
+    conversation = Conversation(
+        agent=agent,
+        workspace=workspace,
+        visualizer=DelegationVisualizer(name="TaskRunner"),
+        persistence_dir=CONVERSATIONS_DIR,
+    )
+
+    console.print(f"[dim]Conversation ID: {conversation.id}[/]")
+    console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
+
+    conversation.send_message(task)
+    conversation.run()
+
+    # Check execution status and return appropriate exit code
+    status = conversation.state.execution_status
+    if status == ConversationExecutionStatus.FINISHED:
+        console.print()
+        console.print("[bold green]Task complete.[/]")
+        return 0
+    elif status == ConversationExecutionStatus.ERROR:
+        console.print()
+        console.print("[bold red]Task failed with error.[/]")
+        return 1
+    elif status == ConversationExecutionStatus.STUCK:
+        console.print()
+        console.print("[bold yellow]Task got stuck.[/]")
+        return 1
+    else:
+        # Unexpected status (IDLE, RUNNING, PAUSED, etc.)
+        console.print()
+        console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
+        return 1
+
+
+def _filter_background_args(argv: list[str]) -> list[str]:
+    """Filter out --background and --job-name flags from argv.
+
+    This is used to rebuild the command for background execution without
+    the background-specific flags, avoiding fragile manual reconstruction.
+
+    Args:
+        argv: Original command line arguments
+
+    Returns:
+        Filtered arguments without background flags
+    """
+    result = []
+    skip_next = False
+
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+
+        # Skip --background and -b flags
+        if arg in ("--background", "-b"):
+            continue
+
+        # Skip --job-name and its value
+        if arg == "--job-name":
+            skip_next = True
+            continue
+
+        # Handle --job-name=value format
+        if arg.startswith("--job-name="):
+            continue
+
+        result.append(arg)
+
+    return result
+
+
+def _rewrite_single_path(
+    path_str: str, workspace: Path, description: str
+) -> tuple[str, str | None]:
+    """Rewrite a single path and return (new_path, warning_or_none).
+
+    Args:
+        path_str: The path string to rewrite
+        workspace: The workspace directory
+        description: Description of what this path represents (for warnings)
+
+    Returns:
+        Tuple of (rewritten_path, warning_message_or_none)
+    """
+    path = Path(path_str).resolve()
+    try:
+        rel_path = path.relative_to(workspace)
+        if path_str != str(rel_path):
+            warning = (
+                f"Rewriting {description} path for isolated workspace: {path_str} -> {rel_path}"
+            )
+            return str(rel_path), warning
+        return path_str, None
+    except ValueError:
+        warning = (
+            f"WARNING: {description} path '{path_str}' is outside workspace. "
+            f"The file will be copied to the isolated workspace, but changes "
+            f"will NOT be synced back to the original location."
+        )
+        return path_str, warning
+
+
+def _try_rewrite_path_arg(
+    arg: str, next_arg: str | None, workspace: Path, path_flags: dict[str, str]
+) -> tuple[list[str], int, str | None]:
+    """Try to rewrite a path argument if it matches a known flag.
+
+    Args:
+        arg: Current argument
+        next_arg: Next argument (or None if at end)
+        workspace: Workspace directory
+        path_flags: Dictionary mapping flags to their descriptions
+
+    Returns:
+        Tuple of (rewritten_args, args_consumed, warning_or_none).
+        Empty list if not a path flag.
+    """
+    # Handle --flag value
+    if arg in path_flags and next_arg:
+        new_path, warning = _rewrite_single_path(next_arg, workspace, path_flags[arg])
+        return [arg, new_path], 2, warning
+
+    # Handle --flag=value
+    for flag, desc in path_flags.items():
+        if arg.startswith(f"{flag}="):
+            new_path, warning = _rewrite_single_path(arg[len(flag) + 1 :], workspace, desc)
+            return [f"{flag}={new_path}"], 1, warning
+
+    return [], 0, None
+
+
+def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[list[str], list[str]]:
+    """Rewrite absolute paths in argv to be relative to workspace.
+
+    Background jobs run in an isolated workspace clone. Any explicit absolute
+    paths (--design-path, --workspace, --file) need to be converted to relative
+    paths so they work correctly in the cloned workspace.
+
+    Args:
+        argv: Command line arguments (after filtering background flags)
+        workspace: The workspace directory that will be cloned
+
+    Returns:
+        Tuple of (rewritten_argv, warnings) where warnings are messages
+        to be logged about path rewriting.
+    """
+    result = []
+    warnings = []
+    i = 0
+
+    # Flags that take path arguments
+    path_flags = {
+        "--design-path": "design document",
+        "--design-doc": "design document",
+        "--workspace": "workspace",
+        "-w": "workspace",
+        "--file": "task file",
+        "-f": "task file",
+    }
+
+    while i < len(argv):
+        next_arg = argv[i + 1] if i + 1 < len(argv) else None
+        rewritten, consumed, warning = _try_rewrite_path_arg(
+            argv[i], next_arg, workspace, path_flags
+        )
+        if rewritten:
+            if warning:
+                warnings.append(warning)
+            result.extend(rewritten)
+            i += consumed
+        else:
+            result.append(argv[i])
+            i += 1
+
+    return result, warnings
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -547,6 +812,18 @@ Configuration:
             "normal (reasoning + summaries), verbose (all details) (default: normal)"
         ),
     )
+    implement_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    implement_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'implement')",
+    )
 
     # Reconcile subcommand
     reconcile_parser = subparsers.add_parser(
@@ -617,8 +894,523 @@ Configuration:
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
+    refine_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    refine_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'refine')",
+    )
+
+    # Run subcommand - prompt-driven task execution (like OpenHands headless mode)
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a task from a prompt (headless mode)",
+    )
+    run_task_group = run_parser.add_mutually_exclusive_group(required=True)
+    run_task_group.add_argument(
+        "--task",
+        "-t",
+        type=str,
+        help="Task/prompt to execute",
+    )
+    run_task_group.add_argument(
+        "--file",
+        "-f",
+        type=Path,
+        help="Path to file containing the task/prompt",
+    )
+    run_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to current git root)",
+    )
+    run_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    run_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'run')",
+    )
+
+    # Job subcommand (with nested subcommands)
+    job_parser = subparsers.add_parser(
+        "job",
+        help="Manage background jobs",
+    )
+    job_subparsers = job_parser.add_subparsers(dest="job_command", required=True)
+
+    # job list
+    job_list_parser = job_subparsers.add_parser(
+        "list",
+        help="List all jobs",
+    )
+    job_list_parser.add_argument(
+        "--running",
+        "-r",
+        action="store_true",
+        help="Only show running jobs",
+    )
+    job_list_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=None,
+        help="Maximum number of jobs to show",
+    )
+    job_list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # job status
+    job_status_parser = job_subparsers.add_parser(
+        "status",
+        help="Show detailed job status",
+    )
+    job_status_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # job logs
+    job_logs_parser = job_subparsers.add_parser(
+        "logs",
+        help="View job output logs",
+    )
+    job_logs_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_logs_parser.add_argument(
+        "--lines",
+        "-n",
+        type=int,
+        default=None,
+        help="Number of lines to show (tail)",
+    )
+    job_logs_parser.add_argument(
+        "--follow",
+        "-f",
+        action="store_true",
+        help="Follow log output in real-time",
+    )
+
+    # job stop
+    job_stop_parser = job_subparsers.add_parser(
+        "stop",
+        help="Stop a running job",
+    )
+    job_stop_parser.add_argument(
+        "job_id",
+        help="Job ID or prefix",
+    )
+    job_stop_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=5,
+        help="Seconds to wait before force kill (default: 5)",
+    )
+
+    # job clean
+    job_clean_parser = job_subparsers.add_parser(
+        "clean",
+        help="Clean up old job files",
+    )
+    job_clean_parser.add_argument(
+        "--older-than",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        help="Only delete jobs older than this many days",
+    )
+    job_clean_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be deleted without deleting",
+    )
+
+    # Config command (global lxa configuration)
+    config_parser = subparsers.add_parser(
+        "config",
+        help="View and manage global lxa configuration",
+    )
+    config_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["set", "reset"],
+        help="Action to perform (set, reset)",
+    )
+    config_parser.add_argument(
+        "key",
+        nargs="?",
+        help="Configuration key",
+    )
+    config_parser.add_argument(
+        "value",
+        nargs="?",
+        help="Value to set (for 'set' action)",
+    )
+
+    # Board subcommand (with nested subcommands)
+    board_parser = subparsers.add_parser(
+        "board",
+        help="Manage GitHub Project board for tracking development workflow",
+    )
+    board_subparsers = board_parser.add_subparsers(dest="board_command", required=True)
+
+    # board list
+    board_subparsers.add_parser(
+        "list",
+        help="List all configured boards",
+    )
+
+    # board init
+    board_init_parser = board_subparsers.add_parser(
+        "init",
+        help="Initialize or configure a GitHub Project board",
+    )
+    board_init_group = board_init_parser.add_mutually_exclusive_group()
+    board_init_group.add_argument(
+        "--create",
+        metavar="NAME",
+        help="Create a new project with this name",
+    )
+    board_init_group.add_argument(
+        "--project-id",
+        help="Configure existing project by GraphQL ID (PVT_xxx)",
+    )
+    board_init_group.add_argument(
+        "--project-number",
+        type=int,
+        help="Configure existing user project by number",
+    )
+    board_init_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Name for this board in config (default: slugified project name)",
+    )
+    board_init_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
+    # board scan
+    board_scan_parser = board_subparsers.add_parser(
+        "scan",
+        help="Scan repos for issues/PRs and add to board",
+    )
+    board_scan_parser.add_argument(
+        "--repos",
+        help="Comma-separated list of repos to scan (default: watched repos)",
+    )
+    board_scan_parser.add_argument(
+        "--since",
+        type=int,
+        metavar="DAYS",
+        help="Only include items updated in last N days",
+    )
+    board_scan_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_scan_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_scan_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output",
+    )
+
+    # board sync
+    board_sync_parser = board_subparsers.add_parser(
+        "sync",
+        help="Sync board with GitHub state (incremental update)",
+    )
+    board_sync_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Force full reconciliation of all items",
+    )
+    board_sync_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_sync_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_sync_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output",
+    )
+
+    # board status
+    board_status_parser = board_subparsers.add_parser(
+        "status",
+        help="Show current board status",
+    )
+    board_status_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_status_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show items in each column",
+    )
+    board_status_parser.add_argument(
+        "--attention",
+        "-a",
+        action="store_true",
+        help="Only show items needing attention",
+    )
+    board_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as JSON",
+    )
+
+    # board config
+    board_config_parser = board_subparsers.add_parser(
+        "config",
+        help="View and manage board configuration",
+    )
+    board_config_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["repos", "set", "default"],
+        help="Action: repos (add/remove), set (key value), default (set default board)",
+    )
+    board_config_parser.add_argument(
+        "key",
+        nargs="?",
+        help="For repos: add/remove; for set: config key; for default: board name",
+    )
+    board_config_parser.add_argument(
+        "value",
+        nargs="?",
+        help="For repos: owner/repo; for set: value",
+    )
+    board_config_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to configure (default: default board)",
+    )
+    board_config_parser.add_argument(
+        "--show-defaults",
+        action="store_true",
+        help="Show configuration with defaults",
+    )
+
+    # board apply
+    board_apply_parser = board_subparsers.add_parser(
+        "apply",
+        help="Apply a YAML board configuration",
+    )
+    board_apply_parser.add_argument(
+        "--config",
+        "-c",
+        dest="config_file",
+        help="Path to YAML config file (default: ~/.lxa/boards/agent-workflow.yaml)",
+    )
+    board_apply_parser.add_argument(
+        "--template",
+        "-t",
+        help="Use built-in template instead of file",
+    )
+    board_apply_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to apply to (default: default board)",
+    )
+    board_apply_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    board_apply_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Remove columns not in config",
+    )
+
+    # board templates
+    board_subparsers.add_parser(
+        "templates",
+        help="List available built-in templates",
+    )
+
+    # board macros
+    board_subparsers.add_parser(
+        "macros",
+        help="List available macros for rule conditions",
+    )
 
     args = parser.parse_args(argv)
+
+    # Handle board command
+    if args.command == "board":
+        from src.board.cli import (
+            cmd_apply,
+            cmd_config,
+            cmd_init,
+            cmd_list,
+            cmd_macros,
+            cmd_scan,
+            cmd_status,
+            cmd_sync,
+            cmd_templates,
+        )
+
+        if args.board_command == "list":
+            return cmd_list()
+
+        if args.board_command == "init":
+            return cmd_init(
+                create_name=args.create,
+                project_id=args.project_id,
+                project_number=args.project_number,
+                board_name=args.board,
+                dry_run=args.dry_run,
+            )
+
+        if args.board_command == "scan":
+            repos = args.repos.split(",") if args.repos else None
+            return cmd_scan(
+                repos=repos,
+                since_days=args.since,
+                board_name=args.board,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+
+        if args.board_command == "sync":
+            return cmd_sync(
+                full=args.full,
+                board_name=args.board,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+
+        if args.board_command == "status":
+            return cmd_status(
+                board_name=args.board,
+                verbose=args.verbose,
+                attention=args.attention,
+                json_output=args.json,
+            )
+
+        if args.board_command == "config":
+            return cmd_config(
+                action=args.action,
+                key=args.key,
+                value=args.value,
+                board_name=args.board,
+                show_defaults=args.show_defaults,
+            )
+
+        if args.board_command == "apply":
+            return cmd_apply(
+                config_file=args.config_file,
+                template=args.template,
+                board_name=args.board,
+                dry_run=args.dry_run,
+                prune=args.prune,
+            )
+
+        if args.board_command == "templates":
+            return cmd_templates()
+
+        if args.board_command == "macros":
+            return cmd_macros()
+
+    # Handle job command
+    if args.command == "job":
+        from src.jobs.cli import (
+            cmd_clean,
+            cmd_list,
+            cmd_logs,
+            cmd_status,
+            cmd_stop,
+        )
+
+        if args.job_command == "list":
+            return cmd_list(
+                running_only=args.running,
+                limit=args.limit,
+                json_output=args.json,
+            )
+
+        if args.job_command == "status":
+            return cmd_status(
+                job_id=args.job_id,
+                json_output=args.json,
+            )
+
+        if args.job_command == "logs":
+            return cmd_logs(
+                job_id=args.job_id,
+                lines=args.lines,
+                follow=args.follow,
+            )
+
+        if args.job_command == "stop":
+            return cmd_stop(
+                job_id=args.job_id,
+                timeout=args.timeout,
+            )
+
+        if args.job_command == "clean":
+            return cmd_clean(
+                older_than_days=args.older_than,
+                dry_run=args.dry_run,
+            )
+
+    # Handle config command (global lxa configuration)
+    if args.command == "config":
+        from src.jobs.cli.config_cmd import cmd_config
+
+        return cmd_config(
+            action=args.action,
+            key=args.key,
+            value=args.value,
+        )
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
@@ -629,6 +1421,27 @@ Configuration:
     # Handle refine command
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+
+        # Handle background mode
+        if args.background:
+            from src.jobs import spawn_lxa_command
+
+            # Filter out --background and --job-name, keep everything else
+            args_to_use = argv if argv is not None else sys.argv[1:]
+            cmd = _filter_background_args(args_to_use)
+
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
+            job = spawn_lxa_command(
+                lxa_command=cmd,
+                cwd=workspace,
+                job_name=args.job_name or "refine",
+                log_preamble=path_warnings if path_warnings else None,
+            )
+            console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+            return 0
+
         return run_refine(
             pr_url=args.pr_url,
             workspace=workspace,
@@ -638,6 +1451,55 @@ Configuration:
             max_iterations=args.max_iterations,
             phase=args.phase,
         )
+
+    # Handle run command - prompt-driven task execution
+    if args.command == "run":
+        # Determine workspace: explicit --workspace, git root, or current directory
+        if args.workspace:
+            workspace = args.workspace.resolve()
+        else:
+            # Try to find git root, fall back to cwd if not in a git repo
+            # This matches run_task()'s behavior which warns but continues without git
+            try:
+                workspace = find_git_root(Path.cwd())
+            except RuntimeError:
+                workspace = Path.cwd()
+
+        # Get task from --task or --file
+        if args.task:
+            task = args.task
+        else:
+            # Load task from file
+            task_file = args.file.resolve()
+            if not task_file.exists():
+                console.print(f"[red]Error:[/] Task file not found: {task_file}")
+                return 1
+            task = task_file.read_text(encoding="utf-8").strip()
+            if not task:
+                console.print(f"[red]Error:[/] Task file is empty: {task_file}")
+                return 1
+
+        # Handle background mode
+        if args.background:
+            from src.jobs import spawn_lxa_command
+
+            # Filter out --background and --job-name, keep everything else
+            args_to_use = argv if argv is not None else sys.argv[1:]
+            cmd = _filter_background_args(args_to_use)
+
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
+            job = spawn_lxa_command(
+                lxa_command=cmd,
+                cwd=workspace,
+                job_name=args.job_name or "run",
+                log_preamble=path_warnings if path_warnings else None,
+            )
+            console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+            return 0
+
+        return run_task(task=task, workspace=workspace)
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -656,6 +1518,26 @@ Configuration:
 
     # Parse verbosity level
     verbosity = Verbosity(args.verbosity)
+
+    # Handle background mode
+    if args.background:
+        from src.jobs import spawn_lxa_command
+
+        # Filter out --background and --job-name, keep everything else
+        args_to_use = argv if argv is not None else sys.argv[1:]
+        cmd = _filter_background_args(args_to_use)
+
+        # Rewrite paths to be relative for isolated workspace
+        cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
+        job = spawn_lxa_command(
+            lxa_command=cmd,
+            cwd=workspace,
+            job_name=args.job_name or "implement",
+            log_preamble=path_warnings if path_warnings else None,
+        )
+        console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+        return 0
 
     # Run in loop mode or single execution
     if args.loop:

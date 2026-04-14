@@ -1,0 +1,35 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 2,
+      "nodes": [
+        {
+          "id": "I_kwDOTest1",
+          "number": 38,
+          "title": "Reduce verbosity",
+          "state": "OPEN",
+          "stateReason": null,
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [{ "login": "openhands-agent" }] },
+          "labels": { "nodes": [{ "name": "enhancement" }] },
+          "createdAt": "2026-02-24T13:09:52Z",
+          "updatedAt": "2026-02-24T13:11:09Z"
+        },
+        {
+          "id": "I_kwDOTest2",
+          "number": 33,
+          "title": "Add PR refinement loop",
+          "state": "CLOSED",
+          "stateReason": "COMPLETED",
+          "repository": { "nameWithOwner": "owner/repo" },
+          "author": { "login": "testuser" },
+          "assignees": { "nodes": [] },
+          "labels": { "nodes": [] },
+          "createdAt": "2026-02-22T00:44:08Z",
+          "updatedAt": "2026-02-23T17:16:03Z"
+        }
+      ]
+    }
+  }
+}

@@ -114,6 +114,31 @@ lxa implement --loop --refine --auto-merge
 lxa implement --loop --refine --allow-merge good_taste --max-refine-iterations 10
 ```
 
+### Task Runner (Headless Mode)
+
+Run arbitrary tasks from a prompt or file (similar to OpenHands CLI headless mode):
+
+```bash
+# Run a task from inline prompt
+lxa run -t "Write a hello world script in Python"
+
+# Run a task from a file
+lxa run -f task.txt
+
+# Run in background (detached from terminal)
+lxa run -t "Refactor the auth module" --background
+
+# Custom job name for background execution
+lxa run -f requirements.txt --background --job-name feature-impl
+```
+
+The task runner provides a simple agent with:
+- File editing capabilities
+- Terminal access for running commands
+- Task tracking for structured work
+
+Background jobs can be managed with the `lxa job` command (see below).
+
 ### Reconciliation (Post-merge)
 
 Update design documents to reference implemented code:
@@ -122,6 +147,120 @@ Update design documents to reference implemented code:
 lxa reconcile .pr/design.md --dry-run  # Preview changes
 lxa reconcile .pr/design.md            # Apply changes
 ```
+
+### Board Management
+
+Track AI-assisted development across multiple repositories with GitHub Projects:
+
+```bash
+# Create a new board
+lxa board init --create "My Agent Board"
+
+# Add repos to watch
+lxa board config repos add owner/repo1
+lxa board config repos add owner/repo2
+
+# Scan for your issues/PRs and populate board
+lxa board scan
+
+# Incremental sync using notifications
+lxa board sync
+
+# Check what needs attention
+lxa board status --attention
+```
+
+The board automatically organizes items into workflow columns based on their state:
+
+```
+Icebox → Backlog → Agent Coding → Human Review → Agent Refinement
+                              → Final Review → Approved → Done / Closed
+```
+
+See [Board Management](doc/reference/board-management.md) for detailed documentation.
+
+#### Debugging API Calls
+
+Enable API logging to capture all GitHub API requests and responses:
+
+```bash
+# Enable API logging
+export LXA_LOG_API=1
+
+# Optionally set custom log directory
+export LXA_LOG_API_DIR=/path/to/logs
+
+# Run any board command - all API calls will be logged
+lxa board scan --dry-run
+
+# Logs saved to ~/.lxa/api_logs/ as:
+# 0001_request.json, 0001_response.json, 0002_request.json, ...
+```
+
+This is useful for debugging API issues and generating test fixture data.
+
+### Background Job Management
+
+Monitor and control long-running background tasks:
+
+```bash
+# List all jobs
+lxa job list
+
+# Show only running jobs
+lxa job list --running
+
+# Get detailed status for a job
+lxa job status implement-a3f2b1c
+
+# View job output
+lxa job logs implement-a3f2b1c
+
+# Follow logs in real-time
+lxa job logs implement-a3f2b1c --follow
+
+# Stop a running job
+lxa job stop implement-a3f2b1c
+
+# Clean up old job files (default: older than 7 days)
+lxa job clean
+
+# Clean jobs older than 30 days
+lxa job clean --older-than 30
+```
+
+Job metadata and logs are stored in `~/.lxa/jobs/`. Background jobs run in isolated workspace clones at `~/.lxa/workspaces/{job_id}/` to prevent interference with your working directory. Git repositories are cloned (preserving history), while non-git directories are copied.
+
+The `job status` command also shows the conversation trajectory path, allowing you to review the full agent conversation history:
+
+```bash
+lxa job status implement-a3f2b1c
+# Shows: Trajectory  ~/.lxa/conversations/abc123-def456
+```
+
+### Global Configuration
+
+Configure lxa-wide settings:
+
+```bash
+# View current configuration
+lxa config
+
+# Set custom conversations directory
+lxa config set conversations_dir /path/to/conversations
+
+# Reset to default
+lxa config reset conversations_dir
+```
+
+Configuration is stored in `~/.lxa/config.toml`. Available settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `conversations_dir` | `~/.lxa/conversations` | Directory for storing conversation histories |
+
+Environment variables override config file settings:
+- `LXA_CONVERSATIONS_DIR` - Override conversations directory
 
 ## Development
 
@@ -157,5 +296,6 @@ make test-cov
 | Document | Description |
 |----------|-------------|
 | [Artifact Path Configuration](doc/reference/artifact-path-configuration.md) | `.pr/` folder pattern and configuration |
+| [Board Management](doc/reference/board-management.md) | GitHub Projects board for tracking development workflow |
 | [Squash Commit Messages](doc/reference/squash-commit-messages.md) | Auto-generated commit messages for PR merges |
 | [PR Refinement](doc/reference/pr-refinement.md) | Two-phase code review and refinement loop |
