@@ -64,6 +64,12 @@ lxa board scan
 # Scan specific repos
 lxa board scan --repos owner/repo1,owner/repo2
 
+# Auto-discover repos: scan all repos owned by a user
+lxa board scan --user jpshackelford --since 21
+
+# Auto-discover repos: scan all repos in an organization
+lxa board scan --org my-org --since 14
+
 # Only include items updated in the last 30 days
 lxa board scan --since 30
 
@@ -76,6 +82,32 @@ The scan uses GitHub's Search API to find items where you are:
 - An assignee
 - Mentioned
 - Requested for review
+
+#### Auto-Discovery Mode
+
+The `--user` and `--org` flags enable auto-discovery mode, which finds all
+repositories with recent activity rather than requiring pre-configured repo
+lists. This is useful when you work across many repos and don't want to
+manually add each one.
+
+```bash
+# Find all your recent work in your personal repos
+lxa board scan --user myusername --since 21
+
+# Track work across an entire organization
+lxa board scan --org my-company --since 14
+```
+
+With `--verbose`, auto-discovery mode shows which repos were found:
+
+```
+Discovered 5 repos with activity:
+  myuser/repo1: 3 items
+  myuser/repo2: 7 items
+  myuser/repo3: 1 items
+```
+
+Note: `--repos`, `--user`, and `--org` are mutually exclusive.
 
 ### `lxa board sync`
 
@@ -171,6 +203,60 @@ List available macros for rule conditions in YAML configs.
 ```bash
 lxa board macros
 ```
+
+### `lxa board sync-config`
+
+Sync board configuration with a private GitHub Gist for persistence across
+ephemeral environments.
+
+```bash
+# Sync config (bidirectional merge)
+lxa board sync-config
+
+# Preview what would happen
+lxa board sync-config --dry-run
+```
+
+This command enables you to persist your board configuration to GitHub, so you
+can restore it in new sessions (e.g., when using ephemeral environments like
+OpenHands Cloud).
+
+**How it works:**
+
+1. First sync creates a private gist named `lxa-config.toml`
+2. Subsequent syncs merge local ↔ remote using timestamps
+3. Newer configuration wins for each board
+4. Deleted boards are tracked via tombstones (propagate across syncs)
+5. Gist is auto-discovered by filename convention
+
+**Example workflow:**
+
+```bash
+# Session 1: Initial setup
+lxa board init --create "My Board"
+lxa board scan --user myuser --since 21
+lxa board sync-config
+# → Saved to gist: https://gist.github.com/myuser/abc123
+
+# Session 2: New ephemeral environment
+lxa board sync-config
+# → Found config gist, restored 1 board(s)
+# → Ready to use immediately!
+```
+
+**Merge behavior:**
+
+| Scenario | Outcome |
+|----------|---------|
+| Board only in local | Added to gist |
+| Board only in gist | Restored locally |
+| Board in both, local newer | Local version uploaded |
+| Board in both, gist newer | Gist version downloaded |
+| Board deleted locally | Deletion propagates to gist |
+| Board deleted in gist | Deletion propagates locally |
+
+**Required token:** Needs `gist` scope. Set `GIST_TOKEN` environment variable
+(or use `GITHUB_TOKEN` if it has gist scope).
 
 ## Workflow Columns
 
