@@ -343,6 +343,8 @@ def run_refine(
     min_iterations: int = 1,
     max_iterations: int = 5,
     phase: str = "auto",
+    verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the refinement loop on an existing PR.
 
@@ -354,6 +356,8 @@ def run_refine(
         min_iterations: Minimum review iterations before accepting "acceptable"
         max_iterations: Maximum refinement iterations
         phase: Which phase to run: "auto", "self-review", or "respond"
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -404,6 +408,8 @@ def run_refine(
         repo_slug=repo_slug,
         refinement_config=refinement_config,
         phase=phase_enum,
+        verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     result = runner.run()
@@ -571,6 +577,33 @@ def _resolve_verbosity(verbosity_arg: str | None, background: bool) -> Verbosity
         return Verbosity(verbosity_arg)
     # Default: quiet for background, normal for foreground
     return Verbosity.QUIET if background else Verbosity.NORMAL
+
+
+def _add_verbosity_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add --verbosity and --timestamps arguments to a parser.
+
+    This is a DRY helper to ensure consistent verbosity/timestamp options
+    across all commands that run agent conversations.
+
+    Args:
+        parser: The argparse parser or subparser to add arguments to
+    """
+    parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default=None,  # None means: use quiet for background, normal otherwise
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
+        ),
+    )
+    parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
+    )
 
 
 def _filter_background_args(argv: list[str]) -> list[str]:
@@ -832,22 +865,7 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
-    implement_parser.add_argument(
-        "--verbosity",
-        "-v",
-        choices=["quiet", "normal", "verbose"],
-        default=None,  # None means: use quiet for background, normal otherwise
-        help=(
-            "Output verbosity: quiet (summaries only), "
-            "normal (reasoning + summaries), verbose (all details). "
-            "Default: quiet for --background, normal otherwise"
-        ),
-    )
-    implement_parser.add_argument(
-        "--timestamps",
-        action="store_true",
-        help="Prefix output lines with timestamps (auto-enabled for --background)",
-    )
+    _add_verbosity_arguments(implement_parser)
     implement_parser.add_argument(
         "--background",
         "-b",
@@ -930,6 +948,7 @@ Configuration:
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
+    _add_verbosity_arguments(refine_parser)
     refine_parser.add_argument(
         "--background",
         "-b",
@@ -968,22 +987,7 @@ Configuration:
         default=None,
         help="Workspace directory (defaults to current git root)",
     )
-    run_parser.add_argument(
-        "--verbosity",
-        "-v",
-        choices=["quiet", "normal", "verbose"],
-        default=None,  # None means: use quiet for background, normal otherwise
-        help=(
-            "Output verbosity: quiet (summaries only), "
-            "normal (reasoning + summaries), verbose (all details). "
-            "Default: quiet for --background, normal otherwise"
-        ),
-    )
-    run_parser.add_argument(
-        "--timestamps",
-        action="store_true",
-        help="Prefix output lines with timestamps (auto-enabled for --background)",
-    )
+    _add_verbosity_arguments(run_parser)
     run_parser.add_argument(
         "--background",
         "-b",
@@ -1474,6 +1478,9 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1481,6 +1488,14 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
+
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1502,6 +1517,8 @@ Configuration:
             min_iterations=args.min_iterations,
             max_iterations=args.max_iterations,
             phase=args.phase,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
         )
 
     # Handle run command - prompt-driven task execution

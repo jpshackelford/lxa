@@ -393,3 +393,69 @@ class TestCLIVerbosityFlag:
 
         args = impl_parser.parse_args(["--verbosity", "quiet"])
         assert args.verbosity == "quiet"
+
+
+class TestAddVerbosityArguments:
+    """Tests for the _add_verbosity_arguments helper function."""
+
+    def test_adds_verbosity_argument(self):
+        """Test that helper adds --verbosity argument."""
+        import argparse
+
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_verbosity_arguments(parser)
+
+        args = parser.parse_args(["--verbosity", "quiet"])
+        assert args.verbosity == "quiet"
+
+    def test_adds_timestamps_argument(self):
+        """Test that helper adds --timestamps argument."""
+        import argparse
+
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_verbosity_arguments(parser)
+
+        args = parser.parse_args(["--timestamps"])
+        assert args.timestamps is True
+
+    def test_short_verbosity_flag(self):
+        """Test that -v short flag works."""
+        import argparse
+
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_verbosity_arguments(parser)
+
+        args = parser.parse_args(["-v", "verbose"])
+        assert args.verbosity == "verbose"
+
+    def test_verbosity_choices(self):
+        """Test that only valid verbosity choices are accepted."""
+        import argparse
+
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_verbosity_arguments(parser)
+
+        for level in ["quiet", "normal", "verbose"]:
+            args = parser.parse_args(["--verbosity", level])
+            assert args.verbosity == level
+
+    def test_default_values(self):
+        """Test that defaults are None for verbosity and False for timestamps."""
+        import argparse
+
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        _add_verbosity_arguments(parser)
+
+        args = parser.parse_args([])
+        assert args.verbosity is None
+        assert args.timestamps is False
