@@ -625,8 +625,12 @@ class TestGetGitHubUsername:
             original_username = os.environ.pop("GITHUB_USERNAME", None)
             original_token = os.environ.pop("GITHUB_TOKEN", None)
             try:
-                # Simulate API failure (no token)
-                with patch("src.board.github_api._get_username_from_gh_cli") as mock_gh:
+                # Simulate API failure (no token available)
+                with (
+                    patch("src.board.github_api.get_github_token") as mock_token,
+                    patch("src.board.github_api._get_username_from_gh_cli") as mock_gh,
+                ):
+                    mock_token.return_value = None
                     mock_gh.return_value = "ghuser"
                     assert get_github_username() == "ghuser"
             finally:
