@@ -2,7 +2,13 @@
 
 from datetime import UTC, datetime
 
-from src.pr.history import _build_history_string, _determine_ci_status
+from src.pr.history import (
+    _build_history_string,
+    _deduplicate_consecutive,
+    _determine_ci_status,
+    _filter_timeline_events,
+    _format_action,
+)
 from src.pr.models import ActionType, CIStatus, TimelineEvent
 
 
@@ -148,3 +154,97 @@ class TestDetermineCIStatus:
             "commits": {"nodes": []},
         }
         assert _determine_ci_status(pr_data) == CIStatus.NONE
+
+
+class TestFilterTimelineEvents:
+    """Tests for timeline event filtering."""
+
+    def test_filters_commits_before_review(self):
+        """Commits before any review should be filtered out."""
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 2, tzinfo=UTC)),
+            TimelineEvent(ActionType.REVIEW, "bob", datetime(2024, 1, 3, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 4, tzinfo=UTC)),
+        ]
+        filtered = _filter_timeline_events(events)
+        actions = [e.action for e in filtered]
+        assert actions == [ActionType.OPENED, ActionType.REVIEW, ActionType.FIX]
+
+    def test_filters_killed_after_merged(self):
+        """KILLED events after MERGED should be filtered out."""
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.MERGED, "bob", datetime(2024, 1, 2, tzinfo=UTC)),
+            TimelineEvent(ActionType.KILLED, "bob", datetime(2024, 1, 3, tzinfo=UTC)),
+        ]
+        filtered = _filter_timeline_events(events)
+        actions = [e.action for e in filtered]
+        assert actions == [ActionType.OPENED, ActionType.MERGED]
+
+    def test_keeps_killed_without_merge(self):
+        """KILLED events should be kept if no MERGED event."""
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.KILLED, "alice", datetime(2024, 1, 2, tzinfo=UTC)),
+        ]
+        filtered = _filter_timeline_events(events)
+        actions = [e.action for e in filtered]
+        assert actions == [ActionType.OPENED, ActionType.KILLED]
+
+
+class TestDeduplicateConsecutive:
+    """Tests for consecutive event deduplication."""
+
+    def test_deduplicates_consecutive_same_action(self):
+        """Multiple consecutive same actions should be collapsed."""
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 2, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 3, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 4, tzinfo=UTC)),
+            TimelineEvent(ActionType.MERGED, "bob", datetime(2024, 1, 5, tzinfo=UTC)),
+        ]
+        deduped = _deduplicate_consecutive(events)
+        actions = [e.action for e in deduped]
+        assert actions == [ActionType.OPENED, ActionType.FIX, ActionType.MERGED]
+
+    def test_keeps_non_consecutive_same_action(self):
+        """Non-consecutive same actions should be kept."""
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 2, tzinfo=UTC)),
+            TimelineEvent(ActionType.REVIEW, "bob", datetime(2024, 1, 3, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", datetime(2024, 1, 4, tzinfo=UTC)),
+        ]
+        deduped = _deduplicate_consecutive(events)
+        actions = [e.action for e in deduped]
+        assert actions == [
+            ActionType.OPENED,
+            ActionType.FIX,
+            ActionType.REVIEW,
+            ActionType.FIX,
+        ]
+
+    def test_empty_list(self):
+        """Empty list should return empty list."""
+        assert _deduplicate_consecutive([]) == []
+
+
+class TestFormatAction:
+    """Tests for action character formatting."""
+
+    def test_lowercase_for_reference_user(self):
+        """Actions by reference user should be lowercase."""
+        assert _format_action(ActionType.OPENED, "alice", "alice") == "o"
+        assert _format_action(ActionType.FIX, "alice", "alice") == "f"
+
+    def test_uppercase_for_other_user(self):
+        """Actions by other users should be uppercase."""
+        assert _format_action(ActionType.REVIEW, "bob", "alice") == "R"
+        assert _format_action(ActionType.MERGED, "bob", "alice") == "M"
+
+    def test_case_insensitive_user_comparison(self):
+        """User comparison should be case-insensitive."""
+        assert _format_action(ActionType.OPENED, "Alice", "alice") == "o"
+        assert _format_action(ActionType.OPENED, "ALICE", "alice") == "o"

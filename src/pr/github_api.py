@@ -129,13 +129,14 @@ class PRClient:
             for repo in repos:
                 query_parts.append(f"repo:{repo}")
 
+        client_side_states: set[str] | None = None
         if states:
-            state_filter = self._build_state_filter(states)
+            state_filter, client_side_states = self._build_state_filter(states)
             if state_filter:
                 query_parts.append(state_filter)
 
         search_query = " ".join(query_parts)
-        return self._search_prs(search_query, author, limit)
+        return self._search_prs(search_query, author, limit, client_side_states)
 
     def list_prs_for_reviewer(
         self,
@@ -208,49 +209,67 @@ class PRClient:
 
         return PRListResult(prs=prs, total_count=len(prs))
 
-    def _build_state_filter(self, states: list[str]) -> str:
+    def _build_state_filter(self, states: list[str]) -> tuple[str, set[str] | None]:
         """Build state filter for search query.
 
-        GitHub search doesn't support OR, so:
-        - Single state: use that filter
-        - All states: no filter (return empty)
-        - Multiple but not all: we approximate with the most inclusive
+        GitHub's search API has a key limitation: it doesn't support OR operators.
+        This means some filter combinations cannot be expressed directly.
+
+        Strategy:
+        - Single state: use exact API filter
+        - All states: no filter needed
+        - Multiple states with API support: use most specific API filter
+        - Unsupported combinations: fetch broader set, filter client-side
+
+        Returns:
+            Tuple of (api_filter_string, states_to_filter_client_side).
+            If client-side filtering needed, returns the states that should be kept.
         """
         states_set = {s.lower() for s in states}
 
         # If all three states, no filter needed
         if states_set == {"open", "merged", "closed"}:
-            return ""
+            return ("", None)
 
-        # Single state filters
+        # Single state filters - exact API match
         if states_set == {"open"}:
-            return "is:open"
+            return ("is:open", None)
         if states_set == {"merged"}:
-            return "is:merged"
+            return ("is:merged", None)
         if states_set == {"closed"}:
-            return "is:closed is:unmerged"
+            return ("is:closed is:unmerged", None)
 
-        # Two states - approximate
+        # Two states - some can be expressed, others need client-side filtering
         if "open" in states_set and "merged" in states_set:
-            # Can't express "open OR merged" directly
-            # Return empty and filter client-side, or just don't filter
-            return ""
+            # API can't express "open OR merged" - fetch all, filter client-side
+            logger.debug("State filter 'open,merged' requires client-side filtering")
+            return ("", {"open", "merged"})
         if "open" in states_set and "closed" in states_set:
             # "unmerged" covers both open and closed-unmerged
-            return "is:unmerged"
+            return ("is:unmerged", None)
         if "merged" in states_set and "closed" in states_set:
             # "closed" covers both merged and closed-unmerged
-            return "is:closed"
+            return ("is:closed", None)
 
-        return ""
+        return ("", None)
 
     def _search_prs(
         self,
         search_query: str,
         reference_user: str,
         limit: int,
+        client_side_states: set[str] | None = None,
     ) -> PRListResult:
-        """Execute a search query and process results."""
+        """Execute a search query and process results.
+
+        Args:
+            search_query: GitHub search query string
+            reference_user: User for determining action case in history
+            limit: Maximum number of PRs to return
+            client_side_states: If provided, filter results to only include
+                PRs with state in this set (for queries that can't be expressed
+                in the API)
+        """
         from src.pr.history import process_pr_data
 
         query = f"""
@@ -275,8 +294,13 @@ class PRClient:
         cursor: str | None = None
         total_count = 0
 
+        # When client-side filtering, we may need to fetch more from API
+        # to satisfy the limit after filtering
+        fetch_multiplier = 2 if client_side_states else 1
+        filtered_total = 0
+
         while len(all_prs) < limit:
-            batch_limit = min(100, limit - len(all_prs))
+            batch_limit = min(100, (limit - len(all_prs)) * fetch_multiplier)
             data = self._client.graphql(
                 query,
                 {"query": search_query, "limit": batch_limit, "cursor": cursor},
@@ -287,7 +311,14 @@ class PRClient:
             for node in search_result["nodes"]:
                 if node:  # Skip null nodes
                     pr_info = process_pr_data(node, reference_user)
+                    # Apply client-side state filter if needed
+                    if client_side_states:
+                        if pr_info.state.value not in client_side_states:
+                            continue
+                        filtered_total += 1
                     all_prs.append(pr_info)
+                    if len(all_prs) >= limit:
+                        break
 
             page_info = search_result["pageInfo"]
             if not page_info["hasNextPage"] or len(all_prs) >= limit:
@@ -297,10 +328,13 @@ class PRClient:
         # Sort by created_at descending (newest first)
         all_prs.sort(key=lambda p: p.created_at, reverse=True)
 
+        # Adjust total_count for client-side filtered results
+        effective_total = filtered_total if client_side_states else total_count
+
         return PRListResult(
             prs=all_prs[:limit],
-            total_count=total_count,
-            has_more=total_count > len(all_prs),
+            total_count=effective_total,
+            has_more=effective_total > len(all_prs),
             cursor=cursor,
         )
 

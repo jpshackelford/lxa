@@ -1,5 +1,8 @@
 """PR list command - show PRs with history visualization."""
 
+import logging
+import traceback
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -8,6 +11,7 @@ from src.pr.github_api import PRClient
 from src.pr.models import CIStatus, PRInfo, PRState
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def cmd_list(
@@ -77,7 +81,9 @@ def cmd_list(
             return 0
 
     except Exception as e:
+        logger.debug("Full traceback:\n%s", traceback.format_exc())
         console.print(f"[red]Error:[/] {e}")
+        console.print("[dim]Run with --verbose for full traceback[/]")
         return 1
 
 

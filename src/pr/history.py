@@ -192,20 +192,14 @@ def _parse_timeline_item(
     return None
 
 
-def _build_history_string(
-    events: list[TimelineEvent],
-    reference_user: str,
-) -> str:
-    """Build the compact history string from timeline events.
+def _filter_timeline_events(events: list[TimelineEvent]) -> list[TimelineEvent]:
+    """Filter events that shouldn't appear in history.
 
-    Rules:
-    - Lowercase = action by reference_user
-    - Uppercase = action by someone else
-    - Consecutive duplicates are collapsed
-    - Commits before any review are ignored (not "fixes")
-    - If merged, don't also show killed
+    Removes:
+    - Commits before any review (they're not "fixes")
+    - Killed events after merged events
     """
-    history_chars: list[str] = []
+    filtered: list[TimelineEvent] = []
     has_had_review = False
     is_merged = False
 
@@ -228,19 +222,54 @@ def _build_history_string(
         if action == ActionType.KILLED and is_merged:
             continue
 
-        # Determine case based on actor
-        char = action.value
-        is_reference_user = event.actor.lower() == reference_user.lower()
-        if not is_reference_user:
-            char = char.upper()
+        filtered.append(event)
 
-        # Skip if same as previous (dedup consecutive)
-        if history_chars and history_chars[-1].lower() == char.lower():
-            continue
+    return filtered
 
-        history_chars.append(char)
 
-    return "".join(history_chars)
+def _deduplicate_consecutive(events: list[TimelineEvent]) -> list[TimelineEvent]:
+    """Remove consecutive duplicate action types."""
+    if not events:
+        return []
+
+    result: list[TimelineEvent] = [events[0]]
+    for event in events[1:]:
+        if event.action != result[-1].action:
+            result.append(event)
+    return result
+
+
+def _format_action(action: ActionType, actor: str, reference_user: str) -> str:
+    """Convert action to case-appropriate character.
+
+    Lowercase = action by reference_user
+    Uppercase = action by someone else
+    """
+    char = action.value
+    is_reference_user = actor.lower() == reference_user.lower()
+    if not is_reference_user:
+        char = char.upper()
+    return char
+
+
+def _build_history_string(
+    events: list[TimelineEvent],
+    reference_user: str,
+) -> str:
+    """Build the compact history string from timeline events.
+
+    Rules:
+    - Lowercase = action by reference_user
+    - Uppercase = action by someone else
+    - Consecutive duplicates are collapsed
+    - Commits before any review are ignored (not "fixes")
+    - If merged, don't also show killed
+    """
+    filtered = _filter_timeline_events(events)
+    deduped = _deduplicate_consecutive(filtered)
+    return "".join(
+        _format_action(e.action, e.actor, reference_user) for e in deduped
+    )
 
 
 def _find_last_activity(events: list[TimelineEvent], created_at: datetime) -> datetime:
