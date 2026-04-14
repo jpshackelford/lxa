@@ -44,9 +44,6 @@ def _clone_workspace(source: Path, dest: Path) -> None:
         # Not a git repo - copy the directory contents
         # Note: dest already exists (created by Job.create), so we copy contents into it
         for item in source.iterdir():
-            # Skip .git since we're not in a git repo context
-            if item.name == ".git":
-                continue
             dest_item = dest / item.name
             if item.is_dir():
                 shutil.copytree(item, dest_item)
