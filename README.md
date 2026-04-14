@@ -229,7 +229,7 @@ lxa job clean
 lxa job clean --older-than 30
 ```
 
-Job metadata and logs are stored in `~/.lxa/jobs/`.
+Job metadata and logs are stored in `~/.lxa/jobs/`. Background jobs run in isolated workspace clones at `~/.lxa/workspaces/{job_id}/` to prevent interference with your working directory. Git repositories are cloned (preserving history), while non-git directories are copied.
 
 ## Development
 
