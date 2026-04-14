@@ -297,11 +297,12 @@ class TestTemplates:
         board = load_board_from_string(template)
 
         assert board.name == "Agent Development Board"
-        assert len(board.columns) == 9  # All workflow columns
+        assert len(board.columns) == 10  # All workflow columns including Triage
         assert len(board.rules) >= 9  # All default rules
 
         # Verify column names
         column_names = board.column_names
+        assert "Triage" in column_names
         assert "Icebox" in column_names
         assert "Backlog" in column_names
         assert "Agent Coding" in column_names

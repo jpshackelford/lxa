@@ -48,6 +48,10 @@ def cmd_status(
 
     print_command_header("lxa board status")
 
+    # Display project metadata for project-scoped boards
+    if config.is_project_scoped:
+        _print_project_metadata(config)
+
     _print_last_sync_info(cache)
     _print_status_table(counts, attention)
 
@@ -61,9 +65,15 @@ def _build_json_output(config, counts: dict, cache: BoardCache, verbose: bool) -
     """Build JSON output for status command."""
     data = {
         "project_id": config.project_id,
+        "scope": config.scope,
         "columns": counts,
         "total": sum(counts.values()),
     }
+    # Include project-scoped metadata
+    if config.is_project_scoped:
+        data["overview_item"] = config.overview_item
+        if config.mission:
+            data["mission"] = config.mission
     if verbose:
         data["items"] = {}
         for col_name in get_default_columns():
@@ -72,6 +82,24 @@ def _build_json_output(config, counts: dict, cache: BoardCache, verbose: bool) -
                 {"repo": i.repo, "number": i.number, "title": i.title} for i in items
             ]
     return data
+
+
+def _print_project_metadata(config) -> None:
+    """Print project metadata for project-scoped boards."""
+    console.print(f"[bold]Board:[/] {config.name}")
+    console.print("[bold]Scope:[/] project")
+
+    if config.overview_item:
+        console.print(f"[bold]Overview:[/] {config.overview_item}")
+
+    if config.mission:
+        console.print()
+        console.print("[bold]Mission:[/]")
+        # Indent mission text
+        for line in config.mission.strip().split("\n"):
+            console.print(f"  {line}")
+
+    console.print()
 
 
 def _print_last_sync_info(cache: BoardCache) -> None:

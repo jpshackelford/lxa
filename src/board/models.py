@@ -18,6 +18,7 @@ class ItemType(Enum):
 
 
 # Column name constants - used as canonical column names
+COLUMN_TRIAGE = "Triage"
 COLUMN_ICEBOX = "Icebox"
 COLUMN_BACKLOG = "Backlog"
 COLUMN_AGENT_CODING = "Agent Coding"
@@ -30,6 +31,7 @@ COLUMN_CLOSED = "Closed"
 
 # Columns that need human attention
 ATTENTION_COLUMNS = {
+    COLUMN_TRIAGE,
     COLUMN_HUMAN_REVIEW,
     COLUMN_FINAL_REVIEW,
     COLUMN_APPROVED,

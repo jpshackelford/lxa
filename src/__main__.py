@@ -1170,6 +1170,16 @@ Configuration:
         help="Name for this board in config (default: slugified project name)",
     )
     board_init_parser.add_argument(
+        "--scope",
+        choices=["user", "project"],
+        help="Board scope: 'user' (default) or 'project' for project-scoped boards",
+    )
+    board_init_parser.add_argument(
+        "--overview",
+        metavar="URL",
+        help="URL of overview item (required for project-scoped boards)",
+    )
+    board_init_parser.add_argument(
         "--dry-run",
         "-n",
         action="store_true",
@@ -1601,6 +1611,8 @@ Configuration:
                 project_id=args.project_id,
                 project_number=args.project_number,
                 board_name=args.board,
+                scope=args.scope,
+                overview=args.overview,
                 dry_run=args.dry_run,
             )
 

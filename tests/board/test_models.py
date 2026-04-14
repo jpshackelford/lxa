@@ -3,6 +3,7 @@
 from src.board.models import (
     COLUMN_CLOSED,
     COLUMN_ICEBOX,
+    COLUMN_TRIAGE,
     Item,
     ItemType,
     get_column_color,
@@ -17,8 +18,9 @@ class TestColumnHelpers:
     def test_get_default_columns_returns_all_columns_in_order(self):
         """Verify get_default_columns returns correct columns."""
         columns = get_default_columns()
-        assert len(columns) == 9
-        assert columns[0] == COLUMN_ICEBOX
+        assert len(columns) == 10  # Including Triage column
+        assert columns[0] == COLUMN_TRIAGE
+        assert columns[1] == COLUMN_ICEBOX
         assert columns[-1] == COLUMN_CLOSED
 
     def test_get_column_color_returns_valid_colors(self):
