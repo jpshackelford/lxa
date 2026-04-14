@@ -454,6 +454,7 @@ def run_task(
     task: str,
     workspace: Path,
     llm: LLM | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
 ) -> int:
     """Run a prompt-driven task using a simple agent.
 
@@ -465,6 +466,7 @@ def run_task(
         workspace: Path to the workspace (git repository root)
         llm: Optional LLM instance (defaults to get_llm() if not provided).
             Useful for testing with a mock LLM.
+        verbosity: Output verbosity level (quiet, normal, verbose)
 
     Returns:
         Exit code (0 for success, 1 for error/stuck)
@@ -503,11 +505,12 @@ def run_task(
     console.print("[bold cyan]Starting task execution...[/]")
     console.print()
 
-    # Create conversation with visualizer and persistence
+    # Create conversation with verbosity-appropriate visualizer and persistence
+    visualizer = get_visualizer(verbosity, name="TaskRunner")
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
-        visualizer=DelegationVisualizer(name="TaskRunner"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
     )
 
@@ -541,6 +544,23 @@ def run_task(
         console.print()
         console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
         return 1
+
+
+def _resolve_verbosity(verbosity_arg: str | None, background: bool) -> Verbosity:
+    """Resolve verbosity level based on explicit arg and background mode.
+
+    Args:
+        verbosity_arg: Explicit --verbosity value, or None if not specified
+        background: Whether --background was specified
+
+    Returns:
+        Resolved Verbosity level: quiet for background (unless overridden),
+        normal otherwise
+    """
+    if verbosity_arg is not None:
+        return Verbosity(verbosity_arg)
+    # Default: quiet for background, normal for foreground
+    return Verbosity.QUIET if background else Verbosity.NORMAL
 
 
 def _filter_background_args(argv: list[str]) -> list[str]:
@@ -806,10 +826,11 @@ Configuration:
         "--verbosity",
         "-v",
         choices=["quiet", "normal", "verbose"],
-        default="normal",
+        default=None,  # None means: use quiet for background, normal otherwise
         help=(
             "Output verbosity: quiet (summaries only), "
-            "normal (reasoning + summaries), verbose (all details) (default: normal)"
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
         ),
     )
     implement_parser.add_argument(
@@ -895,6 +916,17 @@ Configuration:
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
     refine_parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default=None,  # None means: use quiet for background, normal otherwise
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
+        ),
+    )
+    refine_parser.add_argument(
         "--background",
         "-b",
         action="store_true",
@@ -931,6 +963,17 @@ Configuration:
         type=Path,
         default=None,
         help="Workspace directory (defaults to current git root)",
+    )
+    run_parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default=None,  # None means: use quiet for background, normal otherwise
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
+        ),
     )
     run_parser.add_argument(
         "--background",
@@ -1422,6 +1465,9 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1429,6 +1475,10 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1442,6 +1492,7 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
+        # TODO: pass verbosity to run_refine when it supports it
         return run_refine(
             pr_url=args.pr_url,
             workspace=workspace,
@@ -1479,6 +1530,9 @@ Configuration:
                 console.print(f"[red]Error:[/] Task file is empty: {task_file}")
                 return 1
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1486,6 +1540,10 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1499,7 +1557,7 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        return run_task(task=task, workspace=workspace)
+        return run_task(task=task, workspace=workspace, verbosity=verbosity)
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -1516,8 +1574,8 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
-    # Parse verbosity level
-    verbosity = Verbosity(args.verbosity)
+    # Resolve verbosity: quiet for background unless explicitly set
+    verbosity = _resolve_verbosity(args.verbosity, args.background)
 
     # Handle background mode
     if args.background:
@@ -1526,6 +1584,10 @@ Configuration:
         # Filter out --background and --job-name, keep everything else
         args_to_use = argv if argv is not None else sys.argv[1:]
         cmd = _filter_background_args(args_to_use)
+
+        # Add --verbosity to the command if not already present
+        if "--verbosity" not in cmd and "-v" not in cmd:
+            cmd = cmd + ["--verbosity", verbosity.value]
 
         # Rewrite paths to be relative for isolated workspace
         cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
