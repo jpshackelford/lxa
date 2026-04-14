@@ -552,6 +552,6 @@ class TestRunTaskFunctional:
         assert llm.call_count >= 1
         first_call_tools = llm.recorded_calls[0].tools
         tool_names = {tool.name for tool in first_call_tools}
-        assert "FileEditorTool" in tool_names
-        assert "TerminalTool" in tool_names
-        assert "TaskTrackerTool" in tool_names
+        assert "file_editor" in tool_names
+        assert "terminal" in tool_names
+        assert "task_tracker" in tool_names

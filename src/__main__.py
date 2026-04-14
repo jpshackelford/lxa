@@ -573,8 +573,7 @@ def _rewrite_single_path(
         rel_path = path.relative_to(workspace)
         if path_str != str(rel_path):
             warning = (
-                f"Rewriting {description} path for isolated workspace: "
-                f"{path_str} -> {rel_path}"
+                f"Rewriting {description} path for isolated workspace: {path_str} -> {rel_path}"
             )
             return str(rel_path), warning
         return path_str, None

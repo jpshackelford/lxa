@@ -84,9 +84,9 @@ def cmd_status(job_id: str, *, json_output: bool = False) -> int:
 
     # Show helpful hints based on status
     if job.status == JobStatus.RUNNING:
-        console.print("[dim]View logs: lxa job logs", job.id, "[/]")
-        console.print("[dim]Stop job: lxa job stop", job.id, "[/]")
+        console.print(f"[dim]View logs: lxa job logs {job.id}[/]")
+        console.print(f"[dim]Stop job: lxa job stop {job.id}[/]")
     else:
-        console.print("[dim]View logs: lxa job logs", job.id, "[/]")
+        console.print(f"[dim]View logs: lxa job logs {job.id}[/]")
 
     return 0
