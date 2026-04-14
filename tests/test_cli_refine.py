@@ -194,9 +194,7 @@ class TestRefineCliArguments:
         assert args.timestamps is True
 
         # Test short flag -v
-        args = parser.parse_args(
-            ["refine", "https://github.com/owner/repo/pull/42", "-v", "quiet"]
-        )
+        args = parser.parse_args(["refine", "https://github.com/owner/repo/pull/42", "-v", "quiet"])
         assert args.verbosity == "quiet"
 
 
