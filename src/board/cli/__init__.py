@@ -5,6 +5,7 @@ Each command is a thin wrapper that handles console I/O and delegates
 business logic to the service layer.
 """
 
+from src.board.cli.add_item import cmd_add_item
 from src.board.cli.apply import cmd_apply
 from src.board.cli.config_cmd import cmd_config
 from src.board.cli.init import cmd_init
@@ -16,6 +17,7 @@ from src.board.cli.sync_config import cmd_sync_config
 from src.board.cli.templates import cmd_macros, cmd_templates
 
 __all__ = [
+    "cmd_add_item",
     "cmd_apply",
     "cmd_config",
     "cmd_init",
