@@ -34,6 +34,10 @@ from pathlib import Path
 if "LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
+# Suppress OpenHands SDK banner by default
+if "OPENHANDS_SUPPRESS_BANNER" not in os.environ:
+    os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
+
 # Suppress LiteLLM's asyncio deprecation warning.
 # LiteLLM uses asyncio.get_event_loop() which is deprecated in Python 3.10+
 # when no event loop is running. The warning fires during cleanup/shutdown.
@@ -53,7 +57,6 @@ from openhands.sdk.subagent import (  # pyright: ignore[reportMissingImports]
 from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
     register_builtins_agents,
 )
-from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
@@ -69,6 +72,7 @@ from src.global_config import get_conversations_dir
 from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
+from src.visualizers import Verbosity, get_visualizer
 
 # Load environment variables
 load_dotenv()
@@ -197,12 +201,20 @@ def prepare_execution(design_doc: Path, workspace: Path, *, mode_name: str) -> E
     )
 
 
-def run_orchestrator(design_doc: Path, workspace: Path) -> int:
+def run_orchestrator(
+    design_doc: Path,
+    workspace: Path,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
+) -> int:
     """Run the orchestrator agent.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -223,12 +235,14 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print("[bold cyan]Starting orchestrator...[/]")
     console.print()
 
-    # Create conversation with visualizer for real-time sub-agent output
-    # and persistence to ~/.lxa/conversations for history
+    # Create conversation with verbosity-appropriate visualizer
+    # Don't pass agent name - it's redundant for the main agent
+    # Persistence to ~/.lxa/conversations for history
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
-        visualizer=DelegationVisualizer(name="Orchestrator"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
     )
 
@@ -333,6 +347,8 @@ def run_refine(
     min_iterations: int = 1,
     max_iterations: int = 5,
     phase: str = "auto",
+    verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the refinement loop on an existing PR.
 
@@ -344,6 +360,8 @@ def run_refine(
         min_iterations: Minimum review iterations before accepting "acceptable"
         max_iterations: Maximum refinement iterations
         phase: Which phase to run: "auto", "self-review", or "respond"
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -394,6 +412,8 @@ def run_refine(
         repo_slug=repo_slug,
         refinement_config=refinement_config,
         phase=phase_enum,
+        verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     result = runner.run()
@@ -406,6 +426,8 @@ def run_ralph_loop(
     *,
     max_iterations: int = 20,
     refinement_config: RefinementConfig | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
@@ -414,6 +436,8 @@ def run_ralph_loop(
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
         refinement_config: Configuration for code review refinement loop
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -434,6 +458,8 @@ def run_ralph_loop(
         platform=ctx.platform,
         max_iterations=max_iterations,
         refinement_config=refinement_config,
+        verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     loop_result = runner.run()
@@ -444,6 +470,9 @@ def run_task(
     task: str,
     workspace: Path,
     llm: LLM | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
 ) -> int:
     """Run a prompt-driven task using a simple agent.
 
@@ -460,6 +489,8 @@ def run_task(
         workspace: Path to the workspace (git repository root)
         llm: Optional LLM instance (defaults to get_llm() if not provided).
             Useful for testing with a mock LLM.
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for error/stuck)
@@ -509,11 +540,13 @@ def run_task(
     console.print("[bold cyan]Starting task execution...[/]")
     console.print()
 
-    # Create conversation with visualizer, persistence, and optional sandbox hooks
+    # Create conversation with verbosity-appropriate visualizer, persistence, and optional sandbox hooks
+    # Don't pass agent name - it's redundant for the main agent
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
-        visualizer=DelegationVisualizer(name="TaskRunner"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
         hook_config=hook_config,
     )
@@ -548,6 +581,50 @@ def run_task(
         console.print()
         console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
         return 1
+
+
+def _resolve_verbosity(verbosity_arg: str | None, background: bool) -> Verbosity:
+    """Resolve verbosity level based on explicit arg and background mode.
+
+    Args:
+        verbosity_arg: Explicit --verbosity value, or None if not specified
+        background: Whether --background was specified
+
+    Returns:
+        Resolved Verbosity level: quiet for background (unless overridden),
+        normal otherwise
+    """
+    if verbosity_arg is not None:
+        return Verbosity(verbosity_arg)
+    # Default: quiet for background, normal for foreground
+    return Verbosity.QUIET if background else Verbosity.NORMAL
+
+
+def _add_verbosity_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add --verbosity and --timestamps arguments to a parser.
+
+    This is a DRY helper to ensure consistent verbosity/timestamp options
+    across all commands that run agent conversations.
+
+    Args:
+        parser: The argparse parser or subparser to add arguments to
+    """
+    parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default=None,  # None means: use quiet for background, normal otherwise
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
+        ),
+    )
+    parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
+    )
 
 
 def _filter_background_args(argv: list[str]) -> list[str]:
@@ -809,6 +886,7 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    _add_verbosity_arguments(implement_parser)
     implement_parser.add_argument(
         "--background",
         "-b",
@@ -891,6 +969,7 @@ Configuration:
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
+    _add_verbosity_arguments(refine_parser)
     refine_parser.add_argument(
         "--background",
         "-b",
@@ -929,6 +1008,7 @@ Configuration:
         default=None,
         help="Workspace directory (defaults to current git root)",
     )
+    _add_verbosity_arguments(run_parser)
     run_parser.add_argument(
         "--background",
         "-b",
@@ -1107,6 +1187,16 @@ Configuration:
         help="Name for this board in config (default: slugified project name)",
     )
     board_init_parser.add_argument(
+        "--scope",
+        choices=["user", "project"],
+        help="Board scope: 'user' (default) or 'project' for project-scoped boards",
+    )
+    board_init_parser.add_argument(
+        "--overview",
+        metavar="URL",
+        help="URL of overview item (required for project-scoped boards)",
+    )
+    board_init_parser.add_argument(
         "--dry-run",
         "-n",
         action="store_true",
@@ -1121,6 +1211,16 @@ Configuration:
     board_scan_parser.add_argument(
         "--repos",
         help="Comma-separated list of repos to scan (default: watched repos)",
+    )
+    board_scan_parser.add_argument(
+        "--user",
+        metavar="USERNAME",
+        help="Scan all repos owned by this user (auto-discovers repos with activity)",
+    )
+    board_scan_parser.add_argument(
+        "--org",
+        metavar="ORGNAME",
+        help="Scan all repos in this organization (auto-discovers repos with activity)",
     )
     board_scan_parser.add_argument(
         "--since",
@@ -1279,19 +1379,243 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # board add-item
+    board_add_item_parser = board_subparsers.add_parser(
+        "add-item",
+        help="Manually add issues/PRs to the board",
+    )
+    board_add_item_parser.add_argument(
+        "item_refs",
+        nargs="+",
+        metavar="ITEM",
+        help="Item reference(s): URL, owner/repo#123, repo#123, or #123",
+    )
+    board_add_item_parser.add_argument(
+        "--column",
+        metavar="NAME",
+        help="Target column (default: determined by rules)",
+    )
+    board_add_item_parser.add_argument(
+        "--board",
+        metavar="NAME",
+        help="Board to use (default: default board)",
+    )
+    board_add_item_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
+    # board sync-config (separate from board sync which syncs items)
+    board_sync_config_parser = board_subparsers.add_parser(
+        "sync-config",
+        help="Sync board configuration with GitHub Gist",
+    )
+    board_sync_config_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
+    # board rename
+    board_rename_parser = board_subparsers.add_parser(
+        "rename",
+        help="Rename a board",
+    )
+    board_rename_parser.add_argument(
+        "old_name",
+        metavar="OLD_NAME",
+        help="Current board name",
+    )
+    board_rename_parser.add_argument(
+        "new_name",
+        metavar="NEW_NAME",
+        help="New board name",
+    )
+
+    # board rm/delete
+    board_delete_parser = board_subparsers.add_parser(
+        "rm",
+        aliases=["delete"],
+        help="Delete a board",
+    )
+    board_delete_parser.add_argument(
+        "name",
+        metavar="NAME",
+        help="Board name to delete",
+    )
+
+    # pr command
+    pr_parser = subparsers.add_parser(
+        "pr",
+        help="PR history visualization and repo management",
+    )
+    pr_subparsers = pr_parser.add_subparsers(dest="pr_command", required=True)
+
+    # pr list
+    pr_list_parser = pr_subparsers.add_parser(
+        "list",
+        help="List PRs with history visualization",
+        description="List PRs with history visualization. "
+        "Accepts PR references as arguments or piped via stdin (one per line). "
+        "Both owner/repo#number and GitHub PR URLs are supported.",
+    )
+    pr_list_parser.add_argument(
+        "pr_refs",
+        nargs="*",
+        metavar="OWNER/REPO#NUM",
+        help="Specific PR references (owner/repo#number or GitHub PR URL). "
+        "Can also be piped via stdin, one per line.",
+    )
+    pr_list_parser.add_argument(
+        "--author",
+        "-a",
+        metavar="USER",
+        help="Filter by PR author (use 'me' for current user)",
+    )
+    pr_list_parser.add_argument(
+        "--reviewer",
+        "-r",
+        metavar="USER",
+        help="Filter by requested reviewer (use 'me' for current user)",
+    )
+    pr_list_parser.add_argument(
+        "--repo",
+        dest="repos",
+        action="append",
+        metavar="OWNER/REPO",
+        help="Filter by repo (can be specified multiple times)",
+    )
+    pr_list_parser.add_argument(
+        "--all",
+        dest="all_states",
+        action="store_true",
+        help="Show all states (open, merged, closed). Default shows only open.",
+    )
+    pr_list_parser.add_argument(
+        "--merged",
+        dest="include_merged",
+        action="store_true",
+        help="Include merged PRs",
+    )
+    pr_list_parser.add_argument(
+        "--closed",
+        dest="include_closed",
+        action="store_true",
+        help="Include closed PRs",
+    )
+    pr_list_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Use repos from specified board (implies using board repos)",
+    )
+    pr_list_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of PRs to show (default: 100)",
+    )
+    pr_list_parser.add_argument(
+        "--title",
+        "-t",
+        dest="show_title",
+        action="store_true",
+        help="Show PR titles",
+    )
+
+    # repo command
+    repo_parser = subparsers.add_parser(
+        "repo",
+        help="Manage watched repositories",
+    )
+    repo_subparsers = repo_parser.add_subparsers(dest="repo_command", required=True)
+
+    # repo add
+    repo_add_parser = repo_subparsers.add_parser(
+        "add",
+        help="Add repos to a board",
+    )
+    repo_add_parser.add_argument(
+        "repos",
+        nargs="+",
+        metavar="OWNER/REPO",
+        help="Repos to add",
+    )
+    repo_add_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to add repos to (creates if doesn't exist)",
+    )
+    repo_add_parser.add_argument(
+        "--set-default",
+        "-d",
+        action="store_true",
+        help="Set this board as the default",
+    )
+
+    # repo remove
+    repo_remove_parser = repo_subparsers.add_parser(
+        "remove",
+        help="Remove repos from a board",
+    )
+    repo_remove_parser.add_argument(
+        "repos",
+        nargs="+",
+        metavar="OWNER/REPO",
+        help="Repos to remove",
+    )
+    repo_remove_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to remove repos from (default: default board)",
+    )
+
+    # repo list
+    repo_list_parser = repo_subparsers.add_parser(
+        "list",
+        help="List repos in a board",
+    )
+    repo_list_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Board to list repos from (default: default board)",
+    )
+    repo_list_parser.add_argument(
+        "--all",
+        "-a",
+        dest="all_boards",
+        action="store_true",
+        help="Show repos from all boards",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
     if args.command == "board":
         from src.board.cli import (
+            cmd_add_item,
             cmd_apply,
             cmd_config,
+            cmd_delete,
             cmd_init,
             cmd_list,
             cmd_macros,
+            cmd_rename,
             cmd_scan,
             cmd_status,
             cmd_sync,
+            cmd_sync_config,
             cmd_templates,
         )
 
@@ -1304,6 +1628,8 @@ Configuration:
                 project_id=args.project_id,
                 project_number=args.project_number,
                 board_name=args.board,
+                scope=args.scope,
+                overview=args.overview,
                 dry_run=args.dry_run,
             )
 
@@ -1311,6 +1637,8 @@ Configuration:
             repos = args.repos.split(",") if args.repos else None
             return cmd_scan(
                 repos=repos,
+                scan_user=args.user,
+                scan_org=args.org,
                 since_days=args.since,
                 board_name=args.board,
                 dry_run=args.dry_run,
@@ -1323,6 +1651,11 @@ Configuration:
                 board_name=args.board,
                 dry_run=args.dry_run,
                 verbose=args.verbose,
+            )
+
+        if args.board_command == "sync-config":
+            return cmd_sync_config(
+                dry_run=args.dry_run,
             )
 
         if args.board_command == "status":
@@ -1356,6 +1689,77 @@ Configuration:
 
         if args.board_command == "macros":
             return cmd_macros()
+
+        if args.board_command == "add-item":
+            return cmd_add_item(
+                item_refs=args.item_refs,
+                column=args.column,
+                board_name=args.board,
+                dry_run=args.dry_run,
+            )
+
+        if args.board_command == "rename":
+            return cmd_rename(args.old_name, args.new_name)
+
+        if args.board_command in ("rm", "delete"):
+            return cmd_delete(args.name)
+
+    # Handle pr command
+    if args.command == "pr":
+        from src.pr.cli import cmd_list as pr_cmd_list
+
+        if args.pr_command == "list":
+            # Build states list based on flags
+            if args.all_states:
+                states = ["open", "merged", "closed"]
+            else:
+                states = ["open"]
+                if args.include_merged:
+                    states.append("merged")
+                if args.include_closed:
+                    states.append("closed")
+
+            # Collect PR refs from command line args
+            pr_refs = list(args.pr_refs) if args.pr_refs else []
+
+            # Read PR URLs from stdin if piped
+            if not sys.stdin.isatty():
+                pr_refs.extend(_read_pr_refs_from_stdin())
+
+            return pr_cmd_list(
+                author=args.author,
+                reviewer=args.reviewer,
+                repos=args.repos,
+                pr_refs=pr_refs if pr_refs else None,
+                states=states,
+                board_name=args.board_name,
+                limit=args.limit,
+                show_title=args.show_title,
+            )
+
+    # Handle repo command
+    if args.command == "repo":
+        from src.repo.cli import cmd_add, cmd_remove
+        from src.repo.cli import cmd_list as repo_cmd_list
+
+        if args.repo_command == "add":
+            return cmd_add(
+                args.repos,
+                board_name=args.board_name,
+                set_default=args.set_default,
+            )
+
+        if args.repo_command == "remove":
+            return cmd_remove(
+                args.repos,
+                board_name=args.board_name,
+            )
+
+        if args.repo_command == "list":
+            return repo_cmd_list(
+                board_name=args.board_name,
+                all_boards=args.all_boards,
+            )
 
     # Handle job command
     if args.command == "job":
@@ -1419,6 +1823,9 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1426,6 +1833,14 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
+
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1447,6 +1862,8 @@ Configuration:
             min_iterations=args.min_iterations,
             max_iterations=args.max_iterations,
             phase=args.phase,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
         )
 
     # Handle run command - prompt-driven task execution
@@ -1476,6 +1893,9 @@ Configuration:
                 console.print(f"[red]Error:[/] Task file is empty: {task_file}")
                 return 1
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1483,6 +1903,14 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
+
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1496,7 +1924,12 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        return run_task(task=task, workspace=workspace)
+        return run_task(
+            task=task,
+            workspace=workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -1513,6 +1946,9 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
+    # Resolve verbosity: quiet for background unless explicitly set
+    verbosity = _resolve_verbosity(args.verbosity, args.background)
+
     # Handle background mode
     if args.background:
         from src.jobs import spawn_lxa_command
@@ -1520,6 +1956,14 @@ Configuration:
         # Filter out --background and --job-name, keep everything else
         args_to_use = argv if argv is not None else sys.argv[1:]
         cmd = _filter_background_args(args_to_use)
+
+        # Add --verbosity to the command if not already present
+        if "--verbosity" not in cmd and "-v" not in cmd:
+            cmd = cmd + ["--verbosity", verbosity.value]
+
+        # Add --timestamps for background jobs (unless user already specified)
+        if "--timestamps" not in cmd:
+            cmd = cmd + ["--timestamps"]
 
         # Rewrite paths to be relative for isolated workspace
         cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1546,9 +1990,16 @@ Configuration:
                 min_iterations=args.min_iterations,
                 max_iterations=args.max_refine_iterations,
             ),
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
         )
     else:
-        return run_orchestrator(design_doc, workspace)
+        return run_orchestrator(
+            design_doc,
+            workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
 
 def find_git_root(start_path: Path) -> Path:
@@ -1566,6 +2017,36 @@ def find_git_root(start_path: Path) -> Path:
             return current
         current = current.parent
     return start_path
+
+
+def _read_pr_refs_from_stdin() -> list[str]:
+    """Read PR references from stdin, converting URLs to owner/repo#number format.
+
+    Accepts both formats:
+    - GitHub PR URLs: https://github.com/owner/repo/pull/123
+    - Direct refs: owner/repo#123
+
+    Returns:
+        List of PR references in owner/repo#number format
+    """
+    refs = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check if it's a GitHub PR URL
+        if line.startswith("https://github.com/"):
+            try:
+                repo_slug, pr_number = parse_pr_url(line)
+                refs.append(f"{repo_slug}#{pr_number}")
+            except ValueError:
+                console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
+        else:
+            # Assume it's already in owner/repo#number format
+            refs.append(line)
+
+    return refs
 
 
 if __name__ == "__main__":

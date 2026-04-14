@@ -1,5 +1,7 @@
 """Board init command - create or configure GitHub Project boards."""
 
+from dataclasses import dataclass
+
 from rich.console import Console
 
 from src.board.cache import BoardCache
@@ -12,6 +14,7 @@ from src.board.cli._helpers import (
 )
 from src.board.config import (
     BoardConfig,
+    BoardScope,
     load_board_config,
     load_boards_config,
     save_board_config,
@@ -23,12 +26,22 @@ from src.board.models import get_default_columns
 console = Console()
 
 
+@dataclass
+class InitOptions:
+    """Options for board initialization commands."""
+
+    board_name: str | None = None
+    dry_run: bool = False
+
+
 def cmd_init(
     *,
     create_name: str | None = None,
     project_id: str | None = None,
     project_number: int | None = None,
     board_name: str | None = None,
+    scope: str | None = None,
+    overview: str | None = None,
     dry_run: bool = False,
 ) -> int:
     """Initialize or configure a GitHub Project board.
@@ -38,6 +51,8 @@ def cmd_init(
         project_id: GraphQL ID of existing project
         project_number: Number of existing user project
         board_name: Name for this board in config (default: slugified project name)
+        scope: Board scope ("user" or "project")
+        overview: URL of overview item (for project-scoped boards)
         dry_run: Show what would be done without making changes
 
     Returns:
@@ -45,9 +60,29 @@ def cmd_init(
     """
     print_command_header("lxa board init")
 
+    # Validate scope and overview combination
+    if scope == BoardScope.PROJECT and not overview:
+        print_error("Project-scoped boards require --overview")
+        print_info("Specify the overview item URL: --overview https://github.com/...", dim=True)
+        return 1
+
+    if overview and scope != BoardScope.PROJECT:
+        print_warning("--overview is only used with --scope project")
+        print_info("Setting scope to 'project'", dim=True)
+        scope = BoardScope.PROJECT
+
     # For new projects, start with empty config (don't inherit repos from default)
     config = load_board_config(board_name) if not create_name else BoardConfig()
     cache = BoardCache()
+
+    # Set scope and overview on config early (they'll be persisted when config is saved)
+    if scope:
+        config.scope = scope
+    if overview:
+        config.overview_item = overview
+
+    # Bundle options for cleaner parameter passing
+    options = InitOptions(board_name=board_name, dry_run=dry_run)
 
     # Determine username
     username = config.username or get_github_username()
@@ -61,45 +96,47 @@ def cmd_init(
     with GitHubClient() as client:
         # Case 1: Create new project
         if create_name:
-            return _create_new_project(
-                client, cache, config, create_name, board_name, username, dry_run
-            )
+            return _create_new_project(client, cache, config, create_name, username, options)
 
         # Case 2: Configure existing project by ID
         if project_id:
-            return _configure_by_id(
-                client, cache, config, project_id, board_name, username, dry_run
-            )
+            return _configure_by_id(client, cache, config, project_id, username, options)
 
         # Case 3: Configure existing project by number
         if project_number:
-            return _configure_by_number(
-                client, cache, config, project_number, board_name, username, dry_run
-            )
+            return _configure_by_number(client, cache, config, project_number, username, options)
 
         # Case 4: Use configured project
         if config.project_id:
-            return _configure_existing(client, cache, config, board_name, username, dry_run)
+            return _configure_existing(client, cache, config, username, options)
 
         if config.project_number:
             return _configure_by_number(
-                client, cache, config, config.project_number, board_name, username, dry_run
+                client, cache, config, config.project_number, username, options
             )
 
         # No project specified
         print_error("No project specified")
         console.print("\nUsage:")
         console.print("  lxa board init --create 'Project Name'  # Create new")
+        console.print(
+            "  lxa board init --create 'Name' --scope project --overview <url>  # Project-scoped"
+        )
         console.print("  lxa board init --project-number 5       # Configure existing")
         console.print("  lxa board init --project-id PVT_xxx     # Configure by ID")
         return 1
 
 
 def _create_new_project(
-    client, cache, config, create_name: str, board_name: str | None, username: str, dry_run: bool
+    client,
+    cache,
+    config: BoardConfig,
+    create_name: str,
+    username: str,
+    options: InitOptions,
 ) -> int:
     """Create a new GitHub Project."""
-    config_name = board_name or slugify(create_name)
+    config_name = options.board_name or slugify(create_name)
 
     # Check if board already exists
     boards = load_boards_config()
@@ -108,8 +145,11 @@ def _create_new_project(
 
     console.print(f"\nCreating project: [cyan]{create_name}[/]")
     print_info(f"Config name: {config_name}", dim=True)
+    if config.is_project_scoped:
+        print_info("Scope: project", dim=True)
+        print_info(f"Overview: {config.overview_item}", dim=True)
 
-    if dry_run:
+    if options.dry_run:
         console.print("[yellow]Dry run - would create project[/]")
         return 0
 
@@ -136,7 +176,7 @@ def _create_new_project(
         project.column_option_ids = column_options
         print_success(f"Created Status field with {len(column_options)} columns")
 
-    # Save to config
+    # Save to config (scope and overview_item already set on config)
     config.name = config_name
     config.project_id = project.id
     config.project_number = project.number
@@ -145,12 +185,17 @@ def _create_new_project(
     cache.cache_project_info(project)
     print_success(f"Saved configuration as '{config_name}'")
 
-    _print_next_steps()
+    _print_next_steps(config.is_project_scoped)
     return 0
 
 
 def _configure_by_id(
-    client, cache, config, project_id: str, board_name: str | None, username: str, dry_run: bool
+    client,
+    cache,
+    config: BoardConfig,
+    project_id: str,
+    username: str,
+    options: InitOptions,
 ) -> int:
     """Configure an existing project by GraphQL ID."""
     console.print(f"\nConfiguring project: [cyan]{project_id}[/]")
@@ -159,11 +204,16 @@ def _configure_by_id(
         print_error(f"Project not found: {project_id}")
         return 1
 
-    return _finish_configure(client, cache, config, project, board_name, username, dry_run)
+    return _finish_configure(client, cache, config, project, username, options)
 
 
 def _configure_by_number(
-    client, cache, config, project_number: int, board_name: str | None, username: str, dry_run: bool
+    client,
+    cache,
+    config: BoardConfig,
+    project_number: int,
+    username: str,
+    options: InitOptions,
 ) -> int:
     """Configure an existing project by number."""
     console.print(f"\nConfiguring project #{project_number}")
@@ -172,11 +222,15 @@ def _configure_by_number(
         print_error(f"Project #{project_number} not found for {username}")
         return 1
 
-    return _finish_configure(client, cache, config, project, board_name, username, dry_run)
+    return _finish_configure(client, cache, config, project, username, options)
 
 
 def _configure_existing(
-    client, cache, config, board_name: str | None, username: str, dry_run: bool
+    client,
+    cache,
+    config: BoardConfig,
+    username: str,
+    options: InitOptions,
 ) -> int:
     """Configure using existing project from config."""
     console.print(f"\nUsing configured project: [cyan]{config.project_id}[/]")
@@ -185,15 +239,24 @@ def _configure_existing(
         print_error("Configured project not found")
         return 1
 
-    return _finish_configure(client, cache, config, project, board_name, username, dry_run)
+    return _finish_configure(client, cache, config, project, username, options)
 
 
 def _finish_configure(
-    client, cache, config, project, board_name: str | None, username: str, dry_run: bool
+    client,
+    cache,
+    config: BoardConfig,
+    project,
+    username: str,
+    options: InitOptions,
 ) -> int:
     """Complete project configuration (check/update Status field)."""
     print_success(f"Found project: {project.title}")
     console.print(f"  URL: {project.url}")
+
+    if config.is_project_scoped:
+        print_info("Scope: project", dim=True)
+        print_info(f"Overview: {config.overview_item}", dim=True)
 
     # Check/configure Status field
     if project.status_field_id:
@@ -204,7 +267,7 @@ def _finish_configure(
 
         if missing:
             console.print(f"[yellow]Missing columns:[/] {', '.join(missing)}")
-            if dry_run:
+            if options.dry_run:
                 console.print("[yellow]Dry run - would add missing columns[/]")
             else:
                 console.print("Updating Status field...")
@@ -215,7 +278,7 @@ def _finish_configure(
                 print_success(f"Updated Status field ({len(column_options)} columns)")
     else:
         console.print("[yellow]Creating Status field...[/]")
-        if dry_run:
+        if options.dry_run:
             console.print("[yellow]Dry run - would create Status field[/]")
         else:
             field_id, column_options = client.create_status_field(project.id)
@@ -223,9 +286,9 @@ def _finish_configure(
             project.column_option_ids = column_options
             print_success(f"Created Status field with {len(column_options)} columns")
 
-    if not dry_run:
-        # Save to config
-        config_name = board_name or config.name or slugify(project.title)
+    if not options.dry_run:
+        # Save to config (scope and overview_item already set on config)
+        config_name = options.board_name or config.name or slugify(project.title)
         config.name = config_name
         config.project_id = project.id
         config.project_number = project.number
@@ -237,12 +300,18 @@ def _finish_configure(
     return 0
 
 
-def _print_next_steps() -> None:
+def _print_next_steps(is_project_scoped: bool = False) -> None:
     """Print next steps after project creation."""
     console.print("\n[bold]Next steps:[/]")
     console.print("  1. Add repos to watch:")
     console.print("     [dim]lxa board config repos add owner/repo[/]")
-    console.print("  2. Scan for issues and PRs:")
-    console.print("     [dim]lxa board scan[/]")
-    console.print("  3. Check board status:")
-    console.print("     [dim]lxa board status[/]")
+    if is_project_scoped:
+        console.print("  2. Add items manually:")
+        console.print("     [dim]lxa board add-item <url>[/]")
+        console.print("  3. Check board status:")
+        console.print("     [dim]lxa board status[/]")
+    else:
+        console.print("  2. Scan for issues and PRs:")
+        console.print("     [dim]lxa board scan[/]")
+        console.print("  3. Check board status:")
+        console.print("     [dim]lxa board status[/]")

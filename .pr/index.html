@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR #59 Demo - Auto-Discovery Scan & Config Sync</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; color: #00d4ff; margin-bottom: 0.5rem; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 2rem; }
+        .video-container {
+            background: #0d1117;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        video { width: 100%; border-radius: 8px; }
+        .info { background: #1e293b; border-radius: 8px; padding: 1.5rem; margin-top: 2rem; }
+        .info h2 { color: #00d4ff; margin-bottom: 1rem; font-size: 1.2rem; }
+        .info ul { list-style: none; }
+        .info li { padding: 0.5rem 0; border-bottom: 1px solid #334155; }
+        .info li:last-child { border-bottom: none; }
+        .check { color: #22c55e; margin-right: 0.5rem; }
+        code { background: #334155; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.9rem; }
+        .stats { display: flex; justify-content: center; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: #00d4ff; }
+        .stat-label { font-size: 0.8rem; color: #888; }
+        .feature-box { background: #0f172a; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+        .feature-box h3 { color: #fbbf24; font-size: 1rem; margin-bottom: 0.5rem; }
+        .feature-box pre { background: #1e293b; padding: 0.5rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Auto-Discovery Scan Demo</h1>
+        <p class="subtitle">PR #59 Evidence - Board Scan with --user/--org flags</p>
+
+        <div class="video-container">
+            <video controls autoplay muted loop>
+                <source src="https://github.com/jpshackelford/lxa/raw/feature/scan-user-org/.pr/demo_video.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <div class="info">
+            <h2>What This Demonstrates</h2>
+            <ul>
+                <li><span class="check">✓</span> New <code>--user USERNAME</code> flag for auto-discovery scanning</li>
+                <li><span class="check">✓</span> New <code>--org ORGNAME</code> flag for organization-wide scanning</li>
+                <li><span class="check">✓</span> Verbose output showing discovered repos with activity counts</li>
+                <li><span class="check">✓</span> <code>--since DAYS</code> filter for recent activity</li>
+                <li><span class="check">✓</span> Dry-run mode for safe previewing</li>
+                <li><span class="check">✓</span> New <code>sync-config</code> command for gist-based config persistence</li>
+            </ul>
+
+            <div class="feature-box">
+                <h3>Feature 1: Auto-Discovery Scan</h3>
+                <pre>
+# Before: Manual repo configuration
+lxa board config repos add owner/repo1
+lxa board config repos add owner/repo2
+lxa board scan
+
+# After: One command auto-discovers repos
+lxa board scan --user jpshackelford --since 30 --verbose</pre>
+            </div>
+
+            <div class="feature-box">
+                <h3>Feature 2: Config Sync with Gist</h3>
+                <pre>
+# Sync config with private GitHub Gist
+lxa board sync-config
+
+# Preview changes without applying
+lxa board sync-config --dry-run</pre>
+            </div>
+
+            <div class="stats">
+                <div class="stat"><div class="stat-value">2</div><div class="stat-label">New Features</div></div>
+                <div class="stat"><div class="stat-value">1341</div><div class="stat-label">Lines Added</div></div>
+                <div class="stat"><div class="stat-value">12</div><div class="stat-label">Files Changed</div></div>
+                <div class="stat"><div class="stat-value">100s</div><div class="stat-label">Video Length</div></div>
+            </div>
+        </div>
+
+        <p style="text-align: center; margin-top: 2rem; color: #666;">
+            <a href="https://github.com/jpshackelford/lxa/pull/59" style="color: #00d4ff;">View PR #59</a>
+        </p>
+    </div>
+</body>
+</html>

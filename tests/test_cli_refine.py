@@ -163,6 +163,40 @@ class TestRefineCliArguments:
             )
             assert args.allow_merge == allow_merge
 
+    def test_refine_verbosity_arguments(self):
+        """Test that refine command has verbosity arguments."""
+        from src.__main__ import _add_verbosity_arguments
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="command")
+
+        refine_parser = subparsers.add_parser("refine")
+        refine_parser.add_argument("pr_url")
+        _add_verbosity_arguments(refine_parser)
+        refine_parser.add_argument("--background", "-b", action="store_true")
+
+        # Test default verbosity (None = auto-detect based on background)
+        args = parser.parse_args(["refine", "https://github.com/owner/repo/pull/42"])
+        assert args.verbosity is None
+        assert args.timestamps is False
+
+        # Test explicit verbosity levels
+        for level in ["quiet", "normal", "verbose"]:
+            args = parser.parse_args(
+                ["refine", "https://github.com/owner/repo/pull/42", "--verbosity", level]
+            )
+            assert args.verbosity == level
+
+        # Test --timestamps flag
+        args = parser.parse_args(
+            ["refine", "https://github.com/owner/repo/pull/42", "--timestamps"]
+        )
+        assert args.timestamps is True
+
+        # Test short flag -v
+        args = parser.parse_args(["refine", "https://github.com/owner/repo/pull/42", "-v", "quiet"])
+        assert args.verbosity == "quiet"
+
 
 class TestRefineImports:
     """Test that refine command imports work correctly."""
