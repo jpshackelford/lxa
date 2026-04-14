@@ -155,6 +155,47 @@ def search_user_items(
     return all_items, errors
 
 
+def search_user_items_by_owner(
+    client: GitHubClient,
+    username: str,
+    owner: str,
+    owner_type: str,
+    since_date: datetime,
+) -> tuple[list[Item], list[str]]:
+    """Search for user's items across all repos owned by a user or org.
+
+    This enables auto-discovery of repos with recent activity, rather than
+    requiring pre-configured repo lists. It searches for issues and PRs
+    separately since GitHub's search API requires is:issue or is:pr.
+
+    Args:
+        client: GitHub client
+        username: GitHub username (the user whose involvement we're searching for)
+        owner: Owner username or org name to search within
+        owner_type: Either "user" or "org"
+        since_date: Only include items updated since this date
+
+    Returns:
+        Tuple of (items found, errors encountered)
+    """
+    all_items: list[Item] = []
+    errors: list[str] = []
+
+    # GitHub Search API requires is:issue or is:pr when using user:/org: qualifiers
+    # We need to search for each type separately and combine results
+    for item_type in ["issue", "pr"]:
+        query = (
+            f"involves:{username} {owner_type}:{owner} updated:>={since_date.date()} is:{item_type}"
+        )
+        try:
+            search_result = client.search_issues_graphql(query)
+            all_items.extend(search_result.items)
+        except Exception as e:
+            errors.append(f"Error searching {owner_type}:{owner} for {item_type}s: {e}")
+
+    return all_items, errors
+
+
 def add_item_to_board(
     client: GitHubClient,
     cache: BoardCache,

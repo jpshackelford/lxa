@@ -156,12 +156,14 @@ Track AI-assisted development across multiple repositories with GitHub Projects:
 # Create a new board
 lxa board init --create "My Agent Board"
 
-# Add repos to watch
+# Option A: Add specific repos to watch
 lxa board config repos add owner/repo1
 lxa board config repos add owner/repo2
-
-# Scan for your issues/PRs and populate board
 lxa board scan
+
+# Option B: Auto-discover repos with recent activity
+lxa board scan --user myusername --since 21    # All your personal repos
+lxa board scan --org my-company --since 14     # All repos in an org
 
 # Incremental sync using notifications
 lxa board sync
