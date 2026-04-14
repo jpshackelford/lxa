@@ -114,6 +114,31 @@ lxa implement --loop --refine --auto-merge
 lxa implement --loop --refine --allow-merge good_taste --max-refine-iterations 10
 ```
 
+### Task Runner (Headless Mode)
+
+Run arbitrary tasks from a prompt or file (similar to OpenHands CLI headless mode):
+
+```bash
+# Run a task from inline prompt
+lxa run -t "Write a hello world script in Python"
+
+# Run a task from a file
+lxa run -f task.txt
+
+# Run in background (detached from terminal)
+lxa run -t "Refactor the auth module" --background
+
+# Custom job name for background execution
+lxa run -f requirements.txt --background --job-name feature-impl
+```
+
+The task runner provides a simple agent with:
+- File editing capabilities
+- Terminal access for running commands
+- Task tracking for structured work
+
+Background jobs can be managed with the `lxa job` command (see below).
+
 ### Reconciliation (Post-merge)
 
 Update design documents to reference implemented code:
@@ -173,6 +198,38 @@ lxa board scan --dry-run
 ```
 
 This is useful for debugging API issues and generating test fixture data.
+
+### Background Job Management
+
+Monitor and control long-running background tasks:
+
+```bash
+# List all jobs
+lxa job list
+
+# Show only running jobs
+lxa job list --running
+
+# Get detailed status for a job
+lxa job status implement-a3f2b1c
+
+# View job output
+lxa job logs implement-a3f2b1c
+
+# Follow logs in real-time
+lxa job logs implement-a3f2b1c --follow
+
+# Stop a running job
+lxa job stop implement-a3f2b1c
+
+# Clean up old job files (default: older than 7 days)
+lxa job clean
+
+# Clean jobs older than 30 days
+lxa job clean --older-than 30
+```
+
+Job metadata and logs are stored in `~/.lxa/jobs/`.
 
 ## Development
 

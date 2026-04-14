@@ -5,6 +5,8 @@ Usage:
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
     python -m src refine <PR_URL>            # Refine existing PR
+    python -m src run -t "Your task here"    # Run task from prompt
+    python -m src run -f task.txt            # Run task from file
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
@@ -13,6 +15,9 @@ Or via the installed command:
     lxa reconcile .pr/design.md              # Update design doc with code refs
     lxa refine https://github.com/owner/repo/pull/42              # Refine PR
     lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
+    lxa run -t "Write a hello world script"  # Run task from prompt
+    lxa run -f task.txt                      # Run task from file
+    lxa run -t "Fix the bug" --background    # Run task in background
 """
 
 from __future__ import annotations
@@ -424,6 +429,73 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def run_task(
+    task: str,
+    workspace: Path,
+) -> int:
+    """Run a prompt-driven task using a simple agent.
+
+    This provides headless-style execution similar to OpenHands CLI,
+    allowing a task to be specified via command line or file.
+
+    Args:
+        task: The task/prompt to execute
+        workspace: Path to the workspace (git repository root)
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    from openhands.sdk import Agent, Tool
+    from openhands.tools.file_editor import FileEditorTool
+    from openhands.tools.task_tracker import TaskTrackerTool
+    from openhands.tools.terminal import TerminalTool
+
+    console.print(Panel("[bold blue]LXA - Task Runner[/]", expand=False))
+    console.print()
+
+    # Verify workspace is a git repo (optional, but provides context)
+    if not (workspace / ".git").exists():
+        console.print(f"[yellow]Warning:[/] Not a git repository: {workspace}")
+        console.print("[dim]Continuing without git context...[/]")
+        console.print()
+
+    # Get LLM
+    llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    console.print()
+
+    # Create a simple agent with standard tools
+    tools = [
+        Tool(name=FileEditorTool.name),
+        Tool(name=TerminalTool.name),
+        Tool(name=TaskTrackerTool.name),
+    ]
+
+    agent = Agent(llm=llm, tools=tools)
+
+    console.print("[bold cyan]Starting task execution...[/]")
+    console.print()
+
+    # Create conversation with visualizer and persistence
+    conversation = Conversation(
+        agent=agent,
+        workspace=workspace,
+        visualizer=DelegationVisualizer(name="TaskRunner"),
+        persistence_dir=CONVERSATIONS_DIR,
+    )
+
+    console.print(f"[dim]Conversation ID: {conversation.id}[/]")
+    console.print()
+
+    conversation.send_message(task)
+    conversation.run()
+
+    console.print()
+    console.print("[bold green]Task complete.[/]")
+    return 0
+
+
 def _filter_background_args(argv: list[str]) -> list[str]:
     """Filter out --background and --job-name flags from argv.
 
@@ -670,6 +742,44 @@ Configuration:
         type=str,
         default=None,
         help="Custom name for background job (default: 'refine')",
+    )
+
+    # Run subcommand - prompt-driven task execution (like OpenHands headless mode)
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a task from a prompt (headless mode)",
+    )
+    run_task_group = run_parser.add_mutually_exclusive_group(required=True)
+    run_task_group.add_argument(
+        "--task",
+        "-t",
+        type=str,
+        help="Task/prompt to execute",
+    )
+    run_task_group.add_argument(
+        "--file",
+        "-f",
+        type=Path,
+        help="Path to file containing the task/prompt",
+    )
+    run_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to current git root)",
+    )
+    run_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    run_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'run')",
     )
 
     # Job subcommand (with nested subcommands)
@@ -1142,6 +1252,42 @@ Configuration:
             max_iterations=args.max_iterations,
             phase=args.phase,
         )
+
+    # Handle run command - prompt-driven task execution
+    if args.command == "run":
+        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+
+        # Get task from --task or --file
+        if args.task:
+            task = args.task
+        else:
+            # Load task from file
+            task_file = args.file.resolve()
+            if not task_file.exists():
+                console.print(f"[red]Error:[/] Task file not found: {task_file}")
+                return 1
+            task = task_file.read_text().strip()
+            if not task:
+                console.print(f"[red]Error:[/] Task file is empty: {task_file}")
+                return 1
+
+        # Handle background mode
+        if args.background:
+            from src.jobs import spawn_lxa_command
+
+            # Filter out --background and --job-name, keep everything else
+            args_to_use = argv if argv is not None else sys.argv[1:]
+            cmd = _filter_background_args(args_to_use)
+
+            job = spawn_lxa_command(
+                lxa_command=cmd,
+                cwd=workspace,
+                job_name=args.job_name or "run",
+            )
+            console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+            return 0
+
+        return run_task(task=task, workspace=workspace)
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)

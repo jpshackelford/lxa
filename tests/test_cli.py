@@ -149,6 +149,70 @@ class TestCLIIntegration:
         assert "implement" in result.stdout
         assert "reconcile" in result.stdout
 
+    def test_run_subcommand_in_help(self) -> None:
+        """Help should show run subcommand."""
+        result = subprocess.run(
+            ["python", "-m", "src", "--help"],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent,
+        )
+        assert "run" in result.stdout
+        # Verify it's described as headless mode
+        result = subprocess.run(
+            ["python", "-m", "src", "run", "--help"],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent,
+        )
+        assert "--task" in result.stdout
+        assert "--file" in result.stdout
+        assert "--background" in result.stdout
+
+
+class TestMainRun:
+    """Tests for CLI run command."""
+
+    def test_run_help_returns_zero(self) -> None:
+        """run --help should return exit code 0."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["run", "--help"])
+        assert exc_info.value.code == 0
+
+    def test_run_requires_task_or_file(self) -> None:
+        """run without --task or --file should show error."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["run"])
+        # argparse returns 2 for missing required arguments
+        assert exc_info.value.code == 2
+
+    def test_run_task_and_file_mutually_exclusive(self) -> None:
+        """run with both --task and --file should error."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["run", "--task", "test", "--file", "test.txt"])
+        assert exc_info.value.code == 2
+
+    def test_run_nonexistent_file_returns_error(self, tmp_path: Path) -> None:
+        """run with nonexistent file should return 1."""
+        result = main(["run", "--file", "/nonexistent/task.txt", "--workspace", str(tmp_path)])
+        assert result == 1
+
+    def test_run_empty_file_returns_error(self, tmp_path: Path) -> None:
+        """run with empty task file should return 1."""
+        task_file = tmp_path / "empty_task.txt"
+        task_file.write_text("")
+
+        result = main(["run", "--file", str(task_file), "--workspace", str(tmp_path)])
+        assert result == 1
+
+    def test_run_whitespace_only_file_returns_error(self, tmp_path: Path) -> None:
+        """run with whitespace-only task file should return 1."""
+        task_file = tmp_path / "whitespace_task.txt"
+        task_file.write_text("   \n\t\n   ")
+
+        result = main(["run", "--file", str(task_file), "--workspace", str(tmp_path)])
+        assert result == 1
+
 
 class TestAgentRegistration:
     """Tests for agent registration at CLI startup."""
