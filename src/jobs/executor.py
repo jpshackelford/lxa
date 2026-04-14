@@ -55,9 +55,17 @@ def spawn_detached(
 
     log_path = Path(job.log_path)
 
-    # Build the wrapper command that writes exit code on completion
-    # We'll use Python to wrap the command and handle exit code writing
-    wrapper_script = _create_wrapper_script(job.id, jobs_path, command)
+    # Build the wrapper command using the wrapper module
+    # This runs: python -m src.jobs.wrapper <job_id> <jobs_dir> -- <command...>
+    wrapper_command = [
+        sys.executable,
+        "-m",
+        "src.jobs.wrapper",
+        job.id,
+        str(jobs_path),
+        "--",
+        *command,
+    ]
 
     # Start detached process
     # - start_new_session=True creates a new session (like setsid)
@@ -67,9 +75,8 @@ def spawn_detached(
     # handle lifecycle carefully around Popen
     log_file = open(log_path, "w")  # noqa: SIM115
     try:
-        # Use the Python interpreter to run our wrapper script
         proc = subprocess.Popen(
-            [sys.executable, "-c", wrapper_script],
+            wrapper_command,
             cwd=str(cwd),
             stdin=subprocess.DEVNULL,
             stdout=log_file,
@@ -101,63 +108,6 @@ def spawn_detached(
         job.ended_at = datetime.now()
         save_job(job, jobs_path)
         raise
-
-
-def _create_wrapper_script(job_id: str, jobs_dir: Path, command: list[str]) -> str:
-    """Create a Python wrapper script for the background job.
-
-    The wrapper:
-    1. Executes the command
-    2. Captures the exit code
-    3. Updates the job metadata file on completion
-
-    Args:
-        job_id: Job ID for metadata update
-        jobs_dir: Jobs directory path
-        command: Command to execute
-
-    Returns:
-        Python script as a string
-    """
-    # Escape the command list for embedding in Python code
-    import json
-
-    command_json = json.dumps(command)
-    jobs_dir_str = str(jobs_dir)
-
-    return f'''
-import subprocess
-import sys
-import json
-from datetime import datetime
-from pathlib import Path
-
-# Execute the actual command
-command = {command_json}
-try:
-    result = subprocess.run(command, check=False)
-    exit_code = result.returncode
-except Exception as e:
-    print(f"Error executing command: {{e}}", file=sys.stderr)
-    exit_code = 1
-
-# Update job metadata
-jobs_dir = Path({repr(jobs_dir_str)})
-metadata_path = jobs_dir / "{job_id}.json"
-
-if metadata_path.exists():
-    with open(metadata_path) as f:
-        data = json.load(f)
-
-    data["status"] = "done" if exit_code == 0 else "failed"
-    data["exit_code"] = exit_code
-    data["ended_at"] = datetime.now().isoformat()
-
-    with open(metadata_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-sys.exit(exit_code)
-'''
 
 
 def spawn_lxa_command(
