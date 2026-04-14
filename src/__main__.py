@@ -424,6 +424,44 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def _filter_background_args(argv: list[str]) -> list[str]:
+    """Filter out --background and --job-name flags from argv.
+
+    This is used to rebuild the command for background execution without
+    the background-specific flags, avoiding fragile manual reconstruction.
+
+    Args:
+        argv: Original command line arguments
+
+    Returns:
+        Filtered arguments without background flags
+    """
+    result = []
+    skip_next = False
+
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+
+        # Skip --background and -b flags
+        if arg in ("--background", "-b"):
+            continue
+
+        # Skip --job-name and its value
+        if arg == "--job-name":
+            skip_next = True
+            continue
+
+        # Handle --job-name=value format
+        if arg.startswith("--job-name="):
+            continue
+
+        result.append(arg)
+
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -1083,20 +1121,9 @@ Configuration:
         if args.background:
             from src.jobs import spawn_lxa_command
 
-            # Build the command without --background flag
-            cmd = ["refine", args.pr_url]
-            if args.workspace:
-                cmd.extend(["--workspace", str(args.workspace)])
-            if args.auto_merge:
-                cmd.append("--auto-merge")
-            if args.allow_merge != "acceptable":
-                cmd.extend(["--allow-merge", args.allow_merge])
-            if args.min_iterations != 1:
-                cmd.extend(["--min-iterations", str(args.min_iterations)])
-            if args.max_iterations != 5:
-                cmd.extend(["--max-iterations", str(args.max_iterations)])
-            if args.phase != "auto":
-                cmd.extend(["--phase", args.phase])
+            # Filter out --background and --job-name, keep everything else
+            args_to_use = argv if argv is not None else sys.argv[1:]
+            cmd = _filter_background_args(args_to_use)
 
             job = spawn_lxa_command(
                 lxa_command=cmd,
@@ -1135,30 +1162,9 @@ Configuration:
     if args.background:
         from src.jobs import spawn_lxa_command
 
-        # Build the command without --background flag
-        cmd = ["implement"]
-        if args.design_path:
-            cmd.extend(["--design-path", str(args.design_path)])
-        elif args.design_doc:
-            cmd.append(str(args.design_doc))
-        if args.workspace:
-            cmd.extend(["--workspace", str(args.workspace)])
-        if args.keep_design:
-            cmd.append("--keep-design")
-        if args.loop:
-            cmd.append("--loop")
-        if args.max_iterations != 20:
-            cmd.extend(["--max-iterations", str(args.max_iterations)])
-        if args.refine:
-            cmd.append("--refine")
-        if args.auto_merge:
-            cmd.append("--auto-merge")
-        if args.allow_merge != "acceptable":
-            cmd.extend(["--allow-merge", args.allow_merge])
-        if args.min_iterations != 1:
-            cmd.extend(["--min-iterations", str(args.min_iterations)])
-        if args.max_refine_iterations != 5:
-            cmd.extend(["--max-refine-iterations", str(args.max_refine_iterations)])
+        # Filter out --background and --job-name, keep everything else
+        args_to_use = argv if argv is not None else sys.argv[1:]
+        cmd = _filter_background_args(args_to_use)
 
         job = spawn_lxa_command(
             lxa_command=cmd,

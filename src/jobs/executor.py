@@ -63,8 +63,8 @@ def spawn_detached(
     # - start_new_session=True creates a new session (like setsid)
     # - stdin from /dev/null to fully detach
     # - stdout/stderr to log file
-    # Note: We don't use context manager because the file handle needs to stay
-    # open for the detached child process
+    # Note: We don't use context manager because we need to handle the file
+    # handle lifecycle carefully around Popen
     log_file = open(log_path, "w")  # noqa: SIM115
     try:
         # Use the Python interpreter to run our wrapper script
@@ -77,6 +77,17 @@ def spawn_detached(
             start_new_session=True,  # This is the key - creates new session
             env={**os.environ},  # Inherit environment
         )
+
+        # Parent can close its copy after child inherits the file descriptor
+        log_file.close()
+
+        # Verify process actually started (didn't immediately fail)
+        if proc.poll() is not None:
+            job.status = JobStatus.FAILED
+            job.exit_code = proc.returncode
+            job.ended_at = datetime.now()
+            save_job(job, jobs_path)
+            return job
 
         job.pid = proc.pid
         save_job(job, jobs_path)

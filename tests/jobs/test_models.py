@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.jobs.models import Job, JobStatus, generate_job_id
+from src.jobs.models import Job, JobStatus, generate_job_id, sanitize_job_name
 
 
 class TestJobStatus:
@@ -24,6 +24,53 @@ class TestJobStatus:
         assert JobStatus.DONE.is_terminal()
         assert JobStatus.FAILED.is_terminal()
         assert JobStatus.STOPPED.is_terminal()
+
+
+class TestSanitizeJobName:
+    """Tests for sanitize_job_name function."""
+
+    def test_normal_name(self):
+        """Test normal names pass through."""
+        assert sanitize_job_name("implement") == "implement"
+        assert sanitize_job_name("my-feature") == "my-feature"
+
+    def test_path_traversal(self):
+        """Test path traversal attacks are prevented."""
+        assert sanitize_job_name("../../etc/passwd") == "etc-passwd"
+        assert sanitize_job_name("../secret") == "secret"
+        assert sanitize_job_name("foo/../bar") == "foo-bar"
+
+    def test_forward_slash(self):
+        """Test forward slashes are replaced."""
+        assert sanitize_job_name("path/to/file") == "path-to-file"
+
+    def test_backslash(self):
+        """Test backslashes are replaced."""
+        assert sanitize_job_name("path\\to\\file") == "path-to-file"
+
+    def test_null_byte(self):
+        """Test null bytes are removed."""
+        assert sanitize_job_name("test\x00name") == "testname"
+
+    def test_colon(self):
+        """Test colons are replaced (Windows compatibility)."""
+        assert sanitize_job_name("C:path") == "C-path"
+
+    def test_multiple_dashes_collapsed(self):
+        """Test multiple consecutive dashes are collapsed."""
+        assert sanitize_job_name("foo---bar") == "foo-bar"
+        assert sanitize_job_name("a--b--c") == "a-b-c"
+
+    def test_leading_trailing_dashes_stripped(self):
+        """Test leading/trailing dashes are removed."""
+        assert sanitize_job_name("-foo-") == "foo"
+        assert sanitize_job_name("---bar---") == "bar"
+
+    def test_empty_result_fallback(self):
+        """Test empty result falls back to 'job'."""
+        assert sanitize_job_name("..") == "job"
+        assert sanitize_job_name("///") == "job"
+        assert sanitize_job_name("") == "job"
 
 
 class TestGenerateJobId:

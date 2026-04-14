@@ -26,6 +26,27 @@ class JobStatus(str, Enum):
         return self in (JobStatus.DONE, JobStatus.FAILED, JobStatus.STOPPED)
 
 
+def sanitize_job_name(name: str) -> str:
+    """Sanitize job name to prevent path traversal and invalid filenames.
+
+    Args:
+        name: Raw job name from user input or command
+
+    Returns:
+        Sanitized name safe for use in file paths
+    """
+    # Remove path separators and traversal patterns
+    sanitized = name.replace("/", "-").replace("\\", "-").replace("..", "")
+    # Remove other problematic characters for filenames
+    sanitized = sanitized.replace("\x00", "").replace(":", "-")
+    # Collapse multiple dashes and strip leading/trailing
+    while "--" in sanitized:
+        sanitized = sanitized.replace("--", "-")
+    sanitized = sanitized.strip("-")
+    # Ensure non-empty
+    return sanitized or "job"
+
+
 def generate_job_id(name: str) -> str:
     """Generate a unique job ID with format {name}-{hash}.
 
@@ -35,8 +56,10 @@ def generate_job_id(name: str) -> str:
     Returns:
         Unique job ID like "implement-a3f2b1c" or "my-feature-x9y8z7w"
     """
+    # Sanitize name to prevent path traversal attacks
+    safe_name = sanitize_job_name(name)
     hash_suffix = uuid.uuid4().hex[:7]
-    return f"{name}-{hash_suffix}"
+    return f"{safe_name}-{hash_suffix}"
 
 
 @dataclass
