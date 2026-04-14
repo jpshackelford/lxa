@@ -132,14 +132,14 @@ def spawn_detached(
     log_file = open(log_path, "w")  # noqa: SIM115
     try:
         # Write preamble messages to log (e.g., path rewriting warnings)
+        log_file.write(f"[lxa] Original workspace: {cwd}\n")
+        log_file.write(f"[lxa] Isolated workspace: {work_dir}\n")
         if log_preamble:
+            log_file.write("[lxa] Path rewrites:\n")
             for msg in log_preamble:
-                log_file.write(f"[lxa] {msg}\n")
-            log_file.write(f"[lxa] Original workspace: {cwd}\n")
-            log_file.write(f"[lxa] Isolated workspace: {work_dir}\n")
-            log_file.write("[lxa] " + "=" * 60 + "\n")
-            log_file.flush()
-
+                log_file.write(f"[lxa]   {msg}\n")
+        log_file.write("[lxa] " + "=" * 60 + "\n")
+        log_file.flush()
         proc = subprocess.Popen(
             wrapper_command,
             cwd=str(work_dir),  # Run in isolated work_dir, not original cwd
