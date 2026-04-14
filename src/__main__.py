@@ -602,6 +602,35 @@ def _rewrite_single_path(
         return path_str, warning
 
 
+def _try_rewrite_path_arg(
+    arg: str, next_arg: str | None, workspace: Path, path_flags: dict[str, str]
+) -> tuple[list[str], int, str | None]:
+    """Try to rewrite a path argument if it matches a known flag.
+
+    Args:
+        arg: Current argument
+        next_arg: Next argument (or None if at end)
+        workspace: Workspace directory
+        path_flags: Dictionary mapping flags to their descriptions
+
+    Returns:
+        Tuple of (rewritten_args, args_consumed, warning_or_none).
+        Empty list if not a path flag.
+    """
+    # Handle --flag value
+    if arg in path_flags and next_arg:
+        new_path, warning = _rewrite_single_path(next_arg, workspace, path_flags[arg])
+        return [arg, new_path], 2, warning
+
+    # Handle --flag=value
+    for flag, desc in path_flags.items():
+        if arg.startswith(f"{flag}="):
+            new_path, warning = _rewrite_single_path(arg[len(flag) + 1 :], workspace, desc)
+            return [f"{flag}={new_path}"], 1, warning
+
+    return [], 0, None
+
+
 def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[list[str], list[str]]:
     """Rewrite absolute paths in argv to be relative to workspace.
 
@@ -632,36 +661,18 @@ def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[lis
     }
 
     while i < len(argv):
-        arg = argv[i]
-
-        # Check for --flag value format
-        if arg in path_flags and i + 1 < len(argv):
-            flag = arg
-            path_str = argv[i + 1]
-            new_path, warning = _rewrite_single_path(path_str, workspace, path_flags[flag])
+        next_arg = argv[i + 1] if i + 1 < len(argv) else None
+        rewritten, consumed, warning = _try_rewrite_path_arg(
+            argv[i], next_arg, workspace, path_flags
+        )
+        if rewritten:
             if warning:
                 warnings.append(warning)
-            result.append(flag)
-            result.append(new_path)
-            i += 2
-            continue
-
-        # Check for --flag=value format
-        for flag, desc in path_flags.items():
-            if arg.startswith(f"{flag}="):
-                path_str = arg[len(flag) + 1 :]
-                new_path, warning = _rewrite_single_path(path_str, workspace, desc)
-                if warning:
-                    warnings.append(warning)
-                result.append(f"{flag}={new_path}")
-                break
+            result.extend(rewritten)
+            i += consumed
         else:
-            # Not a path flag, keep as-is
-            result.append(arg)
+            result.append(argv[i])
             i += 1
-            continue
-
-        i += 1
 
     return result, warnings
 
