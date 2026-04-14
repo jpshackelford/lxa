@@ -417,6 +417,7 @@ def run_ralph_loop(
     max_iterations: int = 20,
     refinement_config: RefinementConfig | None = None,
     verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
@@ -426,6 +427,7 @@ def run_ralph_loop(
         max_iterations: Maximum iterations before stopping
         refinement_config: Configuration for code review refinement loop
         verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -447,6 +449,7 @@ def run_ralph_loop(
         max_iterations=max_iterations,
         refinement_config=refinement_config,
         verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     loop_result = runner.run()
@@ -926,22 +929,6 @@ Configuration:
         choices=["auto", "self-review", "respond"],
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
-    )
-    refine_parser.add_argument(
-        "--verbosity",
-        "-v",
-        choices=["quiet", "normal", "verbose"],
-        default=None,  # None means: use quiet for background, normal otherwise
-        help=(
-            "Output verbosity: quiet (summaries only), "
-            "normal (reasoning + summaries), verbose (all details). "
-            "Default: quiet for --background, normal otherwise"
-        ),
-    )
-    refine_parser.add_argument(
-        "--timestamps",
-        action="store_true",
-        help="Prefix output lines with timestamps (auto-enabled for --background)",
     )
     refine_parser.add_argument(
         "--background",
@@ -1487,9 +1474,6 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
 
-        # Resolve verbosity: quiet for background unless explicitly set
-        verbosity = _resolve_verbosity(args.verbosity, args.background)
-
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1497,14 +1481,6 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
-
-            # Add --verbosity to the command if not already present
-            if "--verbosity" not in cmd and "-v" not in cmd:
-                cmd = cmd + ["--verbosity", verbosity.value]
-
-            # Add --timestamps for background jobs (unless user already specified)
-            if "--timestamps" not in cmd:
-                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1518,7 +1494,6 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        # TODO: pass verbosity and timestamps to run_refine when it supports it
         return run_refine(
             pr_url=args.pr_url,
             workspace=workspace,
@@ -1654,7 +1629,7 @@ Configuration:
                 max_iterations=args.max_refine_iterations,
             ),
             verbosity=verbosity,
-            # TODO: pass show_timestamps when run_ralph_loop supports it
+            show_timestamps=args.timestamps,
         )
     else:
         return run_orchestrator(

@@ -92,6 +92,7 @@ class RalphLoopRunner:
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
         refinement_config: RefinementConfig | None = None,
         verbosity: Verbosity = Verbosity.NORMAL,
+        show_timestamps: bool = False,
     ):
         """Initialize the Ralph Loop runner.
 
@@ -106,6 +107,7 @@ class RalphLoopRunner:
             conversations_dir: Directory for conversation persistence
             refinement_config: Configuration for PR refinement loop
             verbosity: Output verbosity level (quiet, normal, verbose)
+            show_timestamps: If True, prefix output lines with timestamps
         """
         self.llm = llm
         self.design_doc_path = design_doc_path
@@ -117,6 +119,7 @@ class RalphLoopRunner:
         self.conversations_dir = conversations_dir
         self.refinement_config = refinement_config or RefinementConfig()
         self.verbosity = verbosity
+        self.show_timestamps = show_timestamps
 
         self._iteration = 0
         self._consecutive_failures = 0
@@ -275,7 +278,11 @@ class RalphLoopRunner:
             )
 
             # Create conversation with verbosity-appropriate visualizer
-            visualizer = get_visualizer(self.verbosity, name=f"Ralph-{self._iteration}")
+            visualizer = get_visualizer(
+                self.verbosity,
+                name=f"Ralph-{self._iteration}",
+                show_timestamps=self.show_timestamps,
+            )
             conversation = Conversation(
                 agent=agent,
                 workspace=self.workspace,
