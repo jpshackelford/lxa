@@ -53,7 +53,6 @@ from openhands.sdk.subagent import (  # pyright: ignore[reportMissingImports]
 from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
     register_builtins_agents,
 )
-from openhands.tools.delegate import DelegationVisualizer  # noqa: F401
 from rich.console import Console
 from rich.panel import Panel
 
