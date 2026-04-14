@@ -1276,7 +1276,16 @@ Configuration:
 
     # Handle run command - prompt-driven task execution
     if args.command == "run":
-        workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
+        # Determine workspace: explicit --workspace, git root, or current directory
+        if args.workspace:
+            workspace = args.workspace.resolve()
+        else:
+            # Try to find git root, fall back to cwd if not in a git repo
+            # This matches run_task()'s behavior which warns but continues without git
+            try:
+                workspace = find_git_root(Path.cwd())
+            except RuntimeError:
+                workspace = Path.cwd()
 
         # Get task from --task or --file
         if args.task:
