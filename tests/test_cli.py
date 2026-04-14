@@ -517,3 +517,41 @@ class TestRunTaskFunctional:
 
         # Verify the task ran successfully
         assert llm.call_count >= 1
+
+    def test_run_task_has_expected_tools(self, tmp_path: Path) -> None:
+        """run_task should provide FileEditor, Terminal, and TaskTracker tools."""
+        from openhands.sdk.llm import Message, MessageToolCall, TextContent
+
+        from src.__main__ import run_task
+        from tests.testing import RecordingTestLLM
+
+        llm = RecordingTestLLM.from_messages(
+            [
+                Message(
+                    role="assistant",
+                    content=[TextContent(text="Done.")],
+                    tool_calls=[
+                        MessageToolCall(
+                            id="call_finish",
+                            name="finish",
+                            arguments='{"message": "ok"}',
+                            origin="completion",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        run_task(
+            task="Test task",
+            workspace=tmp_path,
+            llm=llm,
+        )
+
+        # Verify the agent has the expected tools
+        assert llm.call_count >= 1
+        first_call_tools = llm.recorded_calls[0].tools
+        tool_names = {tool.name for tool in first_call_tools}
+        assert "FileEditorTool" in tool_names
+        assert "TerminalTool" in tool_names
+        assert "TaskTrackerTool" in tool_names
