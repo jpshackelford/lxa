@@ -402,16 +402,16 @@ class QuietVisualizer(ConversationVisualizerBase):
         role = event.llm_message.role
 
         if role == "user":
-            # User messages: show with "You:" prefix
+            # User messages: show with "Prompt:" prefix
             # Truncate long user messages for quiet mode
             if len(content) > 200:
                 content = content[:197] + "..."
-            self._console.print(self._format_line(f"[bold]You:[/bold] {content}"))
+            self._console.print(self._format_line(f"[bold]Prompt:[/bold] {content}"))
         elif role == "assistant":
-            # Assistant messages (not from actions): show with "Agent:" prefix
+            # Assistant messages (not from actions): show with "OpenHands:" prefix
             if len(content) > 200:
                 content = content[:197] + "..."
-            self._console.print(self._format_line(f"[bold]Agent:[/bold] {content}"))
+            self._console.print(self._format_line(f"[bold]OpenHands:[/bold] {content}"))
 
 
 def get_visualizer(
