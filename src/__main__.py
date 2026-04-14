@@ -65,7 +65,8 @@ from src.agents.orchestrator import (
 )
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
+from src.global_config import get_conversations_dir
+from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
 
@@ -92,7 +93,12 @@ def _register_agents() -> None:
     )
 
 
-CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
+def _get_conversations_dir() -> str:
+    """Get the conversations directory from global config."""
+    return str(get_conversations_dir())
+
+
+CONVERSATIONS_DIR = _get_conversations_dir()
 
 
 def get_llm():
@@ -218,7 +224,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print()
 
     # Create conversation with visualizer for real-time sub-agent output
-    # and persistence to ~/.openhands/conversations for history
+    # and persistence to ~/.lxa/conversations for history
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
@@ -228,6 +234,11 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
 
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
 
     initial_message = f"""\
 Start milestone execution for this project.
@@ -492,6 +503,11 @@ def run_task(
 
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
 
     conversation.send_message(task)
     conversation.run()
@@ -1002,6 +1018,28 @@ Configuration:
         help="Show what would be deleted without deleting",
     )
 
+    # Config command (global lxa configuration)
+    config_parser = subparsers.add_parser(
+        "config",
+        help="View and manage global lxa configuration",
+    )
+    config_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["set", "reset"],
+        help="Action to perform (set, reset)",
+    )
+    config_parser.add_argument(
+        "key",
+        nargs="?",
+        help="Configuration key",
+    )
+    config_parser.add_argument(
+        "value",
+        nargs="?",
+        help="Value to set (for 'set' action)",
+    )
+
     # Board subcommand (with nested subcommands)
     board_parser = subparsers.add_parser(
         "board",
@@ -1332,6 +1370,16 @@ Configuration:
                 older_than_days=args.older_than,
                 dry_run=args.dry_run,
             )
+
+    # Handle config command (global lxa configuration)
+    if args.command == "config":
+        from src.jobs.cli.config_cmd import cmd_config
+
+        return cmd_config(
+            action=args.action,
+            key=args.key,
+            value=args.value,
+        )
 
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":

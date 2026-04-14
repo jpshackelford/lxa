@@ -67,6 +67,14 @@ def cmd_status(job_id: str, *, json_output: bool = False) -> int:
     table.add_row("Original Dir", job.cwd)
     table.add_row("Work Dir", job.work_dir)
     table.add_row("Log File", job.log_path)
+
+    # Show trajectory path if available
+    if job.trajectory_path:
+        table.add_row("Trajectory", str(job.trajectory_path))
+    elif job.conversation_id:
+        # Has conversation_id but no conversations_dir (legacy)
+        table.add_row("Conversation ID", job.conversation_id)
+
     table.add_row("Duration", job.format_duration())
 
     if job.created_at:

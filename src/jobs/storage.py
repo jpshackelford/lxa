@@ -67,6 +67,44 @@ def load_job(job_id: str, jobs_dir: Path | None = None) -> Job | None:
         return Job.from_dict(data)
 
 
+def update_job_conversation(
+    job_id: str,
+    conversation_id: str,
+    conversations_dir: str,
+    jobs_dir: Path | None = None,
+) -> bool:
+    """Update job metadata with conversation information.
+
+    This is called by running jobs after they create a conversation,
+    so the job status command can link to the trajectory.
+
+    Args:
+        job_id: Job ID to update
+        conversation_id: ID of the conversation
+        conversations_dir: Directory where conversation is stored
+        jobs_dir: Custom jobs directory (default: ~/.lxa/jobs)
+
+    Returns:
+        True if updated, False if job not found
+    """
+    path = ensure_jobs_dir(jobs_dir)
+    metadata_path = path / f"{job_id}.json"
+
+    if not metadata_path.exists():
+        return False
+
+    with open(metadata_path) as f:
+        data = json.load(f)
+
+    data["conversation_id"] = conversation_id
+    data["conversations_dir"] = conversations_dir
+
+    with open(metadata_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    return True
+
+
 def list_jobs(jobs_dir: Path | None = None) -> list[Job]:
     """List all jobs from the jobs directory.
 

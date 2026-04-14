@@ -333,3 +333,61 @@ class TestJob:
             log_path="/test.log",
         )
         assert job.metadata_path(tmp_path) == tmp_path / "test-meta123.json"
+
+    def test_trajectory_path_with_conversation(self):
+        """Test trajectory_path returns correct path when conversation is set."""
+        job = Job(
+            id="test-conv123",
+            command=[],
+            cwd="/",
+            work_dir="/work",
+            log_path="/test.log",
+            conversation_id="abc123-def456",
+            conversations_dir="/home/user/.lxa/conversations",
+        )
+        assert job.trajectory_path == Path("/home/user/.lxa/conversations/abc123-def456")
+
+    def test_trajectory_path_without_conversation(self):
+        """Test trajectory_path returns None when conversation is not set."""
+        job = Job(
+            id="test-noconv",
+            command=[],
+            cwd="/",
+            work_dir="/work",
+            log_path="/test.log",
+        )
+        assert job.trajectory_path is None
+
+    def test_trajectory_path_partial_conversation_info(self):
+        """Test trajectory_path returns None when only conversation_id is set."""
+        job = Job(
+            id="test-partial",
+            command=[],
+            cwd="/",
+            work_dir="/work",
+            log_path="/test.log",
+            conversation_id="abc123",
+            conversations_dir=None,
+        )
+        assert job.trajectory_path is None
+
+    def test_conversation_fields_in_serialization(self):
+        """Test conversation fields are included in to_dict/from_dict."""
+        job = Job(
+            id="test-serial",
+            command=["run"],
+            cwd="/test",
+            work_dir="/work",
+            log_path="/test.log",
+            conversation_id="conv-123-456",
+            conversations_dir="/home/user/.lxa/conversations",
+        )
+
+        data = job.to_dict()
+        assert data["conversation_id"] == "conv-123-456"
+        assert data["conversations_dir"] == "/home/user/.lxa/conversations"
+
+        restored = Job.from_dict(data)
+        assert restored.conversation_id == "conv-123-456"
+        assert restored.conversations_dir == "/home/user/.lxa/conversations"
+        assert restored.trajectory_path == Path("/home/user/.lxa/conversations/conv-123-456")

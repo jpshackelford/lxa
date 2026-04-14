@@ -140,6 +140,12 @@ def spawn_detached(
                 log_file.write(f"[lxa]   {msg}\n")
         log_file.write("[lxa] " + "=" * 60 + "\n")
         log_file.flush()
+        # Pass job_id as environment variable so the command can update metadata
+        job_env = {
+            **os.environ,
+            "LXA_JOB_ID": job.id,
+            "LXA_JOBS_DIR": str(jobs_path),
+        }
         proc = subprocess.Popen(
             wrapper_command,
             cwd=str(work_dir),  # Run in isolated work_dir, not original cwd
@@ -147,7 +153,7 @@ def spawn_detached(
             stdout=log_file,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # This is the key - creates new session
-            env={**os.environ},  # Inherit environment
+            env=job_env,
         )
 
         # Parent can close its copy after child inherits the file descriptor

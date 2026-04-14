@@ -74,6 +74,8 @@ class Job:
         pid: Process ID of the running job (None if not started or waiting)
         status: Current job status
         log_path: Path to the job's log file
+        conversation_id: ID of the conversation for this job (None if not tracked)
+        conversations_dir: Directory where conversations are stored
         created_at: When the job was created
         started_at: When the job started running (None if not started)
         ended_at: When the job finished (None if still running)
@@ -87,6 +89,8 @@ class Job:
     log_path: str
     pid: int | None = None
     status: JobStatus = JobStatus.RUNNING
+    conversation_id: str | None = None
+    conversations_dir: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
     started_at: datetime | None = None
     ended_at: datetime | None = None
@@ -150,6 +154,8 @@ class Job:
             "pid": self.pid,
             "status": self.status.value,
             "log_path": self.log_path,
+            "conversation_id": self.conversation_id,
+            "conversations_dir": self.conversations_dir,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
@@ -167,6 +173,8 @@ class Job:
             pid=data.get("pid"),
             status=JobStatus(data["status"]),
             log_path=data["log_path"],
+            conversation_id=data.get("conversation_id"),
+            conversations_dir=data.get("conversations_dir"),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
             else datetime.now(),
@@ -210,3 +218,14 @@ class Job:
             hours = int(seconds // 3600)
             minutes = int((seconds % 3600) // 60)
             return f"{hours}h {minutes}m"
+
+    @property
+    def trajectory_path(self) -> Path | None:
+        """Get the path to the conversation trajectory directory.
+
+        Returns:
+            Path to trajectory directory, or None if conversation_id not set
+        """
+        if not self.conversation_id or not self.conversations_dir:
+            return None
+        return Path(self.conversations_dir) / self.conversation_id
