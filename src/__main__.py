@@ -5,6 +5,8 @@ Usage:
     python -m src implement .pr/design.md    # Start implementation
     python -m src reconcile .pr/design.md    # Run reconciliation (post-merge)
     python -m src refine <PR_URL>            # Refine existing PR
+    python -m src run -t "Your task here"    # Run task from prompt
+    python -m src run -f task.txt            # Run task from file
 
 Or via the installed command:
     lxa implement                            # Uses .pr/design.md
@@ -13,6 +15,9 @@ Or via the installed command:
     lxa reconcile .pr/design.md              # Update design doc with code refs
     lxa refine https://github.com/owner/repo/pull/42              # Refine PR
     lxa refine https://github.com/owner/repo/pull/42 --auto-merge # Refine and merge
+    lxa run -t "Write a hello world script"  # Run task from prompt
+    lxa run -f task.txt                      # Run task from file
+    lxa run -t "Fix the bug" --background    # Run task in background
 """
 
 from __future__ import annotations
@@ -60,7 +65,8 @@ from src.agents.orchestrator import (
 )
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
-from src.ralph.runner import DEFAULT_CONVERSATIONS_DIR, RefinementConfig
+from src.global_config import get_conversations_dir
+from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
 
@@ -87,7 +93,12 @@ def _register_agents() -> None:
     )
 
 
-CONVERSATIONS_DIR = DEFAULT_CONVERSATIONS_DIR
+def _get_conversations_dir() -> str:
+    """Get the conversations directory from global config."""
+    return str(get_conversations_dir())
+
+
+CONVERSATIONS_DIR = _get_conversations_dir()
 
 
 def get_llm():
@@ -213,7 +224,7 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print()
 
     # Create conversation with visualizer for real-time sub-agent output
-    # and persistence to ~/.openhands/conversations for history
+    # and persistence to ~/.lxa/conversations for history
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
@@ -223,6 +234,11 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
 
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")
     console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
 
     initial_message = f"""\
 Start milestone execution for this project.
@@ -424,6 +440,99 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def run_task(
+    task: str,
+    workspace: Path,
+    llm: LLM | None = None,
+) -> int:
+    """Run a prompt-driven task using a simple agent.
+
+    This provides headless-style execution similar to OpenHands CLI,
+    allowing a task to be specified via command line or file.
+
+    Args:
+        task: The task/prompt to execute
+        workspace: Path to the workspace (git repository root)
+        llm: Optional LLM instance (defaults to get_llm() if not provided).
+            Useful for testing with a mock LLM.
+
+    Returns:
+        Exit code (0 for success, 1 for error/stuck)
+    """
+    from openhands.sdk import Agent, Tool
+    from openhands.sdk.conversation.state import ConversationExecutionStatus
+    from openhands.tools.file_editor import FileEditorTool
+    from openhands.tools.task_tracker import TaskTrackerTool
+    from openhands.tools.terminal import TerminalTool
+
+    console.print(Panel("[bold blue]LXA - Task Runner[/]", expand=False))
+    console.print()
+
+    # Verify workspace is a git repo (optional, but provides context)
+    if not (workspace / ".git").exists():
+        console.print(f"[yellow]Warning:[/] Not a git repository: {workspace}")
+        console.print("[dim]Continuing without git context...[/]")
+        console.print()
+
+    # Get LLM (use provided or create from environment)
+    if llm is None:
+        llm = get_llm()
+    console.print(f"[dim]Model: {llm.model}[/]")
+    console.print(f"[dim]Workspace: {workspace}[/]")
+    console.print()
+
+    # Create a simple agent with standard tools
+    tools = [
+        Tool(name=FileEditorTool.name),
+        Tool(name=TerminalTool.name),
+        Tool(name=TaskTrackerTool.name),
+    ]
+
+    agent = Agent(llm=llm, tools=tools)
+
+    console.print("[bold cyan]Starting task execution...[/]")
+    console.print()
+
+    # Create conversation with visualizer and persistence
+    conversation = Conversation(
+        agent=agent,
+        workspace=workspace,
+        visualizer=DelegationVisualizer(name="TaskRunner"),
+        persistence_dir=CONVERSATIONS_DIR,
+    )
+
+    console.print(f"[dim]Conversation ID: {conversation.id}[/]")
+    console.print()
+
+    # Register conversation with job if running as a background job
+    from src.jobs import register_conversation
+
+    register_conversation(str(conversation.id), CONVERSATIONS_DIR)
+
+    conversation.send_message(task)
+    conversation.run()
+
+    # Check execution status and return appropriate exit code
+    status = conversation.state.execution_status
+    if status == ConversationExecutionStatus.FINISHED:
+        console.print()
+        console.print("[bold green]Task complete.[/]")
+        return 0
+    elif status == ConversationExecutionStatus.ERROR:
+        console.print()
+        console.print("[bold red]Task failed with error.[/]")
+        return 1
+    elif status == ConversationExecutionStatus.STUCK:
+        console.print()
+        console.print("[bold yellow]Task got stuck.[/]")
+        return 1
+    else:
+        # Unexpected status (IDLE, RUNNING, PAUSED, etc.)
+        console.print()
+        console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
+        return 1
+
+
 def _filter_background_args(argv: list[str]) -> list[str]:
     """Filter out --background and --job-name flags from argv.
 
@@ -460,6 +569,112 @@ def _filter_background_args(argv: list[str]) -> list[str]:
         result.append(arg)
 
     return result
+
+
+def _rewrite_single_path(
+    path_str: str, workspace: Path, description: str
+) -> tuple[str, str | None]:
+    """Rewrite a single path and return (new_path, warning_or_none).
+
+    Args:
+        path_str: The path string to rewrite
+        workspace: The workspace directory
+        description: Description of what this path represents (for warnings)
+
+    Returns:
+        Tuple of (rewritten_path, warning_message_or_none)
+    """
+    path = Path(path_str).resolve()
+    try:
+        rel_path = path.relative_to(workspace)
+        if path_str != str(rel_path):
+            warning = (
+                f"Rewriting {description} path for isolated workspace: {path_str} -> {rel_path}"
+            )
+            return str(rel_path), warning
+        return path_str, None
+    except ValueError:
+        warning = (
+            f"WARNING: {description} path '{path_str}' is outside workspace. "
+            f"The file will be copied to the isolated workspace, but changes "
+            f"will NOT be synced back to the original location."
+        )
+        return path_str, warning
+
+
+def _try_rewrite_path_arg(
+    arg: str, next_arg: str | None, workspace: Path, path_flags: dict[str, str]
+) -> tuple[list[str], int, str | None]:
+    """Try to rewrite a path argument if it matches a known flag.
+
+    Args:
+        arg: Current argument
+        next_arg: Next argument (or None if at end)
+        workspace: Workspace directory
+        path_flags: Dictionary mapping flags to their descriptions
+
+    Returns:
+        Tuple of (rewritten_args, args_consumed, warning_or_none).
+        Empty list if not a path flag.
+    """
+    # Handle --flag value
+    if arg in path_flags and next_arg:
+        new_path, warning = _rewrite_single_path(next_arg, workspace, path_flags[arg])
+        return [arg, new_path], 2, warning
+
+    # Handle --flag=value
+    for flag, desc in path_flags.items():
+        if arg.startswith(f"{flag}="):
+            new_path, warning = _rewrite_single_path(arg[len(flag) + 1 :], workspace, desc)
+            return [f"{flag}={new_path}"], 1, warning
+
+    return [], 0, None
+
+
+def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[list[str], list[str]]:
+    """Rewrite absolute paths in argv to be relative to workspace.
+
+    Background jobs run in an isolated workspace clone. Any explicit absolute
+    paths (--design-path, --workspace, --file) need to be converted to relative
+    paths so they work correctly in the cloned workspace.
+
+    Args:
+        argv: Command line arguments (after filtering background flags)
+        workspace: The workspace directory that will be cloned
+
+    Returns:
+        Tuple of (rewritten_argv, warnings) where warnings are messages
+        to be logged about path rewriting.
+    """
+    result = []
+    warnings = []
+    i = 0
+
+    # Flags that take path arguments
+    path_flags = {
+        "--design-path": "design document",
+        "--design-doc": "design document",
+        "--workspace": "workspace",
+        "-w": "workspace",
+        "--file": "task file",
+        "-f": "task file",
+    }
+
+    while i < len(argv):
+        next_arg = argv[i + 1] if i + 1 < len(argv) else None
+        rewritten, consumed, warning = _try_rewrite_path_arg(
+            argv[i], next_arg, workspace, path_flags
+        )
+        if rewritten:
+            if warning:
+                warnings.append(warning)
+            result.extend(rewritten)
+            i += consumed
+        else:
+            result.append(argv[i])
+            i += 1
+
+    return result, warnings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -672,6 +887,44 @@ Configuration:
         help="Custom name for background job (default: 'refine')",
     )
 
+    # Run subcommand - prompt-driven task execution (like OpenHands headless mode)
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a task from a prompt (headless mode)",
+    )
+    run_task_group = run_parser.add_mutually_exclusive_group(required=True)
+    run_task_group.add_argument(
+        "--task",
+        "-t",
+        type=str,
+        help="Task/prompt to execute",
+    )
+    run_task_group.add_argument(
+        "--file",
+        "-f",
+        type=Path,
+        help="Path to file containing the task/prompt",
+    )
+    run_parser.add_argument(
+        "--workspace",
+        "-w",
+        type=Path,
+        default=None,
+        help="Workspace directory (defaults to current git root)",
+    )
+    run_parser.add_argument(
+        "--background",
+        "-b",
+        action="store_true",
+        help="Run in background (detached from terminal)",
+    )
+    run_parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help="Custom name for background job (default: 'run')",
+    )
+
     # Job subcommand (with nested subcommands)
     job_parser = subparsers.add_parser(
         "job",
@@ -774,6 +1027,28 @@ Configuration:
         "-n",
         action="store_true",
         help="Show what would be deleted without deleting",
+    )
+
+    # Config command (global lxa configuration)
+    config_parser = subparsers.add_parser(
+        "config",
+        help="View and manage global lxa configuration",
+    )
+    config_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["set", "reset"],
+        help="Action to perform (set, reset)",
+    )
+    config_parser.add_argument(
+        "key",
+        nargs="?",
+        help="Configuration key",
+    )
+    config_parser.add_argument(
+        "value",
+        nargs="?",
+        help="Value to set (for 'set' action)",
     )
 
     # Board subcommand (with nested subcommands)
@@ -1107,6 +1382,16 @@ Configuration:
                 dry_run=args.dry_run,
             )
 
+    # Handle config command (global lxa configuration)
+    if args.command == "config":
+        from src.jobs.cli.config_cmd import cmd_config
+
+        return cmd_config(
+            action=args.action,
+            key=args.key,
+            value=args.value,
+        )
+
     # Handle reconcile command (simple path handling)
     if args.command == "reconcile":
         design_doc = args.design_doc.resolve()
@@ -1125,10 +1410,14 @@ Configuration:
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
 
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
             job = spawn_lxa_command(
                 lxa_command=cmd,
                 cwd=workspace,
                 job_name=args.job_name or "refine",
+                log_preamble=path_warnings if path_warnings else None,
             )
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
@@ -1142,6 +1431,55 @@ Configuration:
             max_iterations=args.max_iterations,
             phase=args.phase,
         )
+
+    # Handle run command - prompt-driven task execution
+    if args.command == "run":
+        # Determine workspace: explicit --workspace, git root, or current directory
+        if args.workspace:
+            workspace = args.workspace.resolve()
+        else:
+            # Try to find git root, fall back to cwd if not in a git repo
+            # This matches run_task()'s behavior which warns but continues without git
+            try:
+                workspace = find_git_root(Path.cwd())
+            except RuntimeError:
+                workspace = Path.cwd()
+
+        # Get task from --task or --file
+        if args.task:
+            task = args.task
+        else:
+            # Load task from file
+            task_file = args.file.resolve()
+            if not task_file.exists():
+                console.print(f"[red]Error:[/] Task file not found: {task_file}")
+                return 1
+            task = task_file.read_text(encoding="utf-8").strip()
+            if not task:
+                console.print(f"[red]Error:[/] Task file is empty: {task_file}")
+                return 1
+
+        # Handle background mode
+        if args.background:
+            from src.jobs import spawn_lxa_command
+
+            # Filter out --background and --job-name, keep everything else
+            args_to_use = argv if argv is not None else sys.argv[1:]
+            cmd = _filter_background_args(args_to_use)
+
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
+            job = spawn_lxa_command(
+                lxa_command=cmd,
+                cwd=workspace,
+                job_name=args.job_name or "run",
+                log_preamble=path_warnings if path_warnings else None,
+            )
+            console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
+            return 0
+
+        return run_task(task=task, workspace=workspace)
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -1166,10 +1504,14 @@ Configuration:
         args_to_use = argv if argv is not None else sys.argv[1:]
         cmd = _filter_background_args(args_to_use)
 
+        # Rewrite paths to be relative for isolated workspace
+        cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
         job = spawn_lxa_command(
             lxa_command=cmd,
             cwd=workspace,
             job_name=args.job_name or "implement",
+            log_preamble=path_warnings if path_warnings else None,
         )
         console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
         return 0

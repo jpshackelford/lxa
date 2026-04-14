@@ -64,8 +64,17 @@ def cmd_status(job_id: str, *, json_output: bool = False) -> int:
     table.add_row("Command", " ".join(job.command))
     table.add_row("Status", status_str)
     table.add_row("PID", str(job.pid) if job.pid else "-")
-    table.add_row("Working Dir", job.cwd)
+    table.add_row("Original Dir", job.cwd)
+    table.add_row("Work Dir", job.work_dir)
     table.add_row("Log File", job.log_path)
+
+    # Show trajectory path if available
+    if job.trajectory_path:
+        table.add_row("Trajectory", str(job.trajectory_path))
+    elif job.conversation_id:
+        # Has conversation_id but no conversations_dir (legacy)
+        table.add_row("Conversation ID", job.conversation_id)
+
     table.add_row("Duration", job.format_duration())
 
     if job.created_at:
@@ -83,9 +92,9 @@ def cmd_status(job_id: str, *, json_output: bool = False) -> int:
 
     # Show helpful hints based on status
     if job.status == JobStatus.RUNNING:
-        console.print("[dim]View logs: lxa job logs", job.id, "[/]")
-        console.print("[dim]Stop job: lxa job stop", job.id, "[/]")
+        console.print(f"[dim]View logs: lxa job logs {job.id}[/]")
+        console.print(f"[dim]Stop job: lxa job stop {job.id}[/]")
     else:
-        console.print("[dim]View logs: lxa job logs", job.id, "[/]")
+        console.print(f"[dim]View logs: lxa job logs {job.id}[/]")
 
     return 0

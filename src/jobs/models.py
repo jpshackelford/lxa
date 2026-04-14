@@ -69,10 +69,13 @@ class Job:
     Attributes:
         id: Unique job identifier (format: {name}-{hash})
         command: Command arguments (e.g., ["implement", "--loop"])
-        cwd: Working directory where the job runs
+        cwd: Original working directory (the user's workspace)
+        work_dir: Isolated working directory for this job (temp directory)
         pid: Process ID of the running job (None if not started or waiting)
         status: Current job status
         log_path: Path to the job's log file
+        conversation_id: ID of the conversation for this job (None if not tracked)
+        conversations_dir: Directory where conversations are stored
         created_at: When the job was created
         started_at: When the job started running (None if not started)
         ended_at: When the job finished (None if still running)
@@ -82,9 +85,12 @@ class Job:
     id: str
     command: list[str]
     cwd: str
+    work_dir: str
     log_path: str
     pid: int | None = None
     status: JobStatus = JobStatus.RUNNING
+    conversation_id: str | None = None
+    conversations_dir: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
     started_at: datetime | None = None
     ended_at: datetime | None = None
@@ -97,28 +103,41 @@ class Job:
         cwd: Path,
         jobs_dir: Path,
         job_name: str | None = None,
+        workspaces_dir: Path | None = None,
     ) -> Job:
         """Create a new job with generated ID and paths.
 
+        Creates an isolated working directory for the job under workspaces_dir.
+        The job will run in this isolated directory, not in the original cwd.
+
         Args:
             command: Command arguments to run
-            cwd: Working directory
+            cwd: Original working directory (user's workspace)
             jobs_dir: Directory for job files (e.g., ~/.lxa/jobs)
             job_name: Custom job name (default: derived from command)
+            workspaces_dir: Directory for ephemeral workspaces (default: ~/.lxa/workspaces)
 
         Returns:
-            New Job instance with generated ID and log path
+            New Job instance with generated ID, work_dir, and log path
         """
         # Derive name from command if not provided
         name = job_name or command[0] if command else "job"
         job_id = generate_job_id(name)
         log_path = jobs_dir / f"{job_id}.log"
 
+        # Create isolated working directory for this job
+        # By default, workspaces are stored at ~/.lxa/workspaces/ (sibling to jobs/)
+        if workspaces_dir is None:
+            workspaces_dir = jobs_dir.parent / "workspaces"
+        work_dir = workspaces_dir / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+
         now = datetime.now()
         return cls(
             id=job_id,
             command=command,
             cwd=str(cwd),
+            work_dir=str(work_dir),
             log_path=str(log_path),
             status=JobStatus.RUNNING,
             created_at=now,
@@ -131,9 +150,12 @@ class Job:
             "id": self.id,
             "command": self.command,
             "cwd": self.cwd,
+            "work_dir": self.work_dir,
             "pid": self.pid,
             "status": self.status.value,
             "log_path": self.log_path,
+            "conversation_id": self.conversation_id,
+            "conversations_dir": self.conversations_dir,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
@@ -147,9 +169,12 @@ class Job:
             id=data["id"],
             command=data["command"],
             cwd=data["cwd"],
+            work_dir=data.get("work_dir", data["cwd"]),  # Fallback for old jobs without work_dir
             pid=data.get("pid"),
             status=JobStatus(data["status"]),
             log_path=data["log_path"],
+            conversation_id=data.get("conversation_id"),
+            conversations_dir=data.get("conversations_dir"),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
             else datetime.now(),
@@ -193,3 +218,14 @@ class Job:
             hours = int(seconds // 3600)
             minutes = int((seconds % 3600) // 60)
             return f"{hours}h {minutes}m"
+
+    @property
+    def trajectory_path(self) -> Path | None:
+        """Get the path to the conversation trajectory directory.
+
+        Returns:
+            Path to trajectory directory, or None if conversation_id not set
+        """
+        if not self.conversation_id or not self.conversations_dir:
+            return None
+        return Path(self.conversations_dir) / self.conversation_id
