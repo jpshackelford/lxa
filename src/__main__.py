@@ -555,6 +555,99 @@ def _filter_background_args(argv: list[str]) -> list[str]:
     return result
 
 
+def _rewrite_paths_for_background(argv: list[str], workspace: Path) -> tuple[list[str], list[str]]:
+    """Rewrite absolute paths in argv to be relative to workspace.
+
+    Background jobs run in an isolated workspace clone. Any explicit absolute
+    paths (--design-path, --workspace, --file) need to be converted to relative
+    paths so they work correctly in the cloned workspace.
+
+    Args:
+        argv: Command line arguments (after filtering background flags)
+        workspace: The workspace directory that will be cloned
+
+    Returns:
+        Tuple of (rewritten_argv, warnings) where warnings are messages
+        to be logged about path rewriting.
+    """
+    result = []
+    warnings = []
+    i = 0
+
+    # Flags that take path arguments
+    path_flags = {
+        "--design-path": "design document",
+        "--design-doc": "design document",
+        "--workspace": "workspace",
+        "-w": "workspace",
+        "--file": "task file",
+        "-f": "task file",
+    }
+
+    while i < len(argv):
+        arg = argv[i]
+
+        # Check for --flag value format
+        if arg in path_flags and i + 1 < len(argv):
+            flag = arg
+            path_str = argv[i + 1]
+            path = Path(path_str).resolve()
+
+            # Try to make path relative to workspace
+            try:
+                rel_path = path.relative_to(workspace)
+                if path_str != str(rel_path):
+                    warnings.append(
+                        f"Rewriting {path_flags[flag]} path for isolated workspace: "
+                        f"{path_str} -> {rel_path}"
+                    )
+                result.append(flag)
+                result.append(str(rel_path))
+            except ValueError:
+                # Path is not under workspace - this is problematic
+                warnings.append(
+                    f"WARNING: {path_flags[flag]} path '{path_str}' is outside workspace. "
+                    f"The file will be copied to the isolated workspace, but changes "
+                    f"will NOT be synced back to the original location."
+                )
+                result.append(flag)
+                result.append(path_str)
+            i += 2
+            continue
+
+        # Check for --flag=value format
+        for flag, desc in path_flags.items():
+            if arg.startswith(f"{flag}="):
+                path_str = arg[len(flag) + 1 :]
+                path = Path(path_str).resolve()
+
+                try:
+                    rel_path = path.relative_to(workspace)
+                    if path_str != str(rel_path):
+                        warnings.append(
+                            f"Rewriting {desc} path for isolated workspace: "
+                            f"{path_str} -> {rel_path}"
+                        )
+                    result.append(f"{flag}={rel_path}")
+                except ValueError:
+                    warnings.append(
+                        f"WARNING: {desc} path '{path_str}' is outside workspace. "
+                        f"The file will be copied to the isolated workspace, but changes "
+                        f"will NOT be synced back to the original location."
+                    )
+                    result.append(arg)
+                break
+        else:
+            # Not a path flag, keep as-is
+            result.append(arg)
+            i += 1
+            continue
+
+        i += 1
+
+    return result, warnings
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -1256,10 +1349,14 @@ Configuration:
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
 
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
             job = spawn_lxa_command(
                 lxa_command=cmd,
                 cwd=workspace,
                 job_name=args.job_name or "refine",
+                log_preamble=path_warnings if path_warnings else None,
             )
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
@@ -1309,10 +1406,14 @@ Configuration:
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
 
+            # Rewrite paths to be relative for isolated workspace
+            cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
             job = spawn_lxa_command(
                 lxa_command=cmd,
                 cwd=workspace,
                 job_name=args.job_name or "run",
+                log_preamble=path_warnings if path_warnings else None,
             )
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
@@ -1342,10 +1443,14 @@ Configuration:
         args_to_use = argv if argv is not None else sys.argv[1:]
         cmd = _filter_background_args(args_to_use)
 
+        # Rewrite paths to be relative for isolated workspace
+        cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
+
         job = spawn_lxa_command(
             lxa_command=cmd,
             cwd=workspace,
             job_name=args.job_name or "implement",
+            log_preamble=path_warnings if path_warnings else None,
         )
         console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
         return 0

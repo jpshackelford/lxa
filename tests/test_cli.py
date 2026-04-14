@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from src.__main__ import _register_agents, find_git_root, main
+from src.__main__ import (
+    _register_agents,
+    _rewrite_paths_for_background,
+    find_git_root,
+    main,
+)
 
 
 class TestFindGitRoot:
@@ -30,6 +35,107 @@ class TestFindGitRoot:
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         assert find_git_root(subdir) == subdir
+
+
+class TestRewritePathsForBackground:
+    """Tests for _rewrite_paths_for_background function."""
+
+    def test_no_paths_unchanged(self, tmp_path: Path) -> None:
+        """Args without paths pass through unchanged."""
+        argv = ["implement", "--loop", "--refine"]
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+        assert result == argv
+        assert warnings == []
+
+    def test_relative_path_in_workspace_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Relative paths inside workspace pass through unchanged."""
+        # Create the file so the path exists
+        design_path = tmp_path / ".pr" / "design.md"
+        design_path.parent.mkdir(parents=True)
+        design_path.touch()
+
+        # Change to tmp_path so relative path resolves correctly
+        monkeypatch.chdir(tmp_path)
+
+        argv = ["implement", "--design-path", ".pr/design.md"]
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+        assert result == ["implement", "--design-path", ".pr/design.md"]
+        assert warnings == []
+
+    def test_absolute_path_in_workspace_converted(self, tmp_path: Path) -> None:
+        """Absolute paths inside workspace converted to relative."""
+        design_path = tmp_path / ".pr" / "design.md"
+        design_path.parent.mkdir(parents=True)
+        design_path.touch()
+
+        argv = ["implement", "--design-path", str(design_path)]
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+
+        assert result == ["implement", "--design-path", ".pr/design.md"]
+        assert len(warnings) == 1
+        assert "Rewriting design document path" in warnings[0]
+
+    def test_absolute_path_outside_workspace_warns(self, tmp_path: Path) -> None:
+        """Absolute paths outside workspace generate warnings."""
+        other_dir = tmp_path / "other_project"
+        other_dir.mkdir()
+        design_path = other_dir / "design.md"
+        design_path.touch()
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        argv = ["implement", "--design-path", str(design_path)]
+        result, warnings = _rewrite_paths_for_background(argv, workspace)
+
+        # Path unchanged since it's outside workspace
+        assert result == ["implement", "--design-path", str(design_path)]
+        assert len(warnings) == 1
+        assert "WARNING" in warnings[0]
+        assert "outside workspace" in warnings[0]
+
+    def test_equals_format_handled(self, tmp_path: Path) -> None:
+        """--flag=value format is handled correctly."""
+        design_path = tmp_path / ".pr" / "design.md"
+        design_path.parent.mkdir(parents=True)
+        design_path.touch()
+
+        argv = ["implement", f"--design-path={design_path}"]
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+
+        assert result == ["implement", "--design-path=.pr/design.md"]
+        assert len(warnings) == 1
+
+    def test_multiple_paths_all_rewritten(self, tmp_path: Path) -> None:
+        """Multiple path arguments are all processed."""
+        design_path = tmp_path / "design.md"
+        design_path.touch()
+
+        argv = [
+            "run",
+            "--file",
+            str(tmp_path / "task.txt"),
+            "--workspace",
+            str(tmp_path),
+        ]
+        (tmp_path / "task.txt").touch()
+
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+
+        assert result == ["run", "--file", "task.txt", "--workspace", "."]
+        assert len(warnings) == 2  # Both paths rewritten
+
+    def test_short_flags_handled(self, tmp_path: Path) -> None:
+        """Short flags like -f and -w are handled."""
+        task_file = tmp_path / "task.txt"
+        task_file.touch()
+
+        argv = ["run", "-f", str(task_file), "-w", str(tmp_path)]
+        result, warnings = _rewrite_paths_for_background(argv, tmp_path)
+
+        assert result == ["run", "-f", "task.txt", "-w", "."]
 
 
 class TestMainHelp:

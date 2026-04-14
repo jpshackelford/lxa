@@ -60,6 +60,7 @@ def spawn_detached(
     job_name: str | None = None,
     jobs_dir: Path | None = None,
     workspaces_dir: Path | None = None,
+    log_preamble: list[str] | None = None,
 ) -> Job:
     """Spawn a detached background process in an isolated working directory.
 
@@ -75,6 +76,7 @@ def spawn_detached(
         job_name: Custom job name (default: derived from command)
         jobs_dir: Directory for job files (default: ~/.lxa/jobs)
         workspaces_dir: Directory for ephemeral workspaces (default: ~/.lxa/workspaces)
+        log_preamble: Optional list of messages to write to log before command runs
 
     Returns:
         Job instance with PID populated
@@ -129,6 +131,15 @@ def spawn_detached(
     # handle lifecycle carefully around Popen
     log_file = open(log_path, "w")  # noqa: SIM115
     try:
+        # Write preamble messages to log (e.g., path rewriting warnings)
+        if log_preamble:
+            for msg in log_preamble:
+                log_file.write(f"[lxa] {msg}\n")
+            log_file.write(f"[lxa] Original workspace: {cwd}\n")
+            log_file.write(f"[lxa] Isolated workspace: {work_dir}\n")
+            log_file.write("[lxa] " + "=" * 60 + "\n")
+            log_file.flush()
+
         proc = subprocess.Popen(
             wrapper_command,
             cwd=str(work_dir),  # Run in isolated work_dir, not original cwd
@@ -170,6 +181,7 @@ def spawn_lxa_command(
     job_name: str | None = None,
     jobs_dir: Path | None = None,
     workspaces_dir: Path | None = None,
+    log_preamble: list[str] | None = None,
 ) -> Job:
     """Spawn an LXA command in the background.
 
@@ -182,6 +194,7 @@ def spawn_lxa_command(
         job_name: Custom job name
         jobs_dir: Directory for job files
         workspaces_dir: Directory for ephemeral workspaces
+        log_preamble: Optional messages to write to log before command runs
 
     Returns:
         Job instance
@@ -196,6 +209,7 @@ def spawn_lxa_command(
         job_name=job_name,
         jobs_dir=jobs_dir,
         workspaces_dir=workspaces_dir,
+        log_preamble=log_preamble,
     )
 
 
