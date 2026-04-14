@@ -480,7 +480,7 @@ def run_task(
     if sandbox_mode:
         from src.hooks import create_sandbox_hook_config
 
-        hook_config = create_sandbox_hook_config(workspace)
+        hook_config = create_sandbox_hook_config()
         console.print("[dim]Sandbox mode: terminal commands restricted to workspace[/]")
         console.print()
 

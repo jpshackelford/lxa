@@ -10,7 +10,8 @@ on paths outside the workspace while still blocking write operations.
 Usage:
     from src.hooks import create_sandbox_hook_config
 
-    hook_config = create_sandbox_hook_config(workspace)
+    # Workspace is read from LXA_WORKSPACE environment variable at runtime
+    hook_config = create_sandbox_hook_config()
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
@@ -105,6 +106,10 @@ def extract_paths_from_command(command: str) -> list[str]:
     This is a heuristic extraction - it looks for arguments that look like
     paths (start with /, ~, or ./ or contain /).
 
+    Note: Comment detection uses simple `split("#")` which may incorrectly
+    strip content from commands with `#` inside strings (e.g., `echo "test # not a comment"`).
+    This is acceptable for heuristic validation but may cause false positives.
+
     Args:
         command: Shell command string
 
@@ -113,6 +118,7 @@ def extract_paths_from_command(command: str) -> list[str]:
     """
     # Remove everything after # (comments) for path extraction
     # But preserve # read-only detection separately
+    # Note: This is simplistic and may incorrectly handle # in quoted strings
     command_part = command.split("#")[0]
 
     paths = []
@@ -242,6 +248,124 @@ def has_write_redirect_to_external(
     return False, None
 
 
+def _format_paths_str(paths: list[str], max_shown: int = 3) -> str:
+    """Format a list of paths for display in error messages."""
+    paths_str = ", ".join(paths[:max_shown])
+    if len(paths) > max_shown:
+        paths_str += f" (and {len(paths) - max_shown} more)"
+    return paths_str
+
+
+def _check_navigation(
+    command: str, cmd_name: str, workspace: Path, current_dir: Path
+) -> tuple[bool, str | None]:
+    """Check if navigation command goes outside workspace."""
+    command_part = command.split("#")[0]
+    try:
+        tokens = shlex.split(command_part)
+    except ValueError:
+        tokens = command_part.split()
+
+    # Find the path argument (skip command name and flags)
+    target_path = None
+    for i, token in enumerate(tokens):
+        if i == 0:
+            continue
+        if token.startswith("-"):
+            continue
+        target_path = token
+        break
+
+    if not target_path:
+        return True, None
+
+    resolved = resolve_path(target_path, current_dir)
+    if is_path_within_workspace(resolved, workspace):
+        return True, None
+
+    return (
+        False,
+        f"""
+Command blocked: '{cmd_name} {target_path}' would navigate outside workspace.
+
+Your workspace is: {workspace}
+
+Navigation outside the workspace is NOT allowed, even with '# read-only'.
+To read files outside the workspace, use absolute paths with commands like cat, grep, or ls:
+
+    cat {target_path} # read-only
+    ls -la {target_path} # read-only
+""",
+    )
+
+
+def _check_write_redirect(
+    command: str, workspace: Path, current_dir: Path
+) -> tuple[bool, str | None]:
+    """Check if command has write redirect to external path."""
+    has_external, target = has_write_redirect_to_external(command, workspace, current_dir)
+    if not has_external:
+        return True, None
+
+    return (
+        False,
+        f"""
+Command blocked: writes to '{target}' which is outside workspace.
+
+Your workspace is: {workspace}
+
+Writing to paths outside the workspace is NOT allowed.
+""",
+    )
+
+
+def _check_write_command(
+    command: str, cmd_name: str, workspace: Path, current_dir: Path
+) -> tuple[bool, str | None]:
+    """Check if write command targets external paths."""
+    outside_paths = find_paths_outside_workspace(command, workspace, current_dir)
+    if not outside_paths:
+        return True, None
+
+    return (
+        False,
+        f"""
+Command blocked: '{cmd_name}' targets paths outside workspace: {_format_paths_str(outside_paths)}
+
+Your workspace is: {workspace}
+
+Write operations to paths outside the workspace are NOT allowed.
+""",
+    )
+
+
+def _check_read_access(
+    command: str, workspace: Path, current_dir: Path, has_read_only: bool
+) -> tuple[bool, str | None]:
+    """Check if read access to external paths is allowed."""
+    outside_paths = find_paths_outside_workspace(command, workspace, current_dir)
+    if not outside_paths:
+        return True, None
+
+    if has_read_only:
+        return True, None
+
+    return (
+        False,
+        f"""
+Command blocked: references paths outside workspace: {_format_paths_str(outside_paths)}
+
+Your workspace is: {workspace}
+
+If you need read-only access to paths outside the workspace, append '# read-only' to your command:
+
+    {command.rstrip()} # read-only
+
+Note: Write operations (rm, mv, cp, >, etc.) to external paths are never allowed.
+""",
+    )
+
+
 def validate_command(
     command: str,
     workspace: Path,
@@ -267,131 +391,41 @@ def validate_command(
     """
     if current_dir is None:
         current_dir = workspace
-
-    # Resolve to absolute paths
     workspace = workspace.resolve()
     current_dir = current_dir.resolve()
 
-    # Check for read-only escape hatch
     has_read_only = bool(READ_ONLY_PATTERN.search(command))
-
-    # Get the primary command name
     cmd_name = get_command_name(command)
 
-    # Check for navigation commands
+    # Check navigation commands
     if cmd_name in NAVIGATION_COMMANDS:
-        # Extract the target path (usually the first non-flag argument after the command)
-        command_part = command.split("#")[0]  # Remove comments
-        try:
-            tokens = shlex.split(command_part)
-        except ValueError:
-            tokens = command_part.split()
+        allowed, error = _check_navigation(command, cmd_name, workspace, current_dir)
+        if not allowed:
+            return allowed, error
 
-        # Find the path argument (skip command name and flags)
-        target_path = None
-        for i, token in enumerate(tokens):
-            if i == 0:
-                continue  # Skip command name
-            if token.startswith("-"):
-                continue  # Skip flags
-            target_path = token
-            break
+    # Check write redirects
+    allowed, error = _check_write_redirect(command, workspace, current_dir)
+    if not allowed:
+        return allowed, error
 
-        if target_path:
-            resolved = resolve_path(target_path, current_dir)
-            if not is_path_within_workspace(resolved, workspace):
-                return (
-                    False,
-                    f"""
-Command blocked: '{cmd_name} {target_path}' would navigate outside workspace.
-
-Your workspace is: {workspace}
-
-Navigation outside the workspace is NOT allowed, even with '# read-only'.
-To read files outside the workspace, use absolute paths with commands like cat, grep, or ls:
-
-    cat {target_path} # read-only
-    ls -la {target_path} # read-only
-""",
-                )
-
-    # Check for write redirects to external paths
-    has_external_redirect, redirect_target = has_write_redirect_to_external(
-        command, workspace, current_dir
-    )
-    if has_external_redirect:
-        return (
-            False,
-            f"""
-Command blocked: writes to '{redirect_target}' which is outside workspace.
-
-Your workspace is: {workspace}
-
-Writing to paths outside the workspace is NOT allowed.
-""",
-        )
-
-    # Check for write commands targeting external paths
+    # Check write commands
     if cmd_name in WRITE_COMMANDS:
-        outside_paths = find_paths_outside_workspace(command, workspace, current_dir)
-        if outside_paths:
-            paths_str = ", ".join(outside_paths[:3])
-            if len(outside_paths) > 3:
-                paths_str += f" (and {len(outside_paths) - 3} more)"
-            return (
-                False,
-                f"""
-Command blocked: '{cmd_name}' targets paths outside workspace: {paths_str}
+        allowed, error = _check_write_command(command, cmd_name, workspace, current_dir)
+        if not allowed:
+            return allowed, error
 
-Your workspace is: {workspace}
-
-Write operations to paths outside the workspace are NOT allowed.
-""",
-            )
-
-    # Check for any paths outside workspace
-    outside_paths = find_paths_outside_workspace(command, workspace, current_dir)
-    if outside_paths:
-        if has_read_only:
-            # Allowed with read-only - the write checks above already passed
-            return True, None
-        else:
-            # Blocked - suggest adding # read-only
-            paths_str = ", ".join(outside_paths[:3])
-            if len(outside_paths) > 3:
-                paths_str += f" (and {len(outside_paths) - 3} more)"
-
-            return (
-                False,
-                f"""
-Command blocked: references paths outside workspace: {paths_str}
-
-Your workspace is: {workspace}
-
-If you need read-only access to paths outside the workspace, append '# read-only' to your command:
-
-    {command.rstrip()} # read-only
-
-Note: Write operations (rm, mv, cp, >, etc.) to external paths are never allowed.
-""",
-            )
-
-    # All checks passed
-    return True, None
+    # Check read access to external paths
+    return _check_read_access(command, workspace, current_dir, has_read_only)
 
 
-def create_sandbox_hook_config(workspace: Path) -> HookConfig:  # noqa: ARG001
+def create_sandbox_hook_config() -> HookConfig:
     """Create a HookConfig that enforces sandbox isolation.
 
     The returned config adds a pre_tool_use hook on the terminal tool
     that validates commands stay within the workspace.
 
-    Note: The workspace parameter is accepted for API consistency but the
-    actual workspace is read from the LXA_WORKSPACE environment variable
-    by the hook script at runtime.
-
-    Args:
-        workspace: Workspace root directory (sandbox boundary)
+    The workspace is read from the LXA_WORKSPACE environment variable
+    by the hook script at runtime (set by the job executor).
 
     Returns:
         HookConfig with sandbox validation hook

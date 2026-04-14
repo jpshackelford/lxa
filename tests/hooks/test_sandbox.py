@@ -23,9 +23,12 @@ class TestResolvePath:
     """Tests for resolve_path function."""
 
     def test_absolute_path(self, tmp_path: Path) -> None:
-        """Absolute paths should be returned resolved."""
-        result = resolve_path("/usr/bin/python", tmp_path)
-        assert result == Path("/usr/bin/python")
+        """Absolute paths should be returned resolved (symlinks followed)."""
+        # Use tmp_path to avoid symlink issues (e.g., /usr/bin/python -> python3.12)
+        test_file = tmp_path / "test_file.txt"
+        test_file.touch()
+        result = resolve_path(str(test_file), tmp_path)
+        assert result == test_file
 
     def test_relative_path(self, tmp_path: Path) -> None:
         """Relative paths should be resolved against current_dir."""
@@ -312,18 +315,18 @@ class TestValidateCommand:
 class TestCreateSandboxHookConfig:
     """Tests for create_sandbox_hook_config function."""
 
-    def test_returns_hook_config(self, tmp_path: Path) -> None:
+    def test_returns_hook_config(self) -> None:
         """Should return a HookConfig with pre_tool_use hooks."""
         from openhands.sdk.hooks import HookConfig
 
-        config = create_sandbox_hook_config(tmp_path)
+        config = create_sandbox_hook_config()
         assert isinstance(config, HookConfig)
         assert config.pre_tool_use is not None
         assert len(config.pre_tool_use) == 1
 
-    def test_matcher_targets_terminal(self, tmp_path: Path) -> None:
+    def test_matcher_targets_terminal(self) -> None:
         """Hook should target the terminal tool."""
-        config = create_sandbox_hook_config(tmp_path)
+        config = create_sandbox_hook_config()
         matcher = config.pre_tool_use[0]
         assert matcher.matcher == "terminal"
 
