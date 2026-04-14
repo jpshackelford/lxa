@@ -53,7 +53,6 @@ from openhands.sdk.subagent import (  # pyright: ignore[reportMissingImports]
 from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
     register_builtins_agents,
 )
-from openhands.tools.delegate import DelegationVisualizer
 from rich.console import Console
 from rich.panel import Panel
 
@@ -69,6 +68,7 @@ from src.global_config import get_conversations_dir
 from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
+from src.visualizers import Verbosity, get_visualizer
 
 # Load environment variables
 load_dotenv()
@@ -197,12 +197,20 @@ def prepare_execution(design_doc: Path, workspace: Path, *, mode_name: str) -> E
     )
 
 
-def run_orchestrator(design_doc: Path, workspace: Path) -> int:
+def run_orchestrator(
+    design_doc: Path,
+    workspace: Path,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
+) -> int:
     """Run the orchestrator agent.
 
     Args:
         design_doc: Path to the design document
         workspace: Path to the workspace (git repository root)
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -223,12 +231,14 @@ def run_orchestrator(design_doc: Path, workspace: Path) -> int:
     console.print("[bold cyan]Starting orchestrator...[/]")
     console.print()
 
-    # Create conversation with visualizer for real-time sub-agent output
-    # and persistence to ~/.lxa/conversations for history
+    # Create conversation with verbosity-appropriate visualizer
+    # Don't pass agent name - it's redundant for the main agent
+    # Persistence to ~/.lxa/conversations for history
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=ctx.workspace,
-        visualizer=DelegationVisualizer(name="Orchestrator"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
     )
 
@@ -333,6 +343,8 @@ def run_refine(
     min_iterations: int = 1,
     max_iterations: int = 5,
     phase: str = "auto",
+    verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the refinement loop on an existing PR.
 
@@ -344,6 +356,8 @@ def run_refine(
         min_iterations: Minimum review iterations before accepting "acceptable"
         max_iterations: Maximum refinement iterations
         phase: Which phase to run: "auto", "self-review", or "respond"
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -394,6 +408,8 @@ def run_refine(
         repo_slug=repo_slug,
         refinement_config=refinement_config,
         phase=phase_enum,
+        verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     result = runner.run()
@@ -406,6 +422,8 @@ def run_ralph_loop(
     *,
     max_iterations: int = 20,
     refinement_config: RefinementConfig | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    show_timestamps: bool = False,
 ) -> int:
     """Run the Ralph Loop for continuous autonomous execution.
 
@@ -414,6 +432,8 @@ def run_ralph_loop(
         workspace: Path to the workspace (git repository root)
         max_iterations: Maximum iterations before stopping
         refinement_config: Configuration for code review refinement loop
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -434,6 +454,8 @@ def run_ralph_loop(
         platform=ctx.platform,
         max_iterations=max_iterations,
         refinement_config=refinement_config,
+        verbosity=verbosity,
+        show_timestamps=show_timestamps,
     )
 
     loop_result = runner.run()
@@ -444,6 +466,9 @@ def run_task(
     task: str,
     workspace: Path,
     llm: LLM | None = None,
+    verbosity: Verbosity = Verbosity.NORMAL,
+    *,
+    show_timestamps: bool = False,
 ) -> int:
     """Run a prompt-driven task using a simple agent.
 
@@ -455,6 +480,8 @@ def run_task(
         workspace: Path to the workspace (git repository root)
         llm: Optional LLM instance (defaults to get_llm() if not provided).
             Useful for testing with a mock LLM.
+        verbosity: Output verbosity level (quiet, normal, verbose)
+        show_timestamps: If True, prefix output lines with timestamps (for background jobs)
 
     Returns:
         Exit code (0 for success, 1 for error/stuck)
@@ -493,11 +520,13 @@ def run_task(
     console.print("[bold cyan]Starting task execution...[/]")
     console.print()
 
-    # Create conversation with visualizer and persistence
+    # Create conversation with verbosity-appropriate visualizer and persistence
+    # Don't pass agent name - it's redundant for the main agent
+    visualizer = get_visualizer(verbosity, show_timestamps=show_timestamps)
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
-        visualizer=DelegationVisualizer(name="TaskRunner"),
+        visualizer=visualizer,
         persistence_dir=CONVERSATIONS_DIR,
     )
 
@@ -531,6 +560,50 @@ def run_task(
         console.print()
         console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
         return 1
+
+
+def _resolve_verbosity(verbosity_arg: str | None, background: bool) -> Verbosity:
+    """Resolve verbosity level based on explicit arg and background mode.
+
+    Args:
+        verbosity_arg: Explicit --verbosity value, or None if not specified
+        background: Whether --background was specified
+
+    Returns:
+        Resolved Verbosity level: quiet for background (unless overridden),
+        normal otherwise
+    """
+    if verbosity_arg is not None:
+        return Verbosity(verbosity_arg)
+    # Default: quiet for background, normal for foreground
+    return Verbosity.QUIET if background else Verbosity.NORMAL
+
+
+def _add_verbosity_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add --verbosity and --timestamps arguments to a parser.
+
+    This is a DRY helper to ensure consistent verbosity/timestamp options
+    across all commands that run agent conversations.
+
+    Args:
+        parser: The argparse parser or subparser to add arguments to
+    """
+    parser.add_argument(
+        "--verbosity",
+        "-v",
+        choices=["quiet", "normal", "verbose"],
+        default=None,  # None means: use quiet for background, normal otherwise
+        help=(
+            "Output verbosity: quiet (summaries only), "
+            "normal (reasoning + summaries), verbose (all details). "
+            "Default: quiet for --background, normal otherwise"
+        ),
+    )
+    parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Prefix output lines with timestamps (auto-enabled for --background)",
+    )
 
 
 def _filter_background_args(argv: list[str]) -> list[str]:
@@ -792,6 +865,7 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    _add_verbosity_arguments(implement_parser)
     implement_parser.add_argument(
         "--background",
         "-b",
@@ -874,6 +948,7 @@ Configuration:
         default="auto",
         help="Phase to run: auto (detect), self-review, or respond (default: auto)",
     )
+    _add_verbosity_arguments(refine_parser)
     refine_parser.add_argument(
         "--background",
         "-b",
@@ -912,6 +987,7 @@ Configuration:
         default=None,
         help="Workspace directory (defaults to current git root)",
     )
+    _add_verbosity_arguments(run_parser)
     run_parser.add_argument(
         "--background",
         "-b",
@@ -1469,6 +1545,9 @@ Configuration:
     if args.command == "refine":
         workspace = args.workspace.resolve() if args.workspace else find_git_root(Path.cwd())
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1476,6 +1555,14 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
+
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1497,6 +1584,8 @@ Configuration:
             min_iterations=args.min_iterations,
             max_iterations=args.max_iterations,
             phase=args.phase,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
         )
 
     # Handle run command - prompt-driven task execution
@@ -1526,6 +1615,9 @@ Configuration:
                 console.print(f"[red]Error:[/] Task file is empty: {task_file}")
                 return 1
 
+        # Resolve verbosity: quiet for background unless explicitly set
+        verbosity = _resolve_verbosity(args.verbosity, args.background)
+
         # Handle background mode
         if args.background:
             from src.jobs import spawn_lxa_command
@@ -1533,6 +1625,14 @@ Configuration:
             # Filter out --background and --job-name, keep everything else
             args_to_use = argv if argv is not None else sys.argv[1:]
             cmd = _filter_background_args(args_to_use)
+
+            # Add --verbosity to the command if not already present
+            if "--verbosity" not in cmd and "-v" not in cmd:
+                cmd = cmd + ["--verbosity", verbosity.value]
+
+            # Add --timestamps for background jobs (unless user already specified)
+            if "--timestamps" not in cmd:
+                cmd = cmd + ["--timestamps"]
 
             # Rewrite paths to be relative for isolated workspace
             cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1546,7 +1646,12 @@ Configuration:
             console.print(f"Started job [cyan]{job.id}[/], logs at {job.log_path}")
             return 0
 
-        return run_task(task=task, workspace=workspace)
+        return run_task(
+            task=task,
+            workspace=workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
     # Handle implement command with config-based path resolution
     # When design_doc is provided, derive workspace from it (backward compatible)
@@ -1563,6 +1668,9 @@ Configuration:
         design_path = config.get_design_path(keep_design=args.keep_design)
         design_doc = workspace / design_path
 
+    # Resolve verbosity: quiet for background unless explicitly set
+    verbosity = _resolve_verbosity(args.verbosity, args.background)
+
     # Handle background mode
     if args.background:
         from src.jobs import spawn_lxa_command
@@ -1570,6 +1678,14 @@ Configuration:
         # Filter out --background and --job-name, keep everything else
         args_to_use = argv if argv is not None else sys.argv[1:]
         cmd = _filter_background_args(args_to_use)
+
+        # Add --verbosity to the command if not already present
+        if "--verbosity" not in cmd and "-v" not in cmd:
+            cmd = cmd + ["--verbosity", verbosity.value]
+
+        # Add --timestamps for background jobs (unless user already specified)
+        if "--timestamps" not in cmd:
+            cmd = cmd + ["--timestamps"]
 
         # Rewrite paths to be relative for isolated workspace
         cmd, path_warnings = _rewrite_paths_for_background(cmd, workspace)
@@ -1596,9 +1712,16 @@ Configuration:
                 min_iterations=args.min_iterations,
                 max_iterations=args.max_refine_iterations,
             ),
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
         )
     else:
-        return run_orchestrator(design_doc, workspace)
+        return run_orchestrator(
+            design_doc,
+            workspace,
+            verbosity=verbosity,
+            show_timestamps=args.timestamps,
+        )
 
 
 def find_git_root(start_path: Path) -> Path:
