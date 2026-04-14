@@ -259,3 +259,155 @@ class TestAgentRegistration:
         info = get_factory_info()
         assert "bash" in info, "bash should appear in registry info"
         assert "task_agent" in info, "task_agent should appear in registry info"
+
+
+class TestRunTaskFunctional:
+    """Functional tests for run_task using TestLLM.
+
+    These tests verify the full flow of run_task without making real LLM calls,
+    using OpenHands SDK's TestLLM to provide scripted responses.
+    """
+
+    def test_run_task_creates_conversation_and_executes(self, tmp_path: Path) -> None:
+        """run_task should create a conversation and run the agent."""
+        from openhands.sdk.llm import Message, MessageToolCall, TextContent
+
+        from src.__main__ import run_task
+        from tests.testing import RecordingTestLLM
+
+        # Create a git repo for the workspace
+        (tmp_path / ".git").mkdir()
+
+        # Create a mock LLM that finishes immediately
+        llm = RecordingTestLLM.from_messages(
+            [
+                Message(
+                    role="assistant",
+                    content=[TextContent(text="Task completed successfully.")],
+                    tool_calls=[
+                        MessageToolCall(
+                            id="call_finish",
+                            name="finish",
+                            arguments='{"message": "Done"}',
+                            origin="completion",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        run_task(
+            task="Say hello",
+            workspace=tmp_path,
+            llm=llm,
+        )
+
+        # Verify the LLM was called
+        assert llm.call_count >= 1
+        # Verify the task was received by the LLM
+        llm.assert_task_was_received("Say hello")
+
+    def test_run_task_returns_zero_on_success(self, tmp_path: Path) -> None:
+        """run_task should return 0 when task completes successfully."""
+        from openhands.sdk.llm import Message, MessageToolCall, TextContent
+
+        from src.__main__ import run_task
+        from tests.testing import RecordingTestLLM
+
+        (tmp_path / ".git").mkdir()
+
+        llm = RecordingTestLLM.from_messages(
+            [
+                Message(
+                    role="assistant",
+                    content=[TextContent(text="Done.")],
+                    tool_calls=[
+                        MessageToolCall(
+                            id="call_finish",
+                            name="finish",
+                            arguments='{"message": "Task complete"}',
+                            origin="completion",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        result = run_task(
+            task="Simple task",
+            workspace=tmp_path,
+            llm=llm,
+        )
+
+        assert result == 0
+
+    def test_run_task_receives_task_prompt(self, tmp_path: Path) -> None:
+        """run_task should pass the task prompt to the LLM."""
+        from openhands.sdk.llm import Message, MessageToolCall, TextContent
+
+        from src.__main__ import run_task
+        from tests.testing import RecordingTestLLM
+
+        (tmp_path / ".git").mkdir()
+
+        llm = RecordingTestLLM.from_messages(
+            [
+                Message(
+                    role="assistant",
+                    content=[TextContent(text="I see you want me to create a file.")],
+                    tool_calls=[
+                        MessageToolCall(
+                            id="call_finish",
+                            name="finish",
+                            arguments='{"message": "Created"}',
+                            origin="completion",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        run_task(
+            task="Create a file called test.txt with 'Hello World'",
+            workspace=tmp_path,
+            llm=llm,
+        )
+
+        # Verify the exact task was passed to the LLM
+        llm.assert_task_was_received("Create a file called test.txt")
+        llm.assert_task_was_received("Hello World")
+
+    def test_run_task_works_without_git_repo(self, tmp_path: Path) -> None:
+        """run_task should work even when workspace is not a git repo."""
+        from openhands.sdk.llm import Message, MessageToolCall, TextContent
+
+        from src.__main__ import run_task
+        from tests.testing import RecordingTestLLM
+
+        # Don't create .git directory - just verify the task still runs
+
+        llm = RecordingTestLLM.from_messages(
+            [
+                Message(
+                    role="assistant",
+                    content=[TextContent(text="Done.")],
+                    tool_calls=[
+                        MessageToolCall(
+                            id="call_finish",
+                            name="finish",
+                            arguments='{"message": "ok"}',
+                            origin="completion",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        run_task(
+            task="Test task",
+            workspace=tmp_path,
+            llm=llm,
+        )
+
+        # Verify the task ran successfully
+        assert llm.call_count >= 1

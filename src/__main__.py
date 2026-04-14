@@ -432,6 +432,7 @@ def run_ralph_loop(
 def run_task(
     task: str,
     workspace: Path,
+    llm: LLM | None = None,
 ) -> int:
     """Run a prompt-driven task using a simple agent.
 
@@ -441,11 +442,14 @@ def run_task(
     Args:
         task: The task/prompt to execute
         workspace: Path to the workspace (git repository root)
+        llm: Optional LLM instance (defaults to get_llm() if not provided).
+            Useful for testing with a mock LLM.
 
     Returns:
-        Exit code (0 for success, 1 for failure)
+        Exit code (0 for success, 1 for error/stuck)
     """
     from openhands.sdk import Agent, Tool
+    from openhands.sdk.conversation.state import ConversationExecutionStatus
     from openhands.tools.file_editor import FileEditorTool
     from openhands.tools.task_tracker import TaskTrackerTool
     from openhands.tools.terminal import TerminalTool
@@ -459,8 +463,9 @@ def run_task(
         console.print("[dim]Continuing without git context...[/]")
         console.print()
 
-    # Get LLM
-    llm = get_llm()
+    # Get LLM (use provided or create from environment)
+    if llm is None:
+        llm = get_llm()
     console.print(f"[dim]Model: {llm.model}[/]")
     console.print(f"[dim]Workspace: {workspace}[/]")
     console.print()
@@ -491,9 +496,25 @@ def run_task(
     conversation.send_message(task)
     conversation.run()
 
-    console.print()
-    console.print("[bold green]Task complete.[/]")
-    return 0
+    # Check execution status and return appropriate exit code
+    status = conversation.state.execution_status
+    if status == ConversationExecutionStatus.FINISHED:
+        console.print()
+        console.print("[bold green]Task complete.[/]")
+        return 0
+    elif status == ConversationExecutionStatus.ERROR:
+        console.print()
+        console.print("[bold red]Task failed with error.[/]")
+        return 1
+    elif status == ConversationExecutionStatus.STUCK:
+        console.print()
+        console.print("[bold yellow]Task got stuck.[/]")
+        return 1
+    else:
+        # Unexpected status (IDLE, RUNNING, PAUSED, etc.)
+        console.print()
+        console.print(f"[yellow]Task ended with unexpected status: {status.value}[/]")
+        return 1
 
 
 def _filter_background_args(argv: list[str]) -> list[str]:
@@ -1266,7 +1287,7 @@ Configuration:
             if not task_file.exists():
                 console.print(f"[red]Error:[/] Task file not found: {task_file}")
                 return 1
-            task = task_file.read_text().strip()
+            task = task_file.read_text(encoding="utf-8").strip()
             if not task:
                 console.print(f"[red]Error:[/] Task file is empty: {task_file}")
                 return 1
