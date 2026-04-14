@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run on all PRs regardless of target branch
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
