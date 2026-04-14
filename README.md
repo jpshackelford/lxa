@@ -231,6 +231,37 @@ lxa job clean --older-than 30
 
 Job metadata and logs are stored in `~/.lxa/jobs/`. Background jobs run in isolated workspace clones at `~/.lxa/workspaces/{job_id}/` to prevent interference with your working directory. Git repositories are cloned (preserving history), while non-git directories are copied.
 
+The `job status` command also shows the conversation trajectory path, allowing you to review the full agent conversation history:
+
+```bash
+lxa job status implement-a3f2b1c
+# Shows: Trajectory  ~/.lxa/conversations/abc123-def456
+```
+
+### Global Configuration
+
+Configure lxa-wide settings:
+
+```bash
+# View current configuration
+lxa config
+
+# Set custom conversations directory
+lxa config set conversations_dir /path/to/conversations
+
+# Reset to default
+lxa config reset conversations_dir
+```
+
+Configuration is stored in `~/.lxa/config.toml`. Available settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `conversations_dir` | `~/.lxa/conversations` | Directory for storing conversation histories |
+
+Environment variables override config file settings:
+- `LXA_CONVERSATIONS_DIR` - Override conversations directory
+
 ## Development
 
 ```bash
