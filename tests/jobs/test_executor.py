@@ -5,36 +5,69 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from src.jobs.executor import read_logs, spawn_detached
 from src.jobs.manager import is_process_running
 from src.jobs.models import JobStatus
 from src.jobs.storage import load_job
 
 
+@pytest.fixture
+def job_dirs(tmp_path: Path) -> dict[str, Path]:
+    """Create separate directories for jobs, workspaces, and source workspace.
+
+    Returns dict with keys:
+    - jobs_dir: Directory for job metadata and logs
+    - workspaces_dir: Directory for isolated job workspaces
+    - source_workspace: A sample workspace to clone from
+    """
+    jobs_dir = tmp_path / "jobs"
+    jobs_dir.mkdir()
+
+    workspaces_dir = tmp_path / "workspaces"
+    workspaces_dir.mkdir()
+
+    source_workspace = tmp_path / "source"
+    source_workspace.mkdir()
+    # Create a marker file in the source workspace
+    (source_workspace / "marker.txt").write_text("source workspace marker")
+
+    return {
+        "jobs_dir": jobs_dir,
+        "workspaces_dir": workspaces_dir,
+        "source_workspace": source_workspace,
+    }
+
+
 class TestSpawnDetached:
     """Tests for spawn_detached function."""
 
-    def test_spawns_process(self, tmp_path: Path):
+    def test_spawns_process(self, job_dirs: dict[str, Path]):
         """Test spawns a detached process."""
         job = spawn_detached(
             command=["echo", "hello"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="echo-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         assert job.id.startswith("echo-test-")
         assert job.pid is not None
         assert job.status == JobStatus.RUNNING
+        # Verify work_dir is in the workspaces directory
+        assert job.work_dir.startswith(str(job_dirs["workspaces_dir"]))
 
-    def test_process_survives(self, tmp_path: Path):
+    def test_process_survives(self, job_dirs: dict[str, Path]):
         """Test spawned process runs independently."""
         # Start a process that will take a moment
         job = spawn_detached(
             command=[sys.executable, "-c", "import time; time.sleep(2); print('done')"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="sleep-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         # Process should be running
@@ -45,30 +78,31 @@ class TestSpawnDetached:
         time.sleep(3)
 
         # Check that it updated metadata
-        updated = load_job(job.id, tmp_path)
+        updated = load_job(job.id, job_dirs["jobs_dir"])
         assert updated is not None
         assert updated.status in (JobStatus.DONE, JobStatus.FAILED)
         assert updated.exit_code is not None
 
-    def test_writes_to_log(self, tmp_path: Path):
+    def test_writes_to_log(self, job_dirs: dict[str, Path]):
         """Test output is written to log file."""
         job = spawn_detached(
             command=[sys.executable, "-c", "print('hello world')"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="log-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         # Wait for process to complete
         time.sleep(1)
 
-        log_path = tmp_path / f"{job.id}.log"
+        log_path = job_dirs["jobs_dir"] / f"{job.id}.log"
         assert log_path.exists()
 
         content = log_path.read_text()
         assert "hello world" in content
 
-    def test_captures_stderr(self, tmp_path: Path):
+    def test_captures_stderr(self, job_dirs: dict[str, Path]):
         """Test stderr is also captured."""
         job = spawn_detached(
             command=[
@@ -76,70 +110,89 @@ class TestSpawnDetached:
                 "-c",
                 "import sys; print('error message', file=sys.stderr)",
             ],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="stderr-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         time.sleep(1)
 
-        log_path = tmp_path / f"{job.id}.log"
+        log_path = job_dirs["jobs_dir"] / f"{job.id}.log"
         content = log_path.read_text()
         assert "error message" in content
 
-    def test_updates_status_on_success(self, tmp_path: Path):
+    def test_updates_status_on_success(self, job_dirs: dict[str, Path]):
         """Test job status is updated to DONE on success."""
         job = spawn_detached(
             command=[sys.executable, "-c", "print('ok')"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="success-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         time.sleep(1)
 
-        updated = load_job(job.id, tmp_path)
+        updated = load_job(job.id, job_dirs["jobs_dir"])
         assert updated is not None
         assert updated.status == JobStatus.DONE
         assert updated.exit_code == 0
         assert updated.ended_at is not None
 
-    def test_updates_status_on_failure(self, tmp_path: Path):
+    def test_updates_status_on_failure(self, job_dirs: dict[str, Path]):
         """Test job status is updated to FAILED on error."""
         job = spawn_detached(
             command=[sys.executable, "-c", "import sys; sys.exit(42)"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="fail-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         time.sleep(1)
 
-        updated = load_job(job.id, tmp_path)
+        updated = load_job(job.id, job_dirs["jobs_dir"])
         assert updated is not None
         assert updated.status == JobStatus.FAILED
         assert updated.exit_code == 42
 
-    def test_working_directory(self, tmp_path: Path):
-        """Test process runs in specified working directory."""
-        # Create a marker file to verify cwd
-        marker = tmp_path / "marker.txt"
-        marker.write_text("test")
-
+    def test_working_directory_is_isolated(self, job_dirs: dict[str, Path]):
+        """Test process runs in isolated working directory, not original."""
         job = spawn_detached(
             command=[sys.executable, "-c", "import os; print(os.getcwd())"],
-            cwd=tmp_path,
+            cwd=job_dirs["source_workspace"],
             job_name="cwd-test",
-            jobs_dir=tmp_path,
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         time.sleep(1)
 
-        log_path = tmp_path / f"{job.id}.log"
+        log_path = job_dirs["jobs_dir"] / f"{job.id}.log"
         content = log_path.read_text()
-        assert str(tmp_path) in content
+        # Process should run in the ISOLATED work_dir, not the original source
+        assert str(job_dirs["workspaces_dir"]) in content
+        assert job.id in content  # work_dir contains job.id
 
-    def test_inherits_environment(self, tmp_path: Path):
+    def test_workspace_is_cloned(self, job_dirs: dict[str, Path]):
+        """Test source workspace files are copied to isolated workspace."""
+        job = spawn_detached(
+            command=[sys.executable, "-c", "print(open('marker.txt').read())"],
+            cwd=job_dirs["source_workspace"],
+            job_name="clone-test",
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
+        )
+
+        time.sleep(1)
+
+        log_path = job_dirs["jobs_dir"] / f"{job.id}.log"
+        content = log_path.read_text()
+        # The marker file from source should be in the cloned workspace
+        assert "source workspace marker" in content
+
+    def test_inherits_environment(self, job_dirs: dict[str, Path]):
         """Test process inherits environment variables."""
         # Set a test env var
         os.environ["TEST_JOB_VAR"] = "test_value_123"
@@ -151,25 +204,27 @@ class TestSpawnDetached:
                     "-c",
                     "import os; print(os.environ.get('TEST_JOB_VAR', 'NOT_SET'))",
                 ],
-                cwd=tmp_path,
+                cwd=job_dirs["source_workspace"],
                 job_name="env-test",
-                jobs_dir=tmp_path,
+                jobs_dir=job_dirs["jobs_dir"],
+                workspaces_dir=job_dirs["workspaces_dir"],
             )
 
             time.sleep(1)
 
-            log_path = tmp_path / f"{job.id}.log"
+            log_path = job_dirs["jobs_dir"] / f"{job.id}.log"
             content = log_path.read_text()
             assert "test_value_123" in content
         finally:
             del os.environ["TEST_JOB_VAR"]
 
-    def test_default_job_name(self, tmp_path: Path):
+    def test_default_job_name(self, job_dirs: dict[str, Path]):
         """Test job name is derived from command."""
         job = spawn_detached(
             command=["echo", "hi"],
-            cwd=tmp_path,
-            jobs_dir=tmp_path,
+            cwd=job_dirs["source_workspace"],
+            jobs_dir=job_dirs["jobs_dir"],
+            workspaces_dir=job_dirs["workspaces_dir"],
         )
 
         assert job.id.startswith("echo-")
