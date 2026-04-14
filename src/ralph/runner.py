@@ -7,7 +7,6 @@ or safety limits are reached. Each iteration gets fresh context.
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,6 +22,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from src.agents.orchestrator import GitPlatform, create_orchestrator_agent
+from src.global_config import get_conversations_dir
 from src.tools.checklist import ChecklistParser
 
 console = Console()
@@ -31,8 +31,9 @@ logger = logging.getLogger(__name__)
 # Completion signal that orchestrator outputs when all milestones are done
 COMPLETION_SIGNAL = "ALL_MILESTONES_COMPLETE"
 
-# Default persistence directory for conversation history (same as OpenHands CLI)
-DEFAULT_CONVERSATIONS_DIR = os.path.expanduser("~/.openhands/conversations")
+# Default persistence directory for conversation history
+# Now defaults to ~/.lxa/conversations via global config
+DEFAULT_CONVERSATIONS_DIR = str(get_conversations_dir())
 
 
 @dataclass
@@ -281,6 +282,11 @@ class RalphLoopRunner:
 
             console.print(f"[dim]Conversation ID: {conversation.id}[/]")
             console.print()
+
+            # Register conversation with job if running as a background job
+            from src.jobs import register_conversation
+
+            register_conversation(str(conversation.id), self.conversations_dir)
 
             # Send context and run
             conversation.send_message(context_message)
