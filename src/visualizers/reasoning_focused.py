@@ -5,20 +5,13 @@ hiding verbose technical details by default. This makes it easier to follow
 the agent's reasoning during normal operation.
 
 Example output with ReasoningFocusedVisualizer:
-    → Check the README file contents
+    → Check the README file contents: $ cat README.md
       I need to understand the project structure before implementing changes.
 
-Compared to verbose output:
-    ─── Agent Action ───────────────────────────────────
-    Summary: Check the README file contents
-    Reasoning: I need to understand the project structure...
-    Thought: Let me check the README first to understand...
-    Action: file_editor
-      command: view
-      path: /workspace/project/README.md
-    ─── Observation ────────────────────────────────────
-    # Project Name
-    ...(full file contents)...
+    → Review the main module: Reading src/main.py
+      Let me check how the entry point is structured.
+
+Compared to verbose output which shows full file contents, all parameters, etc.
 """
 
 from __future__ import annotations
@@ -33,12 +26,24 @@ from openhands.sdk.conversation.visualizer.default import (
     DefaultConversationVisualizer,
     build_event_block,
 )
-from openhands.sdk.event import ActionEvent, MessageEvent, ObservationEvent
+from openhands.sdk.event import (
+    ActionEvent,
+    ConversationStateUpdateEvent,
+    MessageEvent,
+    ObservationEvent,
+    SystemPromptEvent,
+)
+from openhands.sdk.event.condenser import Condensation, CondensationRequest
+from openhands.tools.file_editor.definition import FileEditorAction
+from openhands.tools.terminal.definition import TerminalAction
 from rich.console import Console, Group
 from rich.text import Text
 
 if TYPE_CHECKING:
     from openhands.sdk.event.base import Event
+
+# Maximum length for command/path display in titles
+MAX_DETAIL_LENGTH = 60
 
 
 class Verbosity(StrEnum):
@@ -49,11 +54,24 @@ class Verbosity(StrEnum):
     VERBOSE = "verbose"  # Full details (current behavior)
 
 
-def _truncate(text: str, max_length: int = 100) -> str:
-    """Truncate text to max_length, adding ellipsis if needed."""
+def _truncate(text: str, max_length: int = 100, *, from_end: bool = False) -> str:
+    """Truncate text to max_length, adding ellipsis if needed.
+
+    Args:
+        text: Text to truncate.
+        max_length: Maximum length including ellipsis.
+        from_end: If True, keep the end of the text (useful for paths).
+    """
     if len(text) <= max_length:
         return text
+    if from_end:
+        return "..." + text[-(max_length - 3) :]
     return text[: max_length - 3] + "..."
+
+
+def _clean_for_display(text: str) -> str:
+    """Clean text for single-line display (strip, collapse newlines)."""
+    return text.strip().replace("\n", " ")
 
 
 def _extract_summary_from_action(event: ActionEvent) -> str | None:
@@ -80,6 +98,36 @@ def _extract_reasoning(event: ActionEvent) -> str | None:
     thought_text = " ".join([t.text for t in event.thought])
     if thought_text.strip():
         return thought_text.strip()
+
+    return None
+
+
+def _extract_action_detail(event: ActionEvent) -> str | None:
+    """Extract contextual detail from an action (command, path, etc.).
+
+    Returns a formatted string like:
+        "$ ls -la" for terminal commands
+        "Reading /path/to/file" for file_editor view
+        "Editing /path/to/file" for file_editor modifications
+
+    Returns None if no meaningful detail can be extracted.
+    """
+    action = event.action
+    if action is None:
+        return None
+
+    # Terminal actions: show the command
+    if isinstance(action, TerminalAction) and action.command:
+        cmd = _clean_for_display(action.command)
+        cmd = _truncate(cmd, MAX_DETAIL_LENGTH)
+        return f"$ {cmd}"
+
+    # File editor actions: show operation and path
+    if isinstance(action, FileEditorAction) and action.path:
+        op = "Reading" if action.command == "view" else "Editing"
+        # Truncate path from the end to preserve filename
+        path = _truncate(action.path, MAX_DETAIL_LENGTH - len(op) - 1, from_end=True)
+        return f"{op} {path}"
 
     return None
 
@@ -123,7 +171,18 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
         self._show_observations = show_observations
 
     def _create_event_block(self, event: Event) -> Group | None:
-        """Create a focused event block emphasizing reasoning."""
+        """Create a focused event block emphasizing reasoning.
+
+        Suppresses verbose system events (SystemPrompt, Condensation, etc.)
+        that aren't useful for following agent reasoning.
+        """
+        # Suppress system/infrastructure events - these are noise for reasoning
+        if isinstance(
+            event,
+            SystemPromptEvent | CondensationRequest | Condensation | ConversationStateUpdateEvent,
+        ):
+            return None
+
         if isinstance(event, ActionEvent):
             return self._create_reasoning_block(event)
 
@@ -137,27 +196,43 @@ class ReasoningFocusedVisualizer(DefaultConversationVisualizer):
             # Messages still go through default handling
             return super()._create_event_block(event)
 
-        # Other events use default handling
-        return super()._create_event_block(event)
+        # Other events: suppress by default (fail closed for unknown events)
+        # This prevents verbose output from new event types we haven't considered
+        return None
 
     def _create_reasoning_block(self, event: ActionEvent) -> Group | None:
-        """Create a block focused on the agent's reasoning."""
+        """Create a block focused on the agent's reasoning.
+
+        Format:
+            → Summary: $ command           (for terminal)
+            → Summary: Reading /path       (for file_editor view)
+            → Summary: Editing /path       (for file_editor edit)
+            → Summary                      (for other actions with summary)
+            → [tool_name]                  (fallback when no summary)
+
+        Followed by truncated reasoning/thought content.
+        """
         content = Text()
 
-        # Get summary from tool arguments
+        # Get summary and action detail
         summary = _extract_summary_from_action(event)
+        detail = _extract_action_detail(event)
         tool_name = event.tool_name
 
-        # Build the summary line
+        # Build the summary line with optional detail
+        content.append("→ ", style="bold cyan")
         if summary:
-            content.append("→ ", style="bold cyan")
-            content.append(summary, style="cyan")
-            content.append("\n")
+            content.append(summary, style="bold cyan")
+            if detail:
+                content.append(": ", style="dim")
+                content.append(detail, style="dim")
+        elif detail:
+            # No summary but have detail (e.g., just a command)
+            content.append(detail, style="cyan")
         else:
-            # Fall back to tool name if no summary
-            content.append("→ ", style="bold cyan")
+            # Fall back to tool name if no summary or detail
             content.append(f"[{tool_name}]", style="dim cyan")
-            content.append("\n")
+        content.append("\n")
 
         # Show reasoning/thought content
         reasoning = _extract_reasoning(event)
@@ -222,15 +297,20 @@ class QuietVisualizer(ConversationVisualizerBase):
         self._name = name
 
     def on_event(self, event: Event) -> None:
-        """Display only action summaries."""
+        """Display only action summaries with contextual details."""
         if not isinstance(event, ActionEvent):
             return
 
         summary = _extract_summary_from_action(event)
+        detail = _extract_action_detail(event)
         prefix = f"[dim]{self._name}:[/] " if self._name else ""
 
-        if summary:
+        if summary and detail:
+            self._console.print(f"{prefix}{summary}[dim]: {detail}[/]")
+        elif summary:
             self._console.print(f"{prefix}{summary}")
+        elif detail:
+            self._console.print(f"{prefix}{detail}")
         else:
             # Fall back to tool name
             self._console.print(f"{prefix}[dim][{event.tool_name}][/]")

@@ -6,6 +6,8 @@ import json
 from unittest.mock import MagicMock
 
 from openhands.tools.delegate import DelegationVisualizer
+from openhands.tools.file_editor.definition import FileEditorAction
+from openhands.tools.terminal.definition import TerminalAction
 
 from src.visualizers import (
     QuietVisualizer,
@@ -14,6 +16,8 @@ from src.visualizers import (
     get_visualizer,
 )
 from src.visualizers.reasoning_focused import (
+    _clean_for_display,
+    _extract_action_detail,
     _extract_reasoning,
     _extract_summary_from_action,
     _truncate,
@@ -90,6 +94,94 @@ class TestTruncate:
         result = _truncate(text)
         assert len(result) == 100
 
+    def test_truncate_from_end(self):
+        """Test truncation from end (for paths)."""
+        text = "/very/long/path/to/some/file.py"
+        result = _truncate(text, 20, from_end=True)
+        assert result.startswith("...")
+        assert result.endswith("file.py")
+        assert len(result) == 20
+
+
+class TestCleanForDisplay:
+    """Tests for the _clean_for_display helper function."""
+
+    def test_strips_whitespace(self):
+        """Test that leading/trailing whitespace is stripped."""
+        assert _clean_for_display("  hello  ") == "hello"
+
+    def test_collapses_newlines(self):
+        """Test that newlines are replaced with spaces."""
+        assert _clean_for_display("hello\nworld") == "hello world"
+
+    def test_handles_multiple_newlines(self):
+        """Test handling of multiple newlines."""
+        assert _clean_for_display("a\n\nb\n\nc") == "a  b  c"
+
+
+class TestExtractActionDetail:
+    """Tests for the _extract_action_detail helper function."""
+
+    def test_terminal_action_shows_command(self):
+        """Test that terminal actions show the command."""
+        event = MagicMock()
+        event.action = TerminalAction(command="ls -la")
+        result = _extract_action_detail(event)
+        assert result == "$ ls -la"
+
+    def test_terminal_action_truncates_long_command(self):
+        """Test that long terminal commands are truncated."""
+        event = MagicMock()
+        event.action = TerminalAction(command="cat " + "x" * 100)
+        result = _extract_action_detail(event)
+        assert result is not None
+        assert result.startswith("$ cat ")
+        assert result.endswith("...")
+
+    def test_file_editor_view_shows_reading(self):
+        """Test that file_editor view shows 'Reading'."""
+        event = MagicMock()
+        event.action = FileEditorAction(command="view", path="/path/to/file.py")
+        result = _extract_action_detail(event)
+        assert result == "Reading /path/to/file.py"
+
+    def test_file_editor_edit_shows_editing(self):
+        """Test that file_editor str_replace shows 'Editing'."""
+        event = MagicMock()
+        event.action = FileEditorAction(
+            command="str_replace",
+            path="/path/to/file.py",
+            old_str="foo",
+            new_str="bar",
+        )
+        result = _extract_action_detail(event)
+        assert result == "Editing /path/to/file.py"
+
+    def test_file_editor_truncates_long_path_from_end(self):
+        """Test that long paths are truncated from the end."""
+        event = MagicMock()
+        long_path = "/very/long/nested/path/structure/to/important/file.py"
+        event.action = FileEditorAction(command="view", path=long_path)
+        result = _extract_action_detail(event)
+        assert result is not None
+        # Should preserve the filename at the end
+        assert result.endswith("file.py")
+        assert "..." in result
+
+    def test_returns_none_for_action_without_command_or_path(self):
+        """Test that None is returned for actions without extractable detail."""
+        event = MagicMock()
+        event.action = MagicMock(spec=[])  # No command or path attributes
+        result = _extract_action_detail(event)
+        assert result is None
+
+    def test_returns_none_for_none_action(self):
+        """Test that None is returned when action is None."""
+        event = MagicMock()
+        event.action = None
+        result = _extract_action_detail(event)
+        assert result is None
+
 
 class TestExtractSummaryFromAction:
     """Tests for the _extract_summary_from_action helper function."""
@@ -156,6 +248,47 @@ class TestReasoningFocusedVisualizer:
         """Test that show_observations defaults to False."""
         viz = ReasoningFocusedVisualizer(name="Test")
         assert viz._show_observations is False
+
+    def test_suppresses_system_prompt_event(self):
+        """Test that SystemPromptEvent is suppressed."""
+        from openhands.sdk.event import SystemPromptEvent
+
+        viz = ReasoningFocusedVisualizer(name="Test")
+        event = MagicMock(spec=SystemPromptEvent)
+        # Make isinstance check work
+        event.__class__ = SystemPromptEvent
+        result = viz._create_event_block(event)
+        assert result is None
+
+    def test_suppresses_condensation_request(self):
+        """Test that CondensationRequest is suppressed."""
+        from openhands.sdk.event.condenser import CondensationRequest
+
+        viz = ReasoningFocusedVisualizer(name="Test")
+        event = MagicMock(spec=CondensationRequest)
+        event.__class__ = CondensationRequest
+        result = viz._create_event_block(event)
+        assert result is None
+
+    def test_suppresses_condensation(self):
+        """Test that Condensation is suppressed."""
+        from openhands.sdk.event.condenser import Condensation
+
+        viz = ReasoningFocusedVisualizer(name="Test")
+        event = MagicMock(spec=Condensation)
+        event.__class__ = Condensation
+        result = viz._create_event_block(event)
+        assert result is None
+
+    def test_suppresses_conversation_state_update(self):
+        """Test that ConversationStateUpdateEvent is suppressed."""
+        from openhands.sdk.event import ConversationStateUpdateEvent
+
+        viz = ReasoningFocusedVisualizer(name="Test")
+        event = MagicMock(spec=ConversationStateUpdateEvent)
+        event.__class__ = ConversationStateUpdateEvent
+        result = viz._create_event_block(event)
+        assert result is None
 
 
 class TestQuietVisualizer:
