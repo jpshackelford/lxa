@@ -17,7 +17,7 @@ def cmd_delete(name: str) -> int:
         Exit code (0 for success)
     """
     success, error = delete_board(name)
-    
+
     if success:
         console.print(f"[green]✓[/] Deleted board '{name}'")
         return 0

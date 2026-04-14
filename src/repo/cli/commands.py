@@ -2,7 +2,13 @@
 
 from rich.console import Console
 
-from src.repo.config import UNNAMED_BOARD_PREFIX, add_repo, list_boards_with_repos, list_repos, remove_repo
+from src.repo.config import (
+    UNNAMED_BOARD_PREFIX,
+    add_repo,
+    list_boards_with_repos,
+    list_repos,
+    remove_repo,
+)
 
 console = Console()
 
@@ -50,7 +56,7 @@ def cmd_add(
     # Show board creation message if we created an unnamed board
     if created_board and target_board and target_board.startswith(UNNAMED_BOARD_PREFIX):
         console.print(f"[blue]Created board:[/] {target_board}")
-        console.print(f"[dim]Rename with: lxa board rename \"{target_board}\" \"New Name\"[/]")
+        console.print(f'[dim]Rename with: lxa board rename "{target_board}" "New Name"[/]')
 
     if added:
         for repo in added:

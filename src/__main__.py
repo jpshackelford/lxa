@@ -1126,7 +1126,8 @@ Configuration:
 
     # Handle repo command
     if args.command == "repo":
-        from src.repo.cli import cmd_add, cmd_list as repo_cmd_list, cmd_remove
+        from src.repo.cli import cmd_add, cmd_remove
+        from src.repo.cli import cmd_list as repo_cmd_list
 
         if args.repo_command == "add":
             return cmd_add(

@@ -35,7 +35,7 @@ def process_pr_data(pr_data: dict, reference_user: str) -> PRInfo:
 
     # Process timeline into history string
     events = _extract_timeline_events(pr_data, author)
-    history = _build_history_string(events, reference_user, author)
+    history = _build_history_string(events, reference_user)
 
     # Find last activity time
     last_activity = _find_last_activity(events, created_at)
@@ -110,11 +110,13 @@ def _extract_timeline_events(pr_data: dict, pr_author: str) -> list[TimelineEven
 
     # Add the "opened" event
     created_at = _parse_datetime(pr_data["createdAt"])
-    events.append(TimelineEvent(
-        action=ActionType.OPENED,
-        actor=pr_author,
-        timestamp=created_at,
-    ))
+    events.append(
+        TimelineEvent(
+            action=ActionType.OPENED,
+            actor=pr_author,
+            timestamp=created_at,
+        )
+    )
 
     # Track whether we've seen any review (for determining if commits are "fixes")
     timeline_items = pr_data.get("timelineItems", {}).get("nodes", [])
@@ -193,7 +195,6 @@ def _parse_timeline_item(
 def _build_history_string(
     events: list[TimelineEvent],
     reference_user: str,
-    pr_author: str,
 ) -> str:
     """Build the compact history string from timeline events.
 

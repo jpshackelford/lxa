@@ -24,16 +24,16 @@ UNNAMED_BOARD_PREFIX = "Unnamed Board "
 def _generate_unnamed_board_name(boards_config) -> str:
     """Generate next available 'Unnamed Board N' name."""
     existing_numbers = []
-    for name in boards_config.boards.keys():
+    for name in boards_config.boards:
         if name.startswith(UNNAMED_BOARD_PREFIX):
-            suffix = name[len(UNNAMED_BOARD_PREFIX):]
+            suffix = name[len(UNNAMED_BOARD_PREFIX) :]
             if suffix.isdigit():
                 existing_numbers.append(int(suffix))
-    
+
     next_num = 1
     if existing_numbers:
         next_num = max(existing_numbers) + 1
-    
+
     return f"{UNNAMED_BOARD_PREFIX}{next_num}"
 
 
@@ -53,6 +53,7 @@ def get_repos(board_name: str | None = None) -> list[str]:
 @dataclass
 class AddRepoResult:
     """Result of adding a repo."""
+
     added: bool
     board_name: str
     created_board: bool = False

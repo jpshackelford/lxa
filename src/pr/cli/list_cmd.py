@@ -86,7 +86,7 @@ def _get_repos(
     board_name: str | None,
 ) -> list[str] | None:
     """Get list of repos to query.
-    
+
     Priority:
     1. Explicit --repo flags
     2. Board repos (from --board or default board)
@@ -124,14 +124,16 @@ def _print_pr_table(prs: list[PRInfo], *, show_title: bool = False) -> None:
         ]
         if show_title:
             row.append(pr.title or "")
-        row.extend([
-            _format_history(pr.history),
-            _format_ci_status(pr.ci_status),
-            _format_state(pr.state, pr.is_draft),
-            _format_unresolved_threads(pr.unresolved_thread_count),
-            _format_duration(pr.age_seconds),
-            _format_relative_time(pr.last_activity_seconds),
-        ])
+        row.extend(
+            [
+                _format_history(pr.history),
+                _format_ci_status(pr.ci_status),
+                _format_state(pr.state, pr.is_draft),
+                _format_unresolved_threads(pr.unresolved_thread_count),
+                _format_duration(pr.age_seconds),
+                _format_relative_time(pr.last_activity_seconds),
+            ]
+        )
         table.add_row(*row)
 
     console.print(table)

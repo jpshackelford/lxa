@@ -1,7 +1,6 @@
 """GitHub API interactions for PR history."""
 
 import logging
-from datetime import datetime
 
 from src.board.github_api import GitHubClient, get_github_token, get_github_username
 from src.pr.models import PRInfo, PRListResult
@@ -211,18 +210,18 @@ class PRClient:
 
     def _build_state_filter(self, states: list[str]) -> str:
         """Build state filter for search query.
-        
+
         GitHub search doesn't support OR, so:
         - Single state: use that filter
         - All states: no filter (return empty)
         - Multiple but not all: we approximate with the most inclusive
         """
         states_set = {s.lower() for s in states}
-        
+
         # If all three states, no filter needed
         if states_set == {"open", "merged", "closed"}:
             return ""
-        
+
         # Single state filters
         if states_set == {"open"}:
             return "is:open"
@@ -230,7 +229,7 @@ class PRClient:
             return "is:merged"
         if states_set == {"closed"}:
             return "is:closed is:unmerged"
-        
+
         # Two states - approximate
         if "open" in states_set and "merged" in states_set:
             # Can't express "open OR merged" directly
@@ -240,9 +239,9 @@ class PRClient:
             # "unmerged" covers both open and closed-unmerged
             return "is:unmerged"
         if "merged" in states_set and "closed" in states_set:
-            # "closed" covers both merged and closed-unmerged  
+            # "closed" covers both merged and closed-unmerged
             return "is:closed"
-        
+
         return ""
 
     def _search_prs(
@@ -312,7 +311,6 @@ class PRClient:
         batch_size: int = 20,
     ) -> list[PRInfo]:
         """Fetch PRs in batches using aliased queries."""
-        from src.pr.history import process_pr_data
 
         all_prs: list[PRInfo] = []
 
@@ -338,7 +336,6 @@ class PRClient:
         query_parts = [PR_FIELDS_FRAGMENT]
         query_parts.append("query {")
 
-        variables_needed = []
         for idx, (repo, number) in enumerate(pr_refs):
             owner, name = repo.split("/", 1)
             alias = f"pr{idx}"
