@@ -3,6 +3,10 @@
 Configuration is stored in ~/.lxa/config.toml under the [board] section.
 
 Multi-board configuration structure:
+    [meta]
+    gist_id = "abc123"  # Cached gist ID for sync
+    last_sync = "2026-03-17T12:00:00Z"
+
     [board]
     default = "my-project"  # Name of the default board
 
@@ -11,12 +15,16 @@ Multi-board configuration structure:
     project_number = 5
     username = "user"
     repos = ["owner/repo1", "owner/repo2"]
+    _updated_at = "2026-03-17T12:00:00Z"  # For sync merge
 
     [board.another-project]
     project_id = "PVT_yyy"
     project_number = 6
     username = "user"
     repos = ["owner/repo3"]
+
+    [board._deleted]  # Tombstones for deleted boards
+    old-board = "2026-03-17T12:00:00Z"
 """
 
 import contextlib
@@ -25,6 +33,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 try:
@@ -122,6 +131,13 @@ class BoardConfig:
     # Custom column name mappings (optional overrides)
     column_names: dict[str, str] = field(default_factory=dict)
 
+    # Sync metadata: when this board config was last updated
+    updated_at: datetime | None = None
+
+    def touch(self) -> None:
+        """Update the updated_at timestamp to now."""
+        self.updated_at = datetime.now(tz=UTC)
+
     def get_column_name(self, column_key: str) -> str:
         """Get the column name, using custom mapping if set."""
         from src.board.models import (
@@ -176,6 +192,13 @@ class BoardsConfig:
     # All board configurations, keyed by name
     boards: dict[str, BoardConfig] = field(default_factory=dict)
 
+    # Sync metadata
+    gist_id: str | None = None  # Cached gist ID for sync
+    last_sync: datetime | None = None  # When we last synced with gist
+
+    # Tombstones for deleted boards (board_name -> deleted_at timestamp)
+    deleted: dict[str, datetime] = field(default_factory=dict)
+
     def get_board(self, name: str | None = None) -> BoardConfig | None:
         """Get a board by name, or the default board.
 
@@ -212,6 +235,42 @@ class BoardsConfig:
             return False
         self.default = name
         return True
+
+    def delete_board(self, name: str) -> bool:
+        """Delete a board and record tombstone for sync.
+
+        Args:
+            name: Board name to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        if name not in self.boards:
+            return False
+
+        del self.boards[name]
+        self.deleted[name] = datetime.now(tz=UTC)
+
+        # Update default if we deleted it
+        if self.default == name:
+            self.default = next(iter(self.boards), None)
+
+        return True
+
+    def cleanup_old_tombstones(self, max_age_days: int = 90) -> int:
+        """Remove tombstones older than max_age_days.
+
+        Args:
+            max_age_days: Maximum age of tombstones to keep
+
+        Returns:
+            Number of tombstones removed
+        """
+        cutoff = datetime.now(tz=UTC) - __import__("datetime").timedelta(days=max_age_days)
+        old_tombstones = [name for name, ts in self.deleted.items() if ts < cutoff]
+        for name in old_tombstones:
+            del self.deleted[name]
+        return len(old_tombstones)
 
 
 def ensure_lxa_home() -> Path:
@@ -275,6 +334,26 @@ def _migrate_legacy_config(board_data: dict) -> dict:
     }
 
 
+def _parse_datetime(value: str | None) -> datetime | None:
+    """Parse an ISO format datetime string."""
+    if not value:
+        return None
+    try:
+        # Handle both with and without timezone
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _format_datetime(dt: datetime | None) -> str | None:
+    """Format a datetime as ISO string for TOML."""
+    if not dt:
+        return None
+    return dt.isoformat()
+
+
 def load_boards_config() -> BoardsConfig:
     """Load all board configurations from ~/.lxa/config.toml.
 
@@ -285,9 +364,13 @@ def load_boards_config() -> BoardsConfig:
     """
     data = _load_raw_config()
     board_data = data.get("board", {})
+    meta_data = data.get("meta", {})
 
     if not board_data:
-        return BoardsConfig()
+        return BoardsConfig(
+            gist_id=meta_data.get("gist_id"),
+            last_sync=_parse_datetime(meta_data.get("last_sync")),
+        )
 
     # Check for and migrate legacy format
     if _is_legacy_config(board_data):
@@ -297,8 +380,16 @@ def load_boards_config() -> BoardsConfig:
     default_name = board_data.get("default")
     boards: dict[str, BoardConfig] = {}
 
+    # Parse tombstones
+    deleted_data = board_data.get("_deleted", {})
+    deleted: dict[str, datetime] = {}
+    for name, ts_str in deleted_data.items():
+        ts = _parse_datetime(ts_str)
+        if ts:
+            deleted[name] = ts
+
     for key, value in board_data.items():
-        if key == "default":
+        if key in ("default", "_deleted"):
             continue
         if isinstance(value, dict):
             boards[key] = BoardConfig(
@@ -310,9 +401,16 @@ def load_boards_config() -> BoardsConfig:
                 scan_lookback_days=value.get("scan_lookback_days", 90),
                 agent_username_pattern=value.get("agent_username_pattern", "openhands"),
                 column_names=value.get("columns", {}),
+                updated_at=_parse_datetime(value.get("_updated_at")),
             )
 
-    return BoardsConfig(default=default_name, boards=boards)
+    return BoardsConfig(
+        default=default_name,
+        boards=boards,
+        gist_id=meta_data.get("gist_id"),
+        last_sync=_parse_datetime(meta_data.get("last_sync")),
+        deleted=deleted,
+    )
 
 
 def load_board_config(board_name: str | None = None) -> BoardConfig:
@@ -340,6 +438,23 @@ def save_boards_config(config: BoardsConfig) -> None:
     # Load existing config to preserve other sections
     existing_data = _load_raw_config()
 
+    # Build meta section for sync data
+    meta_data: dict = existing_data.get("meta", {})
+    if config.gist_id:
+        meta_data["gist_id"] = config.gist_id
+    elif "gist_id" in meta_data:
+        del meta_data["gist_id"]
+
+    if config.last_sync:
+        meta_data["last_sync"] = _format_datetime(config.last_sync)
+    elif "last_sync" in meta_data:
+        del meta_data["last_sync"]
+
+    if meta_data:
+        existing_data["meta"] = meta_data
+    elif "meta" in existing_data:
+        del existing_data["meta"]
+
     # Build board section
     board_data: dict = {}
 
@@ -363,8 +478,15 @@ def save_boards_config(config: BoardsConfig) -> None:
             entry["agent_username_pattern"] = board.agent_username_pattern
         if board.column_names:
             entry["columns"] = board.column_names
+        if board.updated_at:
+            entry["_updated_at"] = _format_datetime(board.updated_at)
 
         board_data[name] = entry
+
+    # Add tombstones for deleted boards
+    if config.deleted:
+        deleted_data = {name: _format_datetime(ts) for name, ts in config.deleted.items()}
+        board_data["_deleted"] = deleted_data
 
     # Update existing data
     existing_data["board"] = board_data
@@ -388,6 +510,7 @@ def save_board_config(config: BoardConfig, board_name: str | None = None) -> Non
 
     boards = load_boards_config()
     config.name = name
+    config.touch()  # Update timestamp for sync
     boards.boards[name] = config
 
     # Set as default if it's the first board

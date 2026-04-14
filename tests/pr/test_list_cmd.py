@@ -3,8 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.pr.cli.list_cmd import (
     _format_ci_status,
     _format_duration,
@@ -185,18 +183,20 @@ class TestCmdList:
 
     def test_uses_reviewer_filter_when_provided(self):
         """cmd_list should use list_prs_for_reviewer when reviewer provided."""
-        with patch("src.pr.cli.list_cmd.PRClient") as mock_client_class:
-            with patch("src.pr.cli.list_cmd._get_repos", return_value=None):
-                mock_client = MagicMock()
-                mock_client.__enter__ = MagicMock(return_value=mock_client)
-                mock_client.__exit__ = MagicMock(return_value=False)
-                mock_client.list_prs_for_reviewer.return_value = PRListResult()
-                mock_client_class.return_value = mock_client
+        with (
+            patch("src.pr.cli.list_cmd.PRClient") as mock_client_class,
+            patch("src.pr.cli.list_cmd._get_repos", return_value=None),
+        ):
+            mock_client = MagicMock()
+            mock_client.__enter__ = MagicMock(return_value=mock_client)
+            mock_client.__exit__ = MagicMock(return_value=False)
+            mock_client.list_prs_for_reviewer.return_value = PRListResult()
+            mock_client_class.return_value = mock_client
 
-                result = cmd_list(reviewer="bob")
+            result = cmd_list(reviewer="bob")
 
-                assert result == 0
-                mock_client.list_prs_for_reviewer.assert_called_once()
+            assert result == 0
+            mock_client.list_prs_for_reviewer.assert_called_once()
 
     def test_handles_exception_gracefully(self):
         """cmd_list should return 1 and log error on exception."""
@@ -213,15 +213,17 @@ class TestCmdList:
 
     def test_passes_state_filter(self):
         """cmd_list should pass state filter to API."""
-        with patch("src.pr.cli.list_cmd.PRClient") as mock_client_class:
-            with patch("src.pr.cli.list_cmd._get_repos", return_value=None):
-                mock_client = MagicMock()
-                mock_client.__enter__ = MagicMock(return_value=mock_client)
-                mock_client.__exit__ = MagicMock(return_value=False)
-                mock_client.list_prs_by_author.return_value = PRListResult()
-                mock_client_class.return_value = mock_client
+        with (
+            patch("src.pr.cli.list_cmd.PRClient") as mock_client_class,
+            patch("src.pr.cli.list_cmd._get_repos", return_value=None),
+        ):
+            mock_client = MagicMock()
+            mock_client.__enter__ = MagicMock(return_value=mock_client)
+            mock_client.__exit__ = MagicMock(return_value=False)
+            mock_client.list_prs_by_author.return_value = PRListResult()
+            mock_client_class.return_value = mock_client
 
-                cmd_list(author="alice", states=["merged", "closed"])
+            cmd_list(author="alice", states=["merged", "closed"])
 
-                call_kwargs = mock_client.list_prs_by_author.call_args[1]
-                assert call_kwargs["states"] == ["merged", "closed"]
+            call_kwargs = mock_client.list_prs_by_author.call_args[1]
+            assert call_kwargs["states"] == ["merged", "closed"]
