@@ -40,9 +40,7 @@ class TestBuildStateFilter:
 
     def test_all_three_states(self, client):
         """All three states should produce no filter."""
-        api_filter, client_side = client._build_state_filter(
-            ["open", "merged", "closed"]
-        )
+        api_filter, client_side = client._build_state_filter(["open", "merged", "closed"])
         assert api_filter == ""
         assert client_side is None
 
@@ -88,13 +86,7 @@ class TestSearchPRs:
                         "repository": {"nameWithOwner": "owner/repo"},
                         "reviewThreads": {"nodes": []},
                         "commits": {
-                            "nodes": [
-                                {
-                                    "commit": {
-                                        "statusCheckRollup": {"state": "SUCCESS"}
-                                    }
-                                }
-                            ]
+                            "nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]
                         },
                         "timelineItems": {"nodes": []},
                     },
@@ -110,13 +102,7 @@ class TestSearchPRs:
                         "repository": {"nameWithOwner": "owner/repo"},
                         "reviewThreads": {"nodes": []},
                         "commits": {
-                            "nodes": [
-                                {
-                                    "commit": {
-                                        "statusCheckRollup": {"state": "SUCCESS"}
-                                    }
-                                }
-                            ]
+                            "nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]
                         },
                         "timelineItems": {"nodes": []},
                     },
@@ -135,9 +121,7 @@ class TestSearchPRs:
             mock_client_class.return_value = mock_client
 
             client = PRClient(token="test-token")
-            result = client._search_prs(
-                "is:pr author:testuser", "testuser", limit=10
-            )
+            result = client._search_prs("is:pr author:testuser", "testuser", limit=10)
 
             assert len(result.prs) == 2
             assert result.total_count == 2
@@ -176,9 +160,7 @@ class TestListPRsByAuthor:
         with (
             patch("src.pr.github_api.get_github_token", return_value="test-token"),
             patch("src.pr.github_api.GitHubClient") as mock_client_class,
-            patch(
-                "src.pr.github_api.get_github_username", return_value="currentuser"
-            ),
+            patch("src.pr.github_api.get_github_username", return_value="currentuser"),
         ):
             mock_client = MagicMock()
             mock_client.graphql.return_value = {
@@ -207,9 +189,7 @@ class TestGetPRsByRef:
         with (
             patch("src.pr.github_api.get_github_token", return_value="test-token"),
             patch("src.pr.github_api.GitHubClient") as mock_client_class,
-            patch(
-                "src.pr.github_api.get_github_username", return_value="testuser"
-            ),
+            patch("src.pr.github_api.get_github_username", return_value="testuser"),
         ):
             mock_client = MagicMock()
             mock_client.graphql.return_value = {
@@ -244,18 +224,14 @@ class TestGetPRsByRef:
         with (
             patch("src.pr.github_api.get_github_token", return_value="test-token"),
             patch("src.pr.github_api.GitHubClient") as mock_client_class,
-            patch(
-                "src.pr.github_api.get_github_username", return_value="testuser"
-            ),
+            patch("src.pr.github_api.get_github_username", return_value="testuser"),
         ):
             mock_client = MagicMock()
             mock_client_class.return_value = mock_client
 
             client = PRClient(token="test-token")
             # All invalid references
-            result = client.get_prs_by_ref(
-                ["invalid", "no-number#abc", "missing-hash"]
-            )
+            result = client.get_prs_by_ref(["invalid", "no-number#abc", "missing-hash"])
 
             assert len(result.prs) == 0
             # GraphQL should not have been called

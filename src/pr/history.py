@@ -267,9 +267,7 @@ def _build_history_string(
     """
     filtered = _filter_timeline_events(events)
     deduped = _deduplicate_consecutive(filtered)
-    return "".join(
-        _format_action(e.action, e.actor, reference_user) for e in deduped
-    )
+    return "".join(_format_action(e.action, e.actor, reference_user) for e in deduped)
 
 
 def _find_last_activity(events: list[TimelineEvent], created_at: datetime) -> datetime:
