@@ -89,9 +89,22 @@ The agent is invoked with context about what to design:
 # From an exploration document
 lxa design --from doc/exploration/feature-x.md
 
+# From a GitHub issue
+lxa design --from-issue https://github.com/owner/repo/issues/42
+
 # From conversation context (interactive mode)
 lxa design
+
+# Run in background (detached from terminal)
+lxa design --from-issue https://github.com/owner/repo/issues/42 --background
+
+# Custom job name for background execution
+lxa design --from doc/exploration/feature-x.md --background --job-name widget-design
 ```
+
+The `--from-issue` option fetches the issue title, body, and comments from GitHub
+and uses them as input context for design composition. The agent extracts problem
+statement, requirements, and any technical direction from the issue content.
 
 ### 2.2 Workflow
 
@@ -202,7 +215,8 @@ Before drafting content, verify sufficient context exists:
 | Integration context | "Are there existing systems this needs to integrate with?" |
 
 The agent does not ask questions if the answers are already available in the
-provided context (exploration doc, conversation history, or --from file).
+provided context (exploration doc, conversation history, --from file, or
+--from-issue content).
 
 ## 3. Technical Design
 
@@ -365,7 +379,68 @@ design-composition.md) so the agent has it available without needing to read a
 separate file. The template provides structure; the other skills provide quality
 guidance.
 
-### 3.5 Iteration
+### 3.5 GitHub Issue Fetching
+
+When invoked with `--from-issue <url>`, the agent:
+
+1. Parses the GitHub issue URL to extract owner, repo, and issue number
+2. Fetches issue data via GitHub API (`gh issue view` or REST API)
+3. Extracts structured content:
+   - **Title**: Used as feature name suggestion
+   - **Body**: Primary source for problem statement and requirements
+   - **Labels**: Hints for categorization (bug, feature, enhancement)
+   - **Comments**: Additional context, clarifications, or requirements
+4. Transforms issue content into design composition input context
+
+The agent maps GitHub issue content to design doc sections:
+
+| Issue Content | Design Doc Section |
+|---------------|-------------------|
+| Title | Feature name, document title |
+| Body - problem description | 1.1 Problem Statement |
+| Body - proposed approach | 1.2 Proposed Solution |
+| Body - technical details | 3. Technical Design (starting point) |
+| Labels | Informs scope and priority |
+| Comments | Additional context for all sections |
+
+If the issue lacks sufficient detail for a complete design doc, the agent
+proceeds to the content precheck and asks clarifying questions.
+
+### 3.6 Background Job Execution
+
+When invoked with `--background`, the design command runs as a background job
+using the LXA job management system (see PR #71). This allows:
+
+- Detaching long-running design sessions from the terminal
+- Running design composition on CI/CD pipelines
+- Parallel design work across multiple features
+
+Background execution:
+
+```bash
+lxa design --from-issue https://github.com/owner/repo/issues/42 --background
+# Output: Started job [cyan]abc123[/], logs at ~/.lxa/jobs/abc123/output.log
+```
+
+The job runs in an isolated workspace (`~/.lxa/workspaces/{job_id}/`) cloned
+from the current repository. Job management commands:
+
+```bash
+lxa job list              # List running/completed jobs
+lxa job status abc123     # Check specific job status
+lxa job logs abc123       # View job output
+lxa job logs abc123 -f    # Follow job output (like tail -f)
+lxa job stop abc123       # Stop a running job
+```
+
+When the design job completes, it commits the design doc to the feature branch
+and outputs the path. The user can then run implementation:
+
+```bash
+lxa implement doc/design/feature-name.md
+```
+
+### 3.7 Iteration
 
 When the user provides feedback:
 
@@ -414,6 +489,42 @@ commits to feature branch, and can hand off to execution.
 
 #### 4.1.3 CLI
 
-- [ ] src/cli/design.py - CLI command with --from option
+- [ ] src/cli/design.py - CLI command with --from, --from-issue, --background,
+      and --job-name options. Integrates with job management system for
+      background execution.
 - [ ] tests/cli/test_design_cli.py - Tests for CLI argument parsing, agent
-      invocation
+      invocation, background job spawning
+
+### 4.2 GitHub Issue Integration (M2)
+
+**Goal**: Fetch GitHub issue content and use it as input context for design
+composition.
+
+**Demo**: Run `lxa design --from-issue https://github.com/owner/repo/issues/42`,
+observe:
+1. Issue URL parsed, API call made
+2. Issue title, body, labels, comments extracted
+3. Content mapped to design doc input context
+4. Agent proceeds with design composition using issue content
+
+#### 4.2.1 Issue Fetcher
+
+- [ ] src/utils/github_issue.py - Functions to parse issue URL, fetch issue
+      data via gh CLI or GitHub API, extract structured content (title, body,
+      labels, comments)
+- [ ] tests/utils/test_github_issue.py - Tests for URL parsing, API response
+      handling, content extraction
+
+#### 4.2.2 Context Transformation
+
+- [ ] src/design/issue_context.py - Transform GitHub issue content into design
+      composition input context. Map issue sections to design doc sections.
+- [ ] tests/design/test_issue_context.py - Tests for content mapping, handling
+      of sparse issues, extraction of problem/solution/technical details
+
+#### 4.2.3 CLI Integration
+
+- [ ] Update src/cli/design.py - Add --from-issue option, integrate with issue
+      fetcher and context transformer
+- [ ] Update tests/cli/test_design_cli.py - Tests for --from-issue parsing,
+      error handling for invalid URLs, integration with fetcher
