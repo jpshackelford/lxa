@@ -12,6 +12,7 @@ from src.board.cli.list_cmd import cmd_list
 from src.board.cli.scan import cmd_scan
 from src.board.cli.status import cmd_status
 from src.board.cli.sync import cmd_sync
+from src.board.cli.sync_config import cmd_sync_config
 from src.board.cli.templates import cmd_macros, cmd_templates
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "cmd_scan",
     "cmd_status",
     "cmd_sync",
+    "cmd_sync_config",
     "cmd_templates",
 ]

@@ -1106,6 +1106,16 @@ Configuration:
         help="Comma-separated list of repos to scan (default: watched repos)",
     )
     board_scan_parser.add_argument(
+        "--user",
+        metavar="USERNAME",
+        help="Scan all repos owned by this user (auto-discovers repos with activity)",
+    )
+    board_scan_parser.add_argument(
+        "--org",
+        metavar="ORGNAME",
+        help="Scan all repos in this organization (auto-discovers repos with activity)",
+    )
+    board_scan_parser.add_argument(
         "--since",
         type=int,
         metavar="DAYS",
@@ -1262,6 +1272,18 @@ Configuration:
         help="List available macros for rule conditions",
     )
 
+    # board sync-config (separate from board sync which syncs items)
+    board_sync_config_parser = board_subparsers.add_parser(
+        "sync-config",
+        help="Sync board configuration with GitHub Gist",
+    )
+    board_sync_config_parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
     args = parser.parse_args(argv)
 
     # Handle board command
@@ -1275,6 +1297,7 @@ Configuration:
             cmd_scan,
             cmd_status,
             cmd_sync,
+            cmd_sync_config,
             cmd_templates,
         )
 
@@ -1294,6 +1317,8 @@ Configuration:
             repos = args.repos.split(",") if args.repos else None
             return cmd_scan(
                 repos=repos,
+                scan_user=args.user,
+                scan_org=args.org,
                 since_days=args.since,
                 board_name=args.board,
                 dry_run=args.dry_run,
@@ -1306,6 +1331,11 @@ Configuration:
                 board_name=args.board,
                 dry_run=args.dry_run,
                 verbose=args.verbose,
+            )
+
+        if args.board_command == "sync-config":
+            return cmd_sync_config(
+                dry_run=args.dry_run,
             )
 
         if args.board_command == "status":
