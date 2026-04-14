@@ -16,7 +16,7 @@ from src.board.cli._helpers import (
     print_warning,
 )
 from src.board.github_api import GitHubClient
-from src.board.models import SyncResult
+from src.board.models import Item, SyncResult
 from src.board.service import (
     add_item_to_board,
     fetch_existing_board_items,
@@ -27,6 +27,40 @@ from src.board.service import (
 from src.board.state import determine_column, explain_column
 
 console = Console()
+
+
+def _execute_search(
+    client: GitHubClient,
+    username: str,
+    since_date: datetime,
+    repos: list[str] | None,
+    scan_user: str | None,
+    scan_org: str | None,
+    config_repos: list[str],
+) -> tuple[list | None, list[str], list[str]]:
+    """Execute the appropriate search strategy and return items with display repos.
+
+    Returns:
+        Tuple of (items, errors, display_repos). Items is None if no repos to scan.
+        display_repos is the list of repos to show in verbose mode.
+    """
+    if scan_user or scan_org:
+        owner = scan_user if scan_user else scan_org
+        assert owner is not None  # Type guard: one of scan_user/scan_org must be set
+        owner_type = "user" if scan_user else "org"
+        print_info(f"Scanning all {owner_type}:{owner} repos", dim=True)
+        items, errors = search_user_items_by_owner(client, username, owner, owner_type, since_date)
+        display_repos = sorted({item.repo for item in items})
+        return items, errors, display_repos
+
+    target_repos = repos or config_repos
+    if not target_repos:
+        return None, [], []
+
+    print_info(f"Repos: {len(target_repos)}", dim=True)
+    items: list[Item]
+    items, errors = search_user_items(client, target_repos, username, since_date)
+    return items, errors, list(target_repos)
 
 
 @handle_command_error
@@ -93,25 +127,11 @@ def cmd_scan(
         # Search for user's items - choose search strategy
         console.print("\nSearching for your issues and PRs...")
 
-        if scan_user or scan_org:
-            # User/org-wide discovery mode
-            # Note: scan_user/scan_org cannot both be None here due to outer if condition
-            owner = scan_user if scan_user else scan_org
-            assert owner is not None  # Type guard: one of scan_user/scan_org must be set
-            owner_type = "user" if scan_user else "org"
-            print_info(f"Scanning all {owner_type}:{owner} repos", dim=True)
-            all_items, search_errors = search_user_items_by_owner(
-                client, username, owner, owner_type, since_date
-            )
-        elif repos:
-            # Explicit repos specified on command line
-            print_info(f"Repos: {len(repos)}", dim=True)
-            all_items, search_errors = search_user_items(client, repos, username, since_date)
-        elif config.repos:
-            # Use watched repos from config
-            print_info(f"Repos: {len(config.repos)}", dim=True)
-            all_items, search_errors = search_user_items(client, config.repos, username, since_date)
-        else:
+        all_items, search_errors, display_repos = _execute_search(
+            client, username, since_date, repos, scan_user, scan_org, config.repos
+        )
+        if all_items is None:
+            # No repos to scan
             print_warning("No repos to scan")
             console.print(
                 "Add repos with: lxa board config repos add owner/repo\n"
@@ -123,17 +143,11 @@ def cmd_scan(
             result.errors.append(error)
             print_error(error)
 
-        if verbose and not (scan_user or scan_org):
-            scan_repos = repos or config.repos
-            for repo in scan_repos:
-                repo_items = [i for i in all_items if i.repo == repo]
-                print_info(f"  {repo}: {len(repo_items)} items", dim=True)
-
-        # Show discovered repos when using user/org mode
-        if verbose and (scan_user or scan_org):
-            discovered_repos = sorted({item.repo for item in all_items})
-            print_info(f"Discovered {len(discovered_repos)} repos with activity:", dim=True)
-            for repo in discovered_repos:
+        # Show per-repo item counts in verbose mode
+        if verbose and display_repos:
+            if scan_user or scan_org:
+                print_info(f"Discovered {len(display_repos)} repos with activity:", dim=True)
+            for repo in display_repos:
                 repo_items = [i for i in all_items if i.repo == repo]
                 print_info(f"  {repo}: {len(repo_items)} items", dim=True)
 
