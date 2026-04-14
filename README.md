@@ -156,10 +156,15 @@ View your PRs with compact history codes showing review/fix cycles:
 # List open PRs (default)
 lxa pr list
 
-# Include merged or closed PRs
-lxa pr list --merged
-lxa pr list --closed
-lxa pr list --all
+# Filter by state (each flag shows only that state)
+lxa pr list --merged      # or -M
+lxa pr list --closed      # or -C
+lxa pr list --open        # or -O (explicit, same as default)
+lxa pr list --all         # or -A (all states)
+
+# Combine state flags
+lxa pr list -O -C         # open + closed
+lxa pr list -M -C         # merged + closed
 
 # Show PR titles
 lxa pr list --title
