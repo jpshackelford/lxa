@@ -1473,21 +1473,31 @@ Configuration:
     )
     pr_list_parser.add_argument(
         "--all",
+        "-A",
         dest="all_states",
         action="store_true",
-        help="Show all states (open, merged, closed). Default shows only open.",
+        help="Show all states (open, merged, closed)",
+    )
+    pr_list_parser.add_argument(
+        "--open",
+        "-O",
+        dest="include_open",
+        action="store_true",
+        help="Show open PRs (default if no state flags given)",
     )
     pr_list_parser.add_argument(
         "--merged",
+        "-M",
         dest="include_merged",
         action="store_true",
-        help="Include merged PRs",
+        help="Show merged PRs",
     )
     pr_list_parser.add_argument(
         "--closed",
+        "-C",
         dest="include_closed",
         action="store_true",
-        help="Include closed PRs",
+        help="Show closed (unmerged) PRs",
     )
     pr_list_parser.add_argument(
         "--board",
@@ -1693,14 +1703,21 @@ Configuration:
 
         if args.pr_command == "list":
             # Build states list based on flags
+            # --all trumps everything, otherwise explicit flags determine states
+            # If no state flags given, default to open only
             if args.all_states:
                 states = ["open", "merged", "closed"]
             else:
-                states = ["open"]
+                states = []
+                if args.include_open:
+                    states.append("open")
                 if args.include_merged:
                     states.append("merged")
                 if args.include_closed:
                     states.append("closed")
+                # Default to open if no state flags specified
+                if not states:
+                    states = ["open"]
 
             # Collect PR refs from command line args
             pr_refs = list(args.pr_refs) if args.pr_refs else []
