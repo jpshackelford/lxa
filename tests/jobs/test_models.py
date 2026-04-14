@@ -98,17 +98,23 @@ class TestJob:
 
     def test_create(self, tmp_path: Path):
         """Test Job.create factory method."""
+        jobs_dir = tmp_path / "jobs"
+        jobs_dir.mkdir()
+
         job = Job.create(
             command=["implement", "--loop"],
             cwd=Path("/test/repo"),
-            jobs_dir=tmp_path,
+            jobs_dir=jobs_dir,
             job_name="my-feature",
         )
 
         assert job.id.startswith("my-feature-")
         assert job.command == ["implement", "--loop"]
         assert job.cwd == "/test/repo"
-        assert job.log_path == str(tmp_path / f"{job.id}.log")
+        # work_dir is created under ~/.lxa/workspaces/ (sibling to jobs/)
+        assert job.work_dir == str(tmp_path / "workspaces" / job.id)
+        assert Path(job.work_dir).exists()  # Directory should be created
+        assert job.log_path == str(jobs_dir / f"{job.id}.log")
         assert job.status == JobStatus.RUNNING
         assert job.pid is None
         assert job.created_at is not None
@@ -118,10 +124,13 @@ class TestJob:
 
     def test_create_default_name(self, tmp_path: Path):
         """Test Job.create derives name from command."""
+        jobs_dir = tmp_path / "jobs"
+        jobs_dir.mkdir()
+
         job = Job.create(
             command=["refine", "https://example.com/pr/1"],
             cwd=Path("/test"),
-            jobs_dir=tmp_path,
+            jobs_dir=jobs_dir,
         )
 
         assert job.id.startswith("refine-")
@@ -133,6 +142,7 @@ class TestJob:
             id="test-abc1234",
             command=["implement"],
             cwd="/test",
+            work_dir="/test/work",
             log_path="/logs/test.log",
             pid=12345,
             status=JobStatus.RUNNING,
@@ -147,6 +157,7 @@ class TestJob:
         assert data["id"] == "test-abc1234"
         assert data["command"] == ["implement"]
         assert data["cwd"] == "/test"
+        assert data["work_dir"] == "/test/work"
         assert data["pid"] == 12345
         assert data["status"] == "running"
         assert data["created_at"] == now.isoformat()
@@ -174,9 +185,32 @@ class TestJob:
         assert job.id == "test-xyz7890"
         assert job.command == ["refine", "--auto-merge"]
         assert job.cwd == "/my/repo"
+        assert job.work_dir == "/my/repo"  # Falls back to cwd when not present
         assert job.pid == 99999
         assert job.status == JobStatus.DONE
         assert job.exit_code == 0
+
+    def test_from_dict_with_work_dir(self):
+        """Test Job.from_dict with work_dir present."""
+        now = datetime.now()
+        data = {
+            "id": "test-xyz7890",
+            "command": ["refine"],
+            "cwd": "/my/repo",
+            "work_dir": "/workspaces/test-xyz7890",
+            "pid": 99999,
+            "status": "done",
+            "log_path": "/logs/test.log",
+            "created_at": now.isoformat(),
+            "started_at": now.isoformat(),
+            "ended_at": (now + timedelta(hours=1)).isoformat(),
+            "exit_code": 0,
+        }
+
+        job = Job.from_dict(data)
+
+        assert job.cwd == "/my/repo"
+        assert job.work_dir == "/workspaces/test-xyz7890"
 
     def test_roundtrip_serialization(self, tmp_path: Path):
         """Test to_dict/from_dict roundtrip."""
@@ -217,6 +251,7 @@ class TestJob:
             id="test-123",
             command=["implement"],
             cwd="/test",
+            work_dir="/test/work",
             log_path="/test.log",
             started_at=None,
         )
@@ -229,6 +264,7 @@ class TestJob:
             id="test-456",
             command=["implement"],
             cwd="/test",
+            work_dir="/test/work",
             log_path="/test.log",
             started_at=now,
             ended_at=now + timedelta(hours=2, minutes=30),
@@ -242,6 +278,7 @@ class TestJob:
             id="test-1",
             command=[],
             cwd="/",
+            work_dir="/work",
             log_path="/test.log",
             started_at=datetime.now(),
             ended_at=datetime.now() + timedelta(seconds=45),
@@ -254,6 +291,7 @@ class TestJob:
             id="test-2",
             command=[],
             cwd="/",
+            work_dir="/work",
             log_path="/test.log",
             started_at=datetime.now(),
             ended_at=datetime.now() + timedelta(minutes=12, seconds=30),
@@ -266,6 +304,7 @@ class TestJob:
             id="test-3",
             command=[],
             cwd="/",
+            work_dir="/work",
             log_path="/test.log",
             started_at=datetime.now(),
             ended_at=datetime.now() + timedelta(hours=2, minutes=15),
@@ -278,6 +317,7 @@ class TestJob:
             id="test-4",
             command=[],
             cwd="/",
+            work_dir="/work",
             log_path="/test.log",
             started_at=None,
         )
@@ -289,6 +329,7 @@ class TestJob:
             id="test-meta123",
             command=[],
             cwd="/",
+            work_dir="/work",
             log_path="/test.log",
         )
         assert job.metadata_path(tmp_path) == tmp_path / "test-meta123.json"

@@ -1,14 +1,16 @@
 """Job storage operations.
 
 Handles reading and writing job metadata to ~/.lxa/jobs/ directory.
-Each job has two files:
+Each job has:
 - {job_id}.json - Job metadata (status, timestamps, etc.)
 - {job_id}.log - stdout/stderr output
+- {job_id}/work/ - Isolated working directory (cloned workspace)
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from src.jobs.models import Job
@@ -87,12 +89,15 @@ def list_jobs(jobs_dir: Path | None = None) -> list[Job]:
     return jobs
 
 
-def delete_job(job_id: str, jobs_dir: Path | None = None) -> bool:
-    """Delete job metadata and log files.
+def delete_job(
+    job_id: str, jobs_dir: Path | None = None, workspaces_dir: Path | None = None
+) -> bool:
+    """Delete job metadata, log files, and working directory.
 
     Args:
         job_id: Job ID to delete
         jobs_dir: Custom jobs directory (default: ~/.lxa/jobs)
+        workspaces_dir: Custom workspaces directory (default: ~/.lxa/workspaces)
 
     Returns:
         True if job was deleted, False if not found
@@ -101,12 +106,20 @@ def delete_job(job_id: str, jobs_dir: Path | None = None) -> bool:
     metadata_path = path / f"{job_id}.json"
     log_path = path / f"{job_id}.log"
 
+    # Workspaces are stored separately from jobs (sibling directory)
+    if workspaces_dir is None:
+        workspaces_dir = path.parent / "workspaces"
+    work_dir = workspaces_dir / job_id
+
     deleted = False
     if metadata_path.exists():
         metadata_path.unlink()
         deleted = True
     if log_path.exists():
         log_path.unlink()
+        deleted = True
+    if work_dir.exists() and work_dir.is_dir():
+        shutil.rmtree(work_dir, ignore_errors=True)
         deleted = True
 
     return deleted

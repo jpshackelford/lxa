@@ -64,7 +64,8 @@ def cmd_status(job_id: str, *, json_output: bool = False) -> int:
     table.add_row("Command", " ".join(job.command))
     table.add_row("Status", status_str)
     table.add_row("PID", str(job.pid) if job.pid else "-")
-    table.add_row("Working Dir", job.cwd)
+    table.add_row("Original Dir", job.cwd)
+    table.add_row("Work Dir", job.work_dir)
     table.add_row("Log File", job.log_path)
     table.add_row("Duration", job.format_duration())
 

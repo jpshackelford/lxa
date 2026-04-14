@@ -69,7 +69,8 @@ class Job:
     Attributes:
         id: Unique job identifier (format: {name}-{hash})
         command: Command arguments (e.g., ["implement", "--loop"])
-        cwd: Working directory where the job runs
+        cwd: Original working directory (the user's workspace)
+        work_dir: Isolated working directory for this job (temp directory)
         pid: Process ID of the running job (None if not started or waiting)
         status: Current job status
         log_path: Path to the job's log file
@@ -82,6 +83,7 @@ class Job:
     id: str
     command: list[str]
     cwd: str
+    work_dir: str
     log_path: str
     pid: int | None = None
     status: JobStatus = JobStatus.RUNNING
@@ -97,28 +99,41 @@ class Job:
         cwd: Path,
         jobs_dir: Path,
         job_name: str | None = None,
+        workspaces_dir: Path | None = None,
     ) -> Job:
         """Create a new job with generated ID and paths.
 
+        Creates an isolated working directory for the job under workspaces_dir.
+        The job will run in this isolated directory, not in the original cwd.
+
         Args:
             command: Command arguments to run
-            cwd: Working directory
+            cwd: Original working directory (user's workspace)
             jobs_dir: Directory for job files (e.g., ~/.lxa/jobs)
             job_name: Custom job name (default: derived from command)
+            workspaces_dir: Directory for ephemeral workspaces (default: ~/.lxa/workspaces)
 
         Returns:
-            New Job instance with generated ID and log path
+            New Job instance with generated ID, work_dir, and log path
         """
         # Derive name from command if not provided
         name = job_name or command[0] if command else "job"
         job_id = generate_job_id(name)
         log_path = jobs_dir / f"{job_id}.log"
 
+        # Create isolated working directory for this job
+        # By default, workspaces are stored at ~/.lxa/workspaces/ (sibling to jobs/)
+        if workspaces_dir is None:
+            workspaces_dir = jobs_dir.parent / "workspaces"
+        work_dir = workspaces_dir / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+
         now = datetime.now()
         return cls(
             id=job_id,
             command=command,
             cwd=str(cwd),
+            work_dir=str(work_dir),
             log_path=str(log_path),
             status=JobStatus.RUNNING,
             created_at=now,
@@ -131,6 +146,7 @@ class Job:
             "id": self.id,
             "command": self.command,
             "cwd": self.cwd,
+            "work_dir": self.work_dir,
             "pid": self.pid,
             "status": self.status.value,
             "log_path": self.log_path,
@@ -147,6 +163,7 @@ class Job:
             id=data["id"],
             command=data["command"],
             cwd=data["cwd"],
+            work_dir=data.get("work_dir", data["cwd"]),  # Fallback for old jobs without work_dir
             pid=data.get("pid"),
             status=JobStatus(data["status"]),
             log_path=data["log_path"],

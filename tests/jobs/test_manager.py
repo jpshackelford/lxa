@@ -41,6 +41,7 @@ class TestRefreshJobStatus:
             id="test-running",
             command=["sleep"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(tmp_path / "test.log"),
             pid=os.getpid(),  # Use current process as valid PID
             status=JobStatus.RUNNING,
@@ -58,6 +59,7 @@ class TestRefreshJobStatus:
             id="test-dead",
             command=["sleep"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(tmp_path / "test.log"),
             pid=999999999,  # Nonexistent PID
             status=JobStatus.RUNNING,
@@ -76,6 +78,7 @@ class TestRefreshJobStatus:
             id="test-done",
             command=["echo"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(tmp_path / "test.log"),
             pid=999999999,  # Dead PID, but job is done
             status=JobStatus.DONE,
@@ -94,6 +97,7 @@ class TestRefreshJobStatus:
             id="test-nopid",
             command=["echo"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(tmp_path / "test.log"),
             pid=None,
             status=JobStatus.RUNNING,
@@ -331,6 +335,7 @@ class TestJobManager:
             id="old-1234567",
             command=["implement"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(manager.jobs_dir / "old.log"),
             status=JobStatus.DONE,
             created_at=datetime.now() - timedelta(days=10),
@@ -341,6 +346,7 @@ class TestJobManager:
             id="new-1234567",
             command=["implement"],
             cwd="/test",
+            work_dir="/test/work",
             log_path=str(manager.jobs_dir / "new.log"),
             status=JobStatus.DONE,
             created_at=datetime.now(),
