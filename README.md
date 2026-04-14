@@ -148,7 +148,75 @@ lxa reconcile .pr/design.md --dry-run  # Preview changes
 lxa reconcile .pr/design.md            # Apply changes
 ```
 
+### PR History
+
+View your PRs with compact history codes showing review/fix cycles:
+
+```bash
+# List open PRs (default)
+lxa pr list
+
+# Include merged or closed PRs
+lxa pr list --merged
+lxa pr list --closed
+lxa pr list --all
+
+# Show PR titles
+lxa pr list --title
+lxa pr list -t
+
+# Filter by author or reviewer
+lxa pr list --author octocat
+lxa pr list --reviewer me
+
+# View specific PRs (by ref or URL)
+lxa pr list owner/repo#123 owner/repo#456
+lxa pr list https://github.com/owner/repo/pull/123
+
+# Pipe PR URLs from stdin (one per line)
+cat pr-urls.txt | lxa pr list
+echo "https://github.com/owner/repo/pull/123" | lxa pr list --title
+```
+
+The table shows:
+- **History**: Compact codes showing PR lifecycle - `o` (opened), `C` (changes requested), `F` (fixes pushed), `c` (comment), `A` (approved), `m` (merged), `k` (killed/closed)
+- **CI**: Build status (green/red/pending/conflict)
+- **State**: `draft`, `ready`, `merged`, or `closed`
+- **💬**: Count of unresolved review threads
+
+### Repository Management
+
+Manage watched repositories across boards:
+
+```bash
+# Add repos to the default board
+lxa repo add owner/repo1 owner/repo2
+
+# Add repos to a specific board (creates if needed)
+lxa repo add owner/repo --board my-project
+
+# Add repos and set as default board
+lxa repo add owner/repo --board work --set-default
+
+# Remove repos
+lxa repo remove owner/repo
+
+# List repos
+lxa repo list              # Default board
+lxa repo list --all        # All boards
+```
+
 ### Board Management
+
+Manage boards and rename them:
+
+```bash
+# Rename a board
+lxa board rename "Unnamed Board 1" "My Project"
+
+# Delete a board
+lxa board rm "Old Board"
+```
 
 Track AI-assisted development across multiple repositories with GitHub Projects:
 
