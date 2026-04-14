@@ -450,6 +450,11 @@ def run_task(
     This provides headless-style execution similar to OpenHands CLI,
     allowing a task to be specified via command line or file.
 
+    When running in sandbox mode (LXA_SANDBOX=1 environment variable),
+    terminal commands are validated to stay within the workspace.
+    Commands accessing paths outside the workspace are blocked unless
+    they include a `# read-only` comment to indicate read-only access.
+
     Args:
         task: The task/prompt to execute
         workspace: Path to the workspace (git repository root)
@@ -467,6 +472,17 @@ def run_task(
 
     console.print(Panel("[bold blue]LXA - Task Runner[/]", expand=False))
     console.print()
+
+    # Check if running in sandbox mode (background job)
+    sandbox_mode = os.environ.get("LXA_SANDBOX") == "1"
+    hook_config = None
+
+    if sandbox_mode:
+        from src.hooks import create_sandbox_hook_config
+
+        hook_config = create_sandbox_hook_config(workspace)
+        console.print("[dim]Sandbox mode: terminal commands restricted to workspace[/]")
+        console.print()
 
     # Verify workspace is a git repo (optional, but provides context)
     if not (workspace / ".git").exists():
@@ -493,12 +509,13 @@ def run_task(
     console.print("[bold cyan]Starting task execution...[/]")
     console.print()
 
-    # Create conversation with visualizer and persistence
+    # Create conversation with visualizer, persistence, and optional sandbox hooks
     conversation = Conversation(
         agent=agent,
         workspace=workspace,
         visualizer=DelegationVisualizer(name="TaskRunner"),
         persistence_dir=CONVERSATIONS_DIR,
+        hook_config=hook_config,
     )
 
     console.print(f"[dim]Conversation ID: {conversation.id}[/]")

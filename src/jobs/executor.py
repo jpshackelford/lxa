@@ -137,11 +137,14 @@ def spawn_detached(
                 log_file.write(f"[lxa]   {msg}\n")
         log_file.write("[lxa] " + "=" * 60 + "\n")
         log_file.flush()
-        # Pass job_id as environment variable so the command can update metadata
+        # Pass job metadata and sandbox config as environment variables
+        # LXA_WORKSPACE enables sandbox validation hooks in the spawned process
         job_env = {
             **os.environ,
             "LXA_JOB_ID": job.id,
             "LXA_JOBS_DIR": str(jobs_path),
+            "LXA_WORKSPACE": str(work_dir),
+            "LXA_SANDBOX": "1",
         }
         proc = subprocess.Popen(
             wrapper_command,
