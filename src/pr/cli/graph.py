@@ -114,6 +114,47 @@ def _is_first_week_of_month(
     return True
 
 
+def _render_bar_section(
+    heights: list[int],
+    style: str,
+    scale: float,
+    *,
+    reverse: bool = False,
+) -> list[Text]:
+    """Render a section of vertical bars (upper or lower half of graph).
+
+    Args:
+        heights: List of bar heights for each column
+        style: Rich style for bars (e.g., "green" or "blue")
+        scale: Scale factor for converting row numbers to axis labels
+        reverse: If True, render from MAX_GRAPH_HEIGHT down to 1 (upper section)
+                 If False, render from 1 up to MAX_GRAPH_HEIGHT (lower section)
+
+    Returns:
+        List of Rich Text objects, one per row
+    """
+    lines: list[Text] = []
+    row_range = range(MAX_GRAPH_HEIGHT, 0, -1) if reverse else range(1, MAX_GRAPH_HEIGHT + 1)
+
+    for row in row_range:
+        line = Text()
+        # Axis label on even rows
+        if row % 2 == 0:
+            scaled_value = int(row / scale) if scale > 0 else row
+            line.append(f"{scaled_value:>3} ", style="dim")
+        else:
+            line.append(" " * AXIS_LABEL_WIDTH, style="dim")
+
+        # Bars with spacing
+        for i, height in enumerate(heights):
+            line.append("█" if height >= row else " ", style=style if height >= row else None)
+            if i < len(heights) - 1:
+                line.append(" ")
+        lines.append(line)
+
+    return lines
+
+
 def _build_graph(weekly_data: list[tuple[datetime, int, float]]) -> list[Text]:
     """Build the graph lines.
 
@@ -123,7 +164,6 @@ def _build_graph(weekly_data: list[tuple[datetime, int, float]]) -> list[Text]:
     Returns:
         List of Rich Text objects for each line
     """
-
     # Extract counts and ages
     counts = [d[1] for d in weekly_data]
     ages = [d[2] for d in weekly_data]
@@ -135,69 +175,27 @@ def _build_graph(weekly_data: list[tuple[datetime, int, float]]) -> list[Text]:
     count_scale = MAX_GRAPH_HEIGHT / max_count if max_count > 0 else 1
     age_scale = MAX_GRAPH_HEIGHT / max_age if max_age > 0 else 1
 
-    # Scale values to heights
-    count_heights = [int(round(c * count_scale)) for c in counts]
-    age_heights = [int(round(a * age_scale)) for a in ages]
+    # Scale values to heights (clamped to MAX_GRAPH_HEIGHT)
+    count_heights = [min(int(round(c * count_scale)), MAX_GRAPH_HEIGHT) for c in counts]
+    age_heights = [min(int(round(a * age_scale)), MAX_GRAPH_HEIGHT) for a in ages]
 
-    # Clamp to MAX_GRAPH_HEIGHT
-    count_heights = [min(h, MAX_GRAPH_HEIGHT) for h in count_heights]
-    age_heights = [min(h, MAX_GRAPH_HEIGHT) for h in age_heights]
-
-    # Build lines (top to bottom)
+    # Build lines
     lines: list[Text] = []
     num_weeks = len(weekly_data)
-    bar_width = num_weeks * 2 - 1 if num_weeks > 0 else 0  # bar + space pattern
+    bar_width = num_weeks * 2 - 1 if num_weeks > 0 else 0
 
-    # Upper section (merge counts) - build from top down
-    for row in range(MAX_GRAPH_HEIGHT, 0, -1):
-        line = Text()
-        # Axis label - show value on all even rows from baseline
-        if row % 2 == 0:
-            scaled_value = int(row / count_scale) if count_scale > 0 else row
-            label = f"{scaled_value:>3} "
-        else:
-            label = " " * AXIS_LABEL_WIDTH
-        line.append(label, style="dim")
+    # Upper section (merge counts)
+    lines.extend(_render_bar_section(count_heights, "green", count_scale, reverse=True))
 
-        # Bars with spacing
-        for i, height in enumerate(count_heights):
-            if height >= row:
-                line.append("█", style="green")
-            else:
-                line.append(" ")
-            # Add space between bars (not after last bar)
-            if i < len(count_heights) - 1:
-                line.append(" ")
-        lines.append(line)
-
-    # Baseline with axis marker
+    # Baseline
     baseline = Text()
     baseline.append("  0 ", style="dim")
     for _ in range(bar_width):
         baseline.append("─", style="dim")
     lines.append(baseline)
 
-    # Lower section (average ages) - build from baseline down
-    for row in range(1, MAX_GRAPH_HEIGHT + 1):
-        line = Text()
-        # Axis label - show value on all even rows from baseline
-        if row % 2 == 0:
-            scaled_value = int(row / age_scale) if age_scale > 0 else row
-            label = f"{scaled_value:>3} "
-        else:
-            label = " " * AXIS_LABEL_WIDTH
-        line.append(label, style="dim")
-
-        # Bars with spacing
-        for i, height in enumerate(age_heights):
-            if height >= row:
-                line.append("█", style="blue")
-            else:
-                line.append(" ")
-            # Add space between bars (not after last bar)
-            if i < len(age_heights) - 1:
-                line.append(" ")
-        lines.append(line)
+    # Lower section (average ages)
+    lines.extend(_render_bar_section(age_heights, "blue", age_scale, reverse=False))
 
     # Add week labels at bottom - "now" is on the right (last item)
     # Show first letter of month for the first week of each month
