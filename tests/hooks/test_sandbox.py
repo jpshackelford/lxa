@@ -15,7 +15,9 @@ from src.hooks.sandbox import (
     has_write_redirect_to_external,
     is_path_within_workspace,
     resolve_path,
+    resolve_path_with_symlinks,
     validate_command,
+    validate_file_editor,
 )
 
 
@@ -364,7 +366,7 @@ class TestCreateSandboxHookConfig:
         config = create_sandbox_hook_config()
         assert isinstance(config, HookConfig)
         assert config.pre_tool_use is not None
-        assert len(config.pre_tool_use) == 1
+        assert len(config.pre_tool_use) == 2  # terminal and file_editor
 
     def test_matcher_targets_terminal(self) -> None:
         """Hook should target the terminal tool."""
@@ -372,13 +374,19 @@ class TestCreateSandboxHookConfig:
         matcher = config.pre_tool_use[0]
         assert matcher.matcher == "terminal"
 
+    def test_matcher_targets_file_editor(self) -> None:
+        """Hook should target the file_editor tool."""
+        config = create_sandbox_hook_config()
+        matcher = config.pre_tool_use[1]
+        assert matcher.matcher == "file_editor"
+
 
 class TestHookScriptMain:
     """Tests for the hook script when run as __main__."""
 
     def test_hook_allows_internal_command(self, tmp_path: Path) -> None:
         """Hook script should exit 0 for commands within workspace."""
-        event = {"tool_input": {"command": "ls -la"}}
+        event = {"tool_name": "terminal", "tool_input": {"command": "ls -la"}}
 
         env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
         result = subprocess.run(
@@ -394,7 +402,7 @@ class TestHookScriptMain:
 
     def test_hook_blocks_external_command(self, tmp_path: Path) -> None:
         """Hook script should exit 2 for commands accessing external paths."""
-        event = {"tool_input": {"command": "cat /etc/passwd"}}
+        event = {"tool_name": "terminal", "tool_input": {"command": "cat /etc/passwd"}}
 
         env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
         result = subprocess.run(
@@ -413,7 +421,10 @@ class TestHookScriptMain:
 
     def test_hook_allows_read_only_external(self, tmp_path: Path) -> None:
         """Hook script should exit 0 for external reads with # read-only."""
-        event = {"tool_input": {"command": "cat /etc/passwd # read-only"}}
+        event = {
+            "tool_name": "terminal",
+            "tool_input": {"command": "cat /etc/passwd # read-only"},
+        }
 
         env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
         result = subprocess.run(
@@ -429,7 +440,7 @@ class TestHookScriptMain:
 
     def test_hook_without_workspace_allows_all(self) -> None:
         """Hook script without LXA_WORKSPACE should allow everything."""
-        event = {"tool_input": {"command": "rm -rf /"}}
+        event = {"tool_name": "terminal", "tool_input": {"command": "rm -rf /"}}
 
         env = {k: v for k, v in os.environ.items() if k != "LXA_WORKSPACE"}
         result = subprocess.run(
@@ -446,7 +457,7 @@ class TestHookScriptMain:
 
     def test_hook_allows_reset(self, tmp_path: Path) -> None:
         """Hook script should allow reset commands."""
-        event = {"tool_input": {"command": "", "reset": True}}
+        event = {"tool_name": "terminal", "tool_input": {"command": "", "reset": True}}
 
         env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
         result = subprocess.run(
@@ -462,7 +473,310 @@ class TestHookScriptMain:
 
     def test_hook_allows_is_input(self, tmp_path: Path) -> None:
         """Hook script should allow is_input (interactive input) commands."""
-        event = {"tool_input": {"command": "y", "is_input": True}}
+        event = {
+            "tool_name": "terminal",
+            "tool_input": {"command": "y", "is_input": True},
+        }
+
+        env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.hooks.sandbox"],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        assert result.returncode == 0
+
+
+class TestResolvePathWithSymlinks:
+    """Tests for resolve_path_with_symlinks function."""
+
+    def test_regular_path(self, tmp_path: Path) -> None:
+        """Regular path should be resolved normally."""
+        test_file = tmp_path / "test_file.txt"
+        test_file.touch()
+        result = resolve_path_with_symlinks(str(test_file), tmp_path)
+        assert result == test_file.resolve()
+
+    def test_symlink_to_file(self, tmp_path: Path) -> None:
+        """Symlink should resolve to real path."""
+        real_file = tmp_path / "real_file.txt"
+        real_file.touch()
+        symlink = tmp_path / "symlink_file.txt"
+        symlink.symlink_to(real_file)
+
+        result = resolve_path_with_symlinks(str(symlink), tmp_path)
+        assert result == real_file.resolve()
+
+    def test_symlink_to_directory(self, tmp_path: Path) -> None:
+        """Symlink to directory should resolve to real path."""
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir()
+        symlink_dir = tmp_path / "symlink_dir"
+        symlink_dir.symlink_to(real_dir)
+
+        file_via_symlink = symlink_dir / "file.txt"
+        result = resolve_path_with_symlinks(str(file_via_symlink), tmp_path)
+        # The file doesn't exist yet, but path should be resolved through the symlink
+        assert result == real_dir.resolve() / "file.txt"
+
+    def test_nonexistent_path(self, tmp_path: Path) -> None:
+        """Non-existent path in existing directory should resolve."""
+        result = resolve_path_with_symlinks(str(tmp_path / "nonexistent.txt"), tmp_path)
+        assert result == tmp_path.resolve() / "nonexistent.txt"
+
+    def test_symlink_outside_workspace(self, tmp_path: Path) -> None:
+        """Symlink pointing outside workspace should resolve to real path."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        external = tmp_path / "external"
+        external.mkdir()
+        external_file = external / "file.txt"
+        external_file.touch()
+
+        symlink = workspace / "external_link"
+        symlink.symlink_to(external_file)
+
+        result = resolve_path_with_symlinks(str(symlink), workspace)
+        assert result == external_file.resolve()
+
+    def test_relative_path(self, tmp_path: Path) -> None:
+        """Relative path should be resolved against workspace."""
+        test_file = tmp_path / "file.txt"
+        test_file.touch()
+
+        result = resolve_path_with_symlinks("file.txt", tmp_path)
+        assert result == test_file.resolve()
+
+
+class TestValidateFileEditor:
+    """Tests for validate_file_editor function."""
+
+    def test_view_always_allowed_internal(self, tmp_path: Path) -> None:
+        """view command on internal path should be allowed."""
+        allowed, error = validate_file_editor("view", str(tmp_path / "file.txt"), tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_view_always_allowed_external(self, tmp_path: Path) -> None:
+        """view command on external path should be allowed (read-only)."""
+        allowed, error = validate_file_editor("view", "/etc/passwd", tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_create_internal_allowed(self, tmp_path: Path) -> None:
+        """create command on internal path should be allowed."""
+        allowed, error = validate_file_editor("create", str(tmp_path / "new_file.txt"), tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_create_external_blocked(self, tmp_path: Path) -> None:
+        """create command on external path should be blocked."""
+        allowed, error = validate_file_editor("create", "/tmp/external_file.txt", tmp_path)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_str_replace_internal_allowed(self, tmp_path: Path) -> None:
+        """str_replace command on internal path should be allowed."""
+        test_file = tmp_path / "file.txt"
+        test_file.touch()
+        allowed, error = validate_file_editor("str_replace", str(test_file), tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_str_replace_external_blocked(self, tmp_path: Path) -> None:
+        """str_replace command on external path should be blocked."""
+        allowed, error = validate_file_editor("str_replace", "/etc/hosts", tmp_path)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_insert_internal_allowed(self, tmp_path: Path) -> None:
+        """insert command on internal path should be allowed."""
+        test_file = tmp_path / "file.txt"
+        test_file.touch()
+        allowed, error = validate_file_editor("insert", str(test_file), tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_insert_external_blocked(self, tmp_path: Path) -> None:
+        """insert command on external path should be blocked."""
+        allowed, error = validate_file_editor("insert", "/etc/hosts", tmp_path)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_undo_edit_internal_allowed(self, tmp_path: Path) -> None:
+        """undo_edit command on internal path should be allowed."""
+        test_file = tmp_path / "file.txt"
+        test_file.touch()
+        allowed, error = validate_file_editor("undo_edit", str(test_file), tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_undo_edit_external_blocked(self, tmp_path: Path) -> None:
+        """undo_edit command on external path should be blocked."""
+        allowed, error = validate_file_editor("undo_edit", "/etc/hosts", tmp_path)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_symlink_to_external_blocked(self, tmp_path: Path) -> None:
+        """Write via symlink that points outside workspace should be blocked."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        external = tmp_path / "external"
+        external.mkdir()
+        external_file = external / "file.txt"
+        external_file.touch()
+
+        symlink = workspace / "external_link.txt"
+        symlink.symlink_to(external_file)
+
+        allowed, error = validate_file_editor("str_replace", str(symlink), workspace)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_relative_path_to_parent_blocked(self, tmp_path: Path) -> None:
+        """Relative path that escapes workspace should be blocked."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        # Try to access parent directory via relative path
+        allowed, error = validate_file_editor("create", "../escape.txt", workspace)
+        assert allowed is False
+        assert error is not None
+        assert "outside workspace" in error
+
+    def test_missing_path_for_write_command(self, tmp_path: Path) -> None:
+        """Write command without path should be blocked."""
+        allowed, error = validate_file_editor("create", "", tmp_path)
+        assert allowed is False
+        assert error is not None
+        assert "requires a path" in error
+
+    def test_unknown_command_allowed(self, tmp_path: Path) -> None:
+        """Unknown commands should be allowed (fail open)."""
+        allowed, error = validate_file_editor("unknown_cmd", "/some/path", tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_view_with_symlink_allowed(self, tmp_path: Path) -> None:
+        """view via symlink to external should be allowed (read-only)."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        external = tmp_path / "external"
+        external.mkdir()
+        external_file = external / "file.txt"
+        external_file.touch()
+
+        symlink = workspace / "external_link.txt"
+        symlink.symlink_to(external_file)
+
+        # View should work even through symlink to external
+        allowed, error = validate_file_editor("view", str(symlink), workspace)
+        assert allowed is True
+        assert error is None
+
+
+class TestFileEditorHookScript:
+    """Tests for the hook script with file_editor events."""
+
+    def test_hook_allows_view_external(self, tmp_path: Path) -> None:
+        """Hook script should allow view on external paths."""
+        event = {
+            "tool_name": "file_editor",
+            "tool_input": {"command": "view", "path": "/etc/hosts"},
+        }
+
+        env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.hooks.sandbox"],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        assert result.returncode == 0
+
+    def test_hook_allows_create_internal(self, tmp_path: Path) -> None:
+        """Hook script should allow create on internal paths."""
+        event = {
+            "tool_name": "file_editor",
+            "tool_input": {
+                "command": "create",
+                "path": str(tmp_path / "new_file.txt"),
+            },
+        }
+
+        env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.hooks.sandbox"],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        assert result.returncode == 0
+
+    def test_hook_blocks_create_external(self, tmp_path: Path) -> None:
+        """Hook script should block create on external paths."""
+        event = {
+            "tool_name": "file_editor",
+            "tool_input": {"command": "create", "path": "/tmp/external.txt"},
+        }
+
+        env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.hooks.sandbox"],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        assert result.returncode == 2
+        output = json.loads(result.stdout)
+        assert output["decision"] == "deny"
+        assert "outside workspace" in output["reason"]
+
+    def test_hook_blocks_str_replace_external(self, tmp_path: Path) -> None:
+        """Hook script should block str_replace on external paths."""
+        event = {
+            "tool_name": "file_editor",
+            "tool_input": {"command": "str_replace", "path": "/etc/hosts"},
+        }
+
+        env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.hooks.sandbox"],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        assert result.returncode == 2
+        output = json.loads(result.stdout)
+        assert output["decision"] == "deny"
+
+    def test_hook_unknown_tool_allows(self, tmp_path: Path) -> None:
+        """Hook script should allow unknown tools (fail open)."""
+        event = {
+            "tool_name": "unknown_tool",
+            "tool_input": {"some": "data"},
+        }
 
         env = {**os.environ, "LXA_WORKSPACE": str(tmp_path)}
         result = subprocess.run(

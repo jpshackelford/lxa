@@ -1,11 +1,17 @@
-"""Sandbox validation hook for terminal commands.
+"""Sandbox validation hooks for terminal and file_editor tools.
 
-This module provides a pre_tool_use hook that validates terminal commands
-stay within the designated workspace sandbox. Commands that attempt to
+This module provides pre_tool_use hooks that validate commands and file operations
+stay within the designated workspace sandbox. Operations that attempt to
 navigate or write outside the workspace are blocked with helpful error messages.
 
-The hook supports a `# read-only` escape hatch that allows read operations
-on paths outside the workspace while still blocking write operations.
+Terminal hook:
+- Supports a `# read-only` escape hatch that allows read operations
+  on paths outside the workspace while still blocking write operations.
+
+File editor hook:
+- `view` command is always allowed (read-only)
+- Write commands (`create`, `str_replace`, `insert`, `undo_edit`) validate
+  the target path is within workspace, resolving symlinks.
 
 Usage:
     from src.hooks import create_sandbox_hook_config
@@ -30,7 +36,7 @@ from pathlib import Path
 
 from openhands.sdk.hooks import HookConfig, HookDefinition, HookMatcher
 
-# Commands that modify files/directories
+# Commands that modify files/directories (terminal)
 WRITE_COMMANDS = frozenset(
     {
         "rm",
@@ -48,6 +54,23 @@ WRITE_COMMANDS = frozenset(
         "install",
         "ln",
         "unlink",
+    }
+)
+
+# File editor commands that modify files
+FILE_EDITOR_WRITE_COMMANDS = frozenset(
+    {
+        "create",
+        "str_replace",
+        "insert",
+        "undo_edit",
+    }
+)
+
+# File editor read-only commands (always allowed)
+FILE_EDITOR_READ_COMMANDS = frozenset(
+    {
+        "view",
     }
 )
 
@@ -434,17 +457,112 @@ def validate_command(
     return _check_read_access(command, workspace, current_dir, has_read_only)
 
 
+def resolve_path_with_symlinks(path_str: str, workspace: Path) -> Path:
+    """Resolve a path string, following symlinks to get the real path.
+
+    Args:
+        path_str: Path string (should be absolute for file_editor)
+        workspace: Workspace root directory (used for relative path resolution)
+
+    Returns:
+        The fully resolved real path (symlinks followed)
+    """
+    path = Path(path_str)
+    if not path.is_absolute():
+        path = workspace / path
+
+    # First resolve any .. and . in the path
+    path = path.resolve()
+
+    # If the path exists, get the real path (follows symlinks)
+    # If it doesn't exist, check if parent exists and resolve that
+    if path.exists():
+        return path.resolve()
+
+    # For non-existent paths, resolve the parent and append the name
+    # This handles cases like creating a new file in a symlinked directory
+    parent = path.parent
+    if parent.exists():
+        return parent.resolve() / path.name
+
+    return path
+
+
+def validate_file_editor(
+    command: str,
+    path: str,
+    workspace: Path,
+) -> tuple[bool, str | None]:
+    """Validate a file_editor operation against sandbox rules.
+
+    Rules:
+    1. `view` command is always allowed (read-only operation)
+    2. Write commands (`create`, `str_replace`, `insert`, `undo_edit`)
+       must target paths within the workspace
+    3. Symlinks are resolved before checking workspace containment
+
+    Args:
+        command: The file_editor command (view, create, str_replace, etc.)
+        path: The file path being operated on
+        workspace: Workspace root directory (sandbox boundary)
+
+    Returns:
+        Tuple of (allowed, error_message).
+        If allowed is True, error_message is None.
+        If allowed is False, error_message explains why.
+    """
+    workspace = workspace.resolve()
+
+    # Read commands are always allowed
+    if command in FILE_EDITOR_READ_COMMANDS:
+        return True, None
+
+    # For write commands, validate the path is within workspace
+    if command in FILE_EDITOR_WRITE_COMMANDS:
+        if not path:
+            return (
+                False,
+                f"""
+file_editor command blocked: '{command}' requires a path.
+""",
+            )
+
+        # Resolve the path (following symlinks)
+        resolved_path = resolve_path_with_symlinks(path, workspace)
+
+        if not is_path_within_workspace(resolved_path, workspace):
+            return (
+                False,
+                f"""
+file_editor command blocked: '{command}' targets path outside workspace.
+
+Path: {path}
+Resolved to: {resolved_path}
+Your workspace is: {workspace}
+
+Write operations (create, str_replace, insert, undo_edit) to paths outside
+the workspace are NOT allowed.
+""",
+            )
+
+        return True, None
+
+    # Unknown commands - allow by default (fail open)
+    return True, None
+
+
 def create_sandbox_hook_config() -> HookConfig:
     """Create a HookConfig that enforces sandbox isolation.
 
-    The returned config adds a pre_tool_use hook on the terminal tool
-    that validates commands stay within the workspace.
+    The returned config adds pre_tool_use hooks on:
+    - terminal: Validates commands stay within the workspace
+    - file_editor: Validates write operations target paths within workspace
 
     The workspace is read from the LXA_WORKSPACE environment variable
     by the hook script at runtime (set by the job executor).
 
     Returns:
-        HookConfig with sandbox validation hook
+        HookConfig with sandbox validation hooks
     """
     # The hook command runs this module as a script
     # The workspace is passed via environment variable LXA_WORKSPACE (set by executor)
@@ -460,16 +578,59 @@ def create_sandbox_hook_config() -> HookConfig:
                         timeout=5,
                     )
                 ],
-            )
+            ),
+            HookMatcher(
+                matcher="file_editor",
+                hooks=[
+                    HookDefinition(
+                        command=hook_command,
+                        timeout=5,
+                    )
+                ],
+            ),
         ],
     )
+
+
+def _handle_terminal_event(tool_input: dict, workspace: Path) -> tuple[bool, str | None]:
+    """Handle validation for terminal tool events."""
+    command = tool_input.get("command", "")
+
+    # Handle reset and is_input - these don't need validation
+    if tool_input.get("reset") or tool_input.get("is_input"):
+        return True, None
+
+    # Empty commands are fine
+    if not command.strip():
+        return True, None
+
+    # Get current directory from event metadata if available
+    # The terminal tool includes this in the observation, but we might not have it
+    # in pre_tool_use. Default to workspace.
+    current_dir = workspace
+
+    return validate_command(command, workspace, current_dir)
+
+
+def _handle_file_editor_event(tool_input: dict, workspace: Path) -> tuple[bool, str | None]:
+    """Handle validation for file_editor tool events."""
+    command = tool_input.get("command", "")
+    path = tool_input.get("path", "")
+
+    # Empty command - allow (will likely fail anyway)
+    if not command:
+        return True, None
+
+    return validate_file_editor(command, path, workspace)
 
 
 def main() -> None:
     """Entry point when run as a hook script.
 
-    Reads event JSON from stdin, validates the command,
+    Reads event JSON from stdin, validates the tool operation,
     and exits with appropriate code (0=allow, 2=block).
+
+    Handles both terminal and file_editor tool events.
     """
     # Read event from stdin
     try:
@@ -477,18 +638,6 @@ def main() -> None:
     except json.JSONDecodeError:
         # If we can't parse the input, allow the command
         # (fail open to avoid breaking things)
-        sys.exit(0)
-
-    # Extract command from event
-    tool_input = event.get("tool_input", {})
-    command = tool_input.get("command", "")
-
-    # Handle reset and is_input - these don't need validation
-    if tool_input.get("reset") or tool_input.get("is_input"):
-        sys.exit(0)
-
-    # Empty commands are fine
-    if not command.strip():
         sys.exit(0)
 
     # Get workspace from environment
@@ -499,13 +648,17 @@ def main() -> None:
 
     workspace = Path(workspace_str)
 
-    # Get current directory from event metadata if available
-    # The terminal tool includes this in the observation, but we might not have it
-    # in pre_tool_use. Default to workspace.
-    current_dir = workspace
+    # Extract tool info and route to appropriate handler
+    tool_name = event.get("tool_name", "")
+    tool_input = event.get("tool_input", {})
 
-    # Validate the command
-    allowed, error_message = validate_command(command, workspace, current_dir)
+    if tool_name == "terminal":
+        allowed, error_message = _handle_terminal_event(tool_input, workspace)
+    elif tool_name == "file_editor":
+        allowed, error_message = _handle_file_editor_event(tool_input, workspace)
+    else:
+        # Unknown tool - allow by default
+        allowed, error_message = True, None
 
     if allowed:
         sys.exit(0)
