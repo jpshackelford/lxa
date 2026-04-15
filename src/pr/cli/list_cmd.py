@@ -7,6 +7,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from src.pr.cli.graph import render_merged_graph
 from src.pr.github_api import PRClient
 from src.pr.models import CIStatus, PRInfo, PRState
 
@@ -24,6 +25,7 @@ def cmd_list(
     board_name: str | None = None,
     limit: int = 100,
     show_title: bool = False,
+    show_graph: bool = False,
 ) -> int:
     """List PRs with history visualization.
 
@@ -36,10 +38,16 @@ def cmd_list(
         board_name: Board to get repos from (default: default board)
         limit: Maximum number of PRs to show
         show_title: Include PR titles in output
+        show_graph: Show weekly merge/age graph (only for merged PRs)
 
     Returns:
         Exit code (0 for success)
     """
+    # Validate graph flag - only works with merged state
+    if show_graph and (not states or "merged" not in states):
+        console.print("[red]Error:[/] --graph only works with --merged flag")
+        return 1
+
     try:
         with PRClient() as client:
             # Determine which use case we're handling
@@ -72,6 +80,13 @@ def cmd_list(
             if not result.prs:
                 console.print("[dim]No PRs found.[/]")
                 return 0
+
+            # Show graph above table if requested
+            if show_graph:
+                # Filter to only merged PRs for the graph
+                merged_prs = [pr for pr in result.prs if pr.state == PRState.MERGED]
+                if merged_prs:
+                    render_merged_graph(merged_prs, console=console)
 
             _print_pr_table(result.prs, show_title=show_title)
 
