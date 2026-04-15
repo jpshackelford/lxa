@@ -161,7 +161,7 @@ lxa implement --verbosity normal
 
 # Verbose mode: show all details including file contents
 lxa implement --verbosity verbose
-# or shorthand
+# or shorthand (note: -v requires a value)
 lxa implement -v verbose
 
 # Include timestamps in output (useful for debugging)
