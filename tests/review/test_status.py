@@ -70,6 +70,19 @@ class TestComputeReviewStatus:
         assert status == ReviewStatus.APPROVED
         assert wait_start == approve_time
 
+    def test_re_review_after_approval(self):
+        """Test that new commits after approval trigger re-review."""
+        final_commit_time = datetime(2024, 1, 4, tzinfo=UTC)
+        events = [
+            TimelineEvent(ActionType.OPENED, "alice", datetime(2024, 1, 1, tzinfo=UTC)),
+            TimelineEvent(ActionType.HELP, "alice", datetime(2024, 1, 1, 10, tzinfo=UTC)),
+            TimelineEvent(ActionType.APPROVED, "bob", datetime(2024, 1, 2, tzinfo=UTC)),
+            TimelineEvent(ActionType.FIX, "alice", final_commit_time),
+        ]
+        status, wait_start = compute_review_status(events, "bob")
+        assert status == ReviewStatus.RE_REVIEW
+        assert wait_start == final_commit_time
+
     def test_multiple_review_cycles(self):
         """Test status after multiple review-fix cycles."""
         final_commit_time = datetime(2024, 1, 5, tzinfo=UTC)

@@ -1,7 +1,6 @@
 """Review list command - show reviewer's PR queue."""
 
 import logging
-import traceback
 
 from rich import box
 from rich.console import Console
@@ -74,7 +73,7 @@ def cmd_list(
             return 0
 
     except Exception as e:
-        logger.debug("Full traceback:\n%s", traceback.format_exc())
+        logger.exception("Error listing reviews:")
         console.print(f"[red]Error:[/] {e}")
         console.print("[dim]Run with --verbose for full traceback[/]")
         return 1

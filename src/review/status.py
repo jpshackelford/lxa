@@ -55,6 +55,14 @@ def compute_review_status(
 
     # Check if reviewer approved
     if last_review.action == ActionType.APPROVED:
+        # Check if author pushed commits after approval
+        commits_after_approval = [
+            e
+            for e in timeline_events
+            if e.action == ActionType.FIX and e.timestamp > last_review.timestamp
+        ]
+        if commits_after_approval:
+            return (ReviewStatus.RE_REVIEW, commits_after_approval[0].timestamp)
         return (ReviewStatus.APPROVED, last_review.timestamp)
 
     # Reviewer requested changes - check if author pushed since
