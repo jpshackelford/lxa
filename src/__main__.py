@@ -1520,6 +1520,13 @@ Configuration:
         action="store_true",
         help="Show PR titles",
     )
+    pr_list_parser.add_argument(
+        "--graph",
+        "-g",
+        dest="show_graph",
+        action="store_true",
+        help="Show weekly merge/age graph (only works with --merged)",
+    )
 
     # repo command
     repo_parser = subparsers.add_parser(
@@ -1735,6 +1742,7 @@ Configuration:
                 board_name=args.board_name,
                 limit=args.limit,
                 show_title=args.show_title,
+                show_graph=args.show_graph,
             )
 
     # Handle repo command
