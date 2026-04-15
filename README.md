@@ -51,6 +51,12 @@ lxa implement
 
 # Start from a specific design document
 lxa implement doc/design/feature-name.md
+
+# Run in background (detached from terminal)
+lxa implement --background
+
+# Custom job name for background execution
+lxa implement --background --job-name my-feature
 ```
 
 ### Ralph Loop Mode (Continuous Execution)
@@ -91,6 +97,9 @@ lxa refine https://github.com/owner/repo/pull/42 --phase respond
 
 # Configure quality bar and iteration limits
 lxa refine URL --allow-merge good_taste --max-iterations 10
+
+# Run in background (detached from terminal)
+lxa refine URL --background --job-name pr-review
 ```
 
 The refinement loop has two phases:
@@ -138,6 +147,26 @@ The task runner provides a simple agent with:
 - Task tracking for structured work
 
 Background jobs can be managed with the `lxa job` command (see below).
+
+### Output Verbosity
+
+Control agent output detail with the `--verbosity` flag (available on `implement`, `refine`, and `run`):
+
+```bash
+# Quiet mode: show only action summaries (default for background jobs)
+lxa implement --verbosity quiet
+
+# Normal mode: show reasoning + summaries (default for foreground)
+lxa implement --verbosity normal
+
+# Verbose mode: show all details including file contents
+lxa implement --verbosity verbose
+# or shorthand (note: -v requires a value)
+lxa implement -v verbose
+
+# Include timestamps in output (useful for debugging)
+lxa implement --timestamps
+```
 
 ### Reconciliation (Post-merge)
 
@@ -226,8 +255,11 @@ lxa board rm "Old Board"
 Track AI-assisted development across multiple repositories with GitHub Projects:
 
 ```bash
-# Create a new board
+# Create a new board (user-scoped, tracks your activity)
 lxa board init --create "My Agent Board"
+
+# Create a project-scoped board (tracks specific items for a project)
+lxa board init --create "Feature X" --scope project --overview https://github.com/owner/repo/issues/1
 
 # Option A: Add specific repos to watch
 lxa board config repos add owner/repo1
@@ -238,12 +270,23 @@ lxa board scan
 lxa board scan --user myusername --since 21    # All your personal repos
 lxa board scan --org my-company --since 14     # All repos in an org
 
+# Manually add items to a board
+lxa board add-item https://github.com/owner/repo/pull/123
+lxa board add-item owner/repo#456 repo#789 --column "Backlog"
+
+# Sync config to/from GitHub Gist (for ephemeral environments)
+lxa board sync-config
+
 # Incremental sync using notifications
 lxa board sync
 
 # Check what needs attention
 lxa board status --attention
 ```
+
+**Board Scopes:**
+- **User-scoped** (default): Automatically tracks all issues/PRs where you're involved
+- **Project-scoped**: Tracks a fixed set of items for a specific project; requires an `--overview` item as the anchor
 
 The board automatically organizes items into workflow columns based on their state:
 

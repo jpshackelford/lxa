@@ -35,8 +35,11 @@ lxa board status --attention
 Initialize or configure a GitHub Project board.
 
 ```bash
-# Create a new project
+# Create a new project (user-scoped by default)
 lxa board init --create "Project Name"
+
+# Create a project-scoped board (tracks fixed set of items for a project)
+lxa board init --create "Feature X" --scope project --overview https://github.com/owner/repo/issues/1
 
 # Configure an existing project by number
 lxa board init --project-number 5
@@ -47,6 +50,21 @@ lxa board init --project-id PVT_kwHOABcd12
 # Preview without making changes
 lxa board init --create "Test Board" --dry-run
 ```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--create NAME` | Create a new project with this name |
+| `--project-number N` | Configure existing user project by number |
+| `--project-id ID` | Configure existing project by GraphQL ID |
+| `--board NAME` | Name for this board in config (default: slugified project name) |
+| `--scope SCOPE` | Board scope: `user` (default) or `project` |
+| `--overview URL` | URL of overview item (required for project-scoped boards) |
+| `--dry-run` | Show what would be done without making changes |
+
+**Board Scopes:**
+- **User-scoped** (default): Automatically tracks all issues/PRs where you're involved across watched repos. The `scan` command finds items based on your activity.
+- **Project-scoped**: Tracks a fixed set of items related to a specific project/initiative. Items must be added manually with `lxa board add-item`. The `--overview` option specifies an anchor issue/PR that describes the project.
 
 This command:
 - Creates a new GitHub Project (or connects to an existing one)
@@ -187,6 +205,34 @@ lxa board apply --dry-run
 # Remove columns not in config
 lxa board apply --prune
 ```
+
+### `lxa board add-item`
+
+Manually add issues or PRs to a board.
+
+```bash
+# Add by URL
+lxa board add-item https://github.com/owner/repo/pull/123
+
+# Add by reference (multiple formats supported)
+lxa board add-item owner/repo#123
+lxa board add-item repo#456              # When repo is unique in board config
+lxa board add-item #789                  # When board has exactly one repo
+
+# Add to specific column
+lxa board add-item owner/repo#123 --column "Backlog"
+
+# Add to a specific board
+lxa board add-item owner/repo#123 --board my-project
+
+# Preview without making changes
+lxa board add-item owner/repo#123 --dry-run
+```
+
+This command is particularly useful for:
+- **Project-scoped boards**: Where items must be added manually
+- **Adding items from repos not in your watched list**
+- **Bulk importing specific items**
 
 ### `lxa board templates`
 
