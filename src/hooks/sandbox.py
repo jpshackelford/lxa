@@ -51,6 +51,14 @@ WRITE_COMMANDS = frozenset(
     }
 )
 
+# Special paths that are always safe for write operations
+# /dev/null discards all data written to it
+SAFE_WRITE_PATHS = frozenset(
+    {
+        "/dev/null",
+    }
+)
+
 # Commands that change the working directory
 NAVIGATION_COMMANDS = frozenset(
     {
@@ -152,6 +160,7 @@ def find_paths_outside_workspace(
     command: str,
     workspace: Path,
     current_dir: Path,
+    exclude_safe_paths: bool = True,
 ) -> list[str]:
     """Find all paths in command that are outside the workspace.
 
@@ -159,6 +168,7 @@ def find_paths_outside_workspace(
         command: Shell command string
         workspace: Workspace root directory
         current_dir: Current working directory
+        exclude_safe_paths: If True, excludes SAFE_WRITE_PATHS like /dev/null
 
     Returns:
         List of path strings that are outside the workspace
@@ -167,6 +177,9 @@ def find_paths_outside_workspace(
     outside_paths = []
 
     for path_str in paths:
+        # Skip safe paths like /dev/null
+        if exclude_safe_paths and path_str in SAFE_WRITE_PATHS:
+            continue
         resolved = resolve_path(path_str, current_dir)
         if not is_path_within_workspace(resolved, workspace):
             outside_paths.append(path_str)
@@ -241,6 +254,9 @@ def has_write_redirect_to_external(
     for match in redirect_matches:
         target = match.group(1)
         if target:
+            # Allow safe write destinations like /dev/null
+            if target in SAFE_WRITE_PATHS:
+                continue
             resolved = resolve_path(target, current_dir)
             if not is_path_within_workspace(resolved, workspace):
                 return True, target

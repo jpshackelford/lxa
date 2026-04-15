@@ -186,6 +186,30 @@ class TestHasWriteRedirectToExternal:
         assert has_redirect is True
         assert target == "/tmp/output.txt"
 
+    def test_redirect_to_dev_null_allowed(self, tmp_path: Path) -> None:
+        """Redirect to /dev/null should be allowed (special safe path)."""
+        has_redirect, target = has_write_redirect_to_external(
+            "command > /dev/null", tmp_path, tmp_path
+        )
+        assert has_redirect is False
+        assert target is None
+
+    def test_redirect_stderr_to_dev_null_allowed(self, tmp_path: Path) -> None:
+        """Redirect stderr to /dev/null should be allowed."""
+        has_redirect, target = has_write_redirect_to_external(
+            "command 2> /dev/null", tmp_path, tmp_path
+        )
+        assert has_redirect is False
+        assert target is None
+
+    def test_redirect_both_to_dev_null_allowed(self, tmp_path: Path) -> None:
+        """Redirect both stdout and stderr to /dev/null should be allowed."""
+        has_redirect, target = has_write_redirect_to_external(
+            "command > /dev/null 2>&1", tmp_path, tmp_path
+        )
+        assert has_redirect is False
+        assert target is None
+
 
 class TestValidateCommand:
     """Tests for validate_command function - the main validation logic."""
@@ -262,6 +286,24 @@ class TestValidateCommand:
         assert allowed is False
         assert error is not None
         assert "outside workspace" in error.lower()
+
+    def test_redirect_to_dev_null(self, tmp_path: Path) -> None:
+        """Redirect to /dev/null should be allowed (safe write destination)."""
+        allowed, error = validate_command("echo foo > /dev/null", tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_redirect_stderr_to_dev_null(self, tmp_path: Path) -> None:
+        """Stderr redirect to /dev/null should be allowed."""
+        allowed, error = validate_command("command 2> /dev/null", tmp_path)
+        assert allowed is True
+        assert error is None
+
+    def test_suppress_all_output_to_dev_null(self, tmp_path: Path) -> None:
+        """Common pattern > /dev/null 2>&1 should be allowed."""
+        allowed, error = validate_command("make build > /dev/null 2>&1", tmp_path)
+        assert allowed is True
+        assert error is None
 
     def test_redirect_to_internal_read_external(self, tmp_path: Path) -> None:
         """Reading external but writing internal should work with # read-only."""
