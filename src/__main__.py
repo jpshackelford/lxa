@@ -1545,6 +1545,54 @@ Configuration:
         help="Show weekly merge/age graph (only works with --merged)",
     )
 
+    # review command - reviewer's view of PR queue
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Show PRs needing your review attention",
+        description="Show PRs from a reviewer's perspective. "
+        "Default shows only PRs that need your review action.",
+    )
+    review_parser.add_argument(
+        "--all",
+        "-A",
+        dest="all_reviews",
+        action="store_true",
+        help="Include approved and hold PRs (default: only actionable)",
+    )
+    review_parser.add_argument(
+        "--author",
+        metavar="USER",
+        help="Filter by PR author",
+    )
+    review_parser.add_argument(
+        "--repo",
+        dest="repos",
+        action="append",
+        metavar="OWNER/REPO",
+        help="Filter by repo (can be specified multiple times)",
+    )
+    review_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Use repos from specified board",
+    )
+    review_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of PRs to show (default: 100)",
+    )
+    review_parser.add_argument(
+        "--title",
+        "-t",
+        dest="show_title",
+        action="store_true",
+        help="Show PR titles",
+    )
+
     # repo command
     repo_parser = subparsers.add_parser(
         "repo",
@@ -1761,6 +1809,19 @@ Configuration:
                 show_title=args.show_title,
                 show_graph=args.show_graph,
             )
+
+    # Handle review command
+    if args.command == "review":
+        from src.review.cli import cmd_list as review_cmd_list
+
+        return review_cmd_list(
+            all_reviews=args.all_reviews,
+            author=args.author,
+            repos=args.repos,
+            board_name=args.board_name,
+            limit=args.limit,
+            show_title=args.show_title,
+        )
 
     # Handle repo command
     if args.command == "repo":
