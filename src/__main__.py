@@ -1545,6 +1545,81 @@ Configuration:
         help="Show weekly merge/age graph (only works with --merged)",
     )
 
+    # review command - reviewer's view of PR queue
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Show PRs needing your review attention",
+        description="Show PRs from a reviewer's perspective. "
+        "Default shows only PRs that need your review action.",
+    )
+    review_parser.add_argument(
+        "--all",
+        "-A",
+        dest="all_reviews",
+        action="store_true",
+        help="Include approved and hold PRs (default: only actionable)",
+    )
+    review_parser.add_argument(
+        "--reviewer",
+        "-r",
+        metavar="USER",
+        help="Show review queue for specified user (default: current user)",
+    )
+    review_parser.add_argument(
+        "--author",
+        metavar="USER",
+        help="Filter by PR author",
+    )
+    review_parser.add_argument(
+        "--exclude-author",
+        "-X",
+        dest="exclude_authors",
+        metavar="USERS",
+        help="Comma-separated list of authors to exclude (e.g., dependabot[bot],renovate[bot])",
+    )
+    review_parser.add_argument(
+        "--repo",
+        dest="repos",
+        action="append",
+        metavar="OWNER/REPO",
+        help="Filter by repo (can be specified multiple times)",
+    )
+    review_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Use repos from specified board",
+    )
+    review_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of PRs to show (default: 100)",
+    )
+    review_parser.add_argument(
+        "--title",
+        "-t",
+        dest="show_title",
+        action="store_true",
+        help="Show PR titles",
+    )
+    review_parser.add_argument(
+        "--merged",
+        "-M",
+        dest="include_merged",
+        action="store_true",
+        help="Show merged PRs you've reviewed",
+    )
+    review_parser.add_argument(
+        "--closed",
+        "-C",
+        dest="include_closed",
+        action="store_true",
+        help="Show closed (unmerged) PRs you've reviewed",
+    )
+
     # repo command
     repo_parser = subparsers.add_parser(
         "repo",
@@ -1761,6 +1836,38 @@ Configuration:
                 show_title=args.show_title,
                 show_graph=args.show_graph,
             )
+
+    # Handle review command
+    if args.command == "review":
+        from src.review.cli import cmd_list as review_cmd_list
+
+        # Build states list based on flags
+        # If --merged or --closed specified, use those; otherwise default to open
+        review_states: list[str] = []
+        if args.include_merged:
+            review_states.append("merged")
+        if args.include_closed:
+            review_states.append("closed")
+        # If no historical flags, default to open
+        if not review_states:
+            review_states.append("open")
+
+        # Parse exclude_authors from comma-separated string
+        exclude_authors: list[str] | None = None
+        if args.exclude_authors:
+            exclude_authors = [a.strip() for a in args.exclude_authors.split(",") if a.strip()]
+
+        return review_cmd_list(
+            all_reviews=args.all_reviews,
+            reviewer=args.reviewer,
+            author=args.author,
+            exclude_authors=exclude_authors,
+            repos=args.repos,
+            board_name=args.board_name,
+            limit=args.limit,
+            show_title=args.show_title,
+            states=review_states,
+        )
 
     # Handle repo command
     if args.command == "repo":
