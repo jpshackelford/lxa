@@ -239,6 +239,25 @@ class TestCmdList:
 
     @patch("src.review.cli.list_cmd.ReviewClient")
     @patch("src.review.cli.list_cmd._get_repos")
+    def test_passes_reviewer_filter(self, mock_get_repos, mock_client_cls):
+        """Test that --reviewer is passed to client."""
+        from src.review.cli.list_cmd import cmd_list
+        from src.review.github_api import ReviewListResult
+
+        mock_get_repos.return_value = None
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.list_reviews.return_value = ReviewListResult()
+        mock_client_cls.return_value = mock_client
+
+        cmd_list(reviewer="other-user")
+
+        call_kwargs = mock_client.list_reviews.call_args[1]
+        assert call_kwargs["reviewer"] == "other-user"
+
+    @patch("src.review.cli.list_cmd.ReviewClient")
+    @patch("src.review.cli.list_cmd._get_repos")
     def test_handles_error(self, mock_get_repos, mock_client_cls):
         """Test error handling."""
         from src.review.cli.list_cmd import cmd_list
