@@ -21,6 +21,7 @@ WAIT_WARNING_SECONDS = 24 * 3600  # 24 hours
 def cmd_list(
     *,
     all_reviews: bool = False,
+    reviewer: str | None = None,
     author: str | None = None,
     repos: list[str] | None = None,
     board_name: str | None = None,
@@ -31,6 +32,7 @@ def cmd_list(
 
     Args:
         all_reviews: Include approved and hold PRs (default: only actionable)
+        reviewer: GitHub username to show queue for (default: current user)
         author: Filter by PR author
         repos: List of repos to filter by (owner/repo format)
         board_name: Board to get repos from (default: default board)
@@ -46,17 +48,21 @@ def cmd_list(
             target_repos = _get_repos(repos, board_name)
 
             result = client.list_reviews(
+                reviewer=reviewer,
                 repos=target_repos,
                 author=author,
                 limit=limit,
                 include_all=all_reviews,
             )
 
+            # Determine whose queue we're showing for user-facing messages
+            target_possessive = f"{reviewer}'s" if reviewer else "your"
+
             if not result.reviews:
                 if all_reviews:
-                    console.print("[dim]No PRs found in your review queue.[/]")
+                    console.print(f"[dim]No PRs found in {target_possessive} review queue.[/]")
                 else:
-                    console.print("[dim]No PRs needing your review.[/]")
+                    console.print(f"[dim]No PRs needing {target_possessive} review.[/]")
                 return 0
 
             _print_review_table(result.reviews, show_title=show_title)
@@ -68,7 +74,9 @@ def cmd_list(
                     f"({result.action_count} need action)[/]"
                 )
             else:
-                console.print(f"\n[dim]Showing {len(result.reviews)} PRs needing your review[/]")
+                console.print(
+                    f"\n[dim]Showing {len(result.reviews)} PRs needing {target_possessive} review[/]"
+                )
 
             return 0
 

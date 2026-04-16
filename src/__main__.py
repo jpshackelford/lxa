@@ -1560,6 +1560,12 @@ Configuration:
         help="Include approved and hold PRs (default: only actionable)",
     )
     review_parser.add_argument(
+        "--reviewer",
+        "-r",
+        metavar="USER",
+        help="Show review queue for specified user (default: current user)",
+    )
+    review_parser.add_argument(
         "--author",
         metavar="USER",
         help="Filter by PR author",
@@ -1816,6 +1822,7 @@ Configuration:
 
         return review_cmd_list(
             all_reviews=args.all_reviews,
+            reviewer=args.reviewer,
             author=args.author,
             repos=args.repos,
             board_name=args.board_name,
