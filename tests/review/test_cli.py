@@ -282,6 +282,25 @@ class TestCmdList:
         result = cmd_list()
         assert result == 1
 
+    @patch("src.review.cli.list_cmd.ReviewClient")
+    @patch("src.review.cli.list_cmd._get_repos")
+    def test_passes_exclude_authors(self, mock_get_repos, mock_client_cls):
+        """Test that --exclude-author is passed to client."""
+        from src.review.cli.list_cmd import cmd_list
+        from src.review.github_api import ReviewListResult
+
+        mock_get_repos.return_value = None
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.list_reviews.return_value = ReviewListResult()
+        mock_client_cls.return_value = mock_client
+
+        cmd_list(exclude_authors=["dependabot[bot]", "renovate[bot]"])
+
+        call_kwargs = mock_client.list_reviews.call_args[1]
+        assert call_kwargs["exclude_authors"] == ["dependabot[bot]", "renovate[bot]"]
+
 
 class TestGetRepos:
     """Tests for _get_repos function."""

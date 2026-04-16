@@ -1571,6 +1571,13 @@ Configuration:
         help="Filter by PR author",
     )
     review_parser.add_argument(
+        "--exclude-author",
+        "-X",
+        dest="exclude_authors",
+        metavar="USERS",
+        help="Comma-separated list of authors to exclude (e.g., dependabot[bot],renovate[bot])",
+    )
+    review_parser.add_argument(
         "--repo",
         dest="repos",
         action="append",
@@ -1845,10 +1852,16 @@ Configuration:
         if not review_states:
             review_states.append("open")
 
+        # Parse exclude_authors from comma-separated string
+        exclude_authors: list[str] | None = None
+        if args.exclude_authors:
+            exclude_authors = [a.strip() for a in args.exclude_authors.split(",") if a.strip()]
+
         return review_cmd_list(
             all_reviews=args.all_reviews,
             reviewer=args.reviewer,
             author=args.author,
+            exclude_authors=exclude_authors,
             repos=args.repos,
             board_name=args.board_name,
             limit=args.limit,

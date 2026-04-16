@@ -77,6 +77,55 @@ class TestProcessPrForReviewer:
 
         assert review_info is None
 
+    def test_exclude_authors_filters_out_specified_authors(self):
+        """Test that exclude_authors filters out specified authors."""
+        pr_data = self._make_pr_data(author="dependabot[bot]")
+
+        client = ReviewClient.__new__(ReviewClient)
+        exclude_set = {"dependabot[bot]"}
+        review_info = client._process_pr_for_reviewer(pr_data, "bob", exclude_set)
+
+        assert review_info is None
+
+    def test_exclude_authors_case_insensitive(self):
+        """Test that exclude_authors matching is case-insensitive."""
+        pr_data = self._make_pr_data(author="Dependabot[bot]")
+
+        client = ReviewClient.__new__(ReviewClient)
+        exclude_set = {"dependabot[bot]"}  # lowercase
+        review_info = client._process_pr_for_reviewer(pr_data, "bob", exclude_set)
+
+        assert review_info is None
+
+    def test_exclude_authors_allows_non_matching_authors(self):
+        """Test that exclude_authors doesn't filter out other authors."""
+        pr_data = self._make_pr_data(author="alice")
+
+        client = ReviewClient.__new__(ReviewClient)
+        exclude_set = {"dependabot[bot]", "renovate[bot]"}
+        review_info = client._process_pr_for_reviewer(pr_data, "bob", exclude_set)
+
+        assert review_info is not None
+        assert review_info.author == "alice"
+
+    def test_exclude_authors_empty_set(self):
+        """Test that empty exclude_authors doesn't filter anything."""
+        pr_data = self._make_pr_data(author="alice")
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob", set())
+
+        assert review_info is not None
+
+    def test_exclude_authors_none(self):
+        """Test that None exclude_authors doesn't filter anything."""
+        pr_data = self._make_pr_data(author="alice")
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob", None)
+
+        assert review_info is not None
+
     def test_re_review_status(self):
         """Test PR that needs re-review after fixes."""
         pr_data = self._make_pr_data(

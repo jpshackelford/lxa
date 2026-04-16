@@ -55,6 +55,7 @@ class ReviewClient:
         reviewer: str | None = None,
         repos: list[str] | None = None,
         author: str | None = None,
+        exclude_authors: list[str] | None = None,
         limit: int = 100,
         include_all: bool = False,
         states: list[str] | None = None,
@@ -69,6 +70,7 @@ class ReviewClient:
             reviewer: GitHub username (default: current user)
             repos: List of "owner/repo" strings to filter by
             author: Filter by PR author
+            exclude_authors: List of authors to exclude (e.g., dependabot[bot])
             limit: Maximum number of PRs to fetch
             include_all: If True, include all PRs; if False, only actionable ones
             states: List of states to include ("open", "merged", "closed")
@@ -78,6 +80,9 @@ class ReviewClient:
         """
         if reviewer is None:
             reviewer = self.get_current_user()
+
+        # Normalize exclude_authors to lowercase for case-insensitive matching
+        exclude_authors_lower = {a.lower() for a in exclude_authors} if exclude_authors else set()
 
         # Determine which states to fetch
         states_set = {s.lower() for s in (states or ["open"])}
@@ -121,7 +126,7 @@ class ReviewClient:
         # Process each PR to compute review status
         reviews: list[ReviewInfo] = []
         for pr_data in all_prs.values():
-            review_info = self._process_pr_for_reviewer(pr_data, reviewer)
+            review_info = self._process_pr_for_reviewer(pr_data, reviewer, exclude_authors_lower)
             if review_info:
                 reviews.append(review_info)
 
@@ -251,12 +256,14 @@ class ReviewClient:
         self,
         pr_data: dict,
         reviewer: str,
+        exclude_authors: set[str] | None = None,
     ) -> ReviewInfo | None:
         """Process raw PR data into ReviewInfo from reviewer's perspective.
 
         Args:
             pr_data: Raw PR data from GraphQL query
             reviewer: GitHub username of the reviewer
+            exclude_authors: Set of lowercased author names to exclude
 
         Returns:
             ReviewInfo object or None if PR should be excluded
@@ -271,6 +278,10 @@ class ReviewClient:
 
         # Skip if reviewer is the author
         if author.lower() == reviewer.lower():
+            return None
+
+        # Skip if author is in exclude list
+        if exclude_authors and author.lower() in exclude_authors:
             return None
 
         # Count unresolved review threads

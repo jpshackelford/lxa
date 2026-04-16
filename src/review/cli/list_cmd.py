@@ -23,6 +23,7 @@ def cmd_list(
     all_reviews: bool = False,
     reviewer: str | None = None,
     author: str | None = None,
+    exclude_authors: list[str] | None = None,
     repos: list[str] | None = None,
     board_name: str | None = None,
     limit: int = 100,
@@ -35,6 +36,7 @@ def cmd_list(
         all_reviews: Include approved and hold PRs (default: only actionable)
         reviewer: GitHub username to show queue for (default: current user)
         author: Filter by PR author
+        exclude_authors: List of authors to exclude (e.g., dependabot[bot])
         repos: List of repos to filter by (owner/repo format)
         board_name: Board to get repos from (default: default board)
         limit: Maximum number of PRs to show
@@ -56,6 +58,7 @@ def cmd_list(
                 reviewer=resolved_reviewer,
                 repos=target_repos,
                 author=author,
+                exclude_authors=exclude_authors,
                 limit=limit,
                 include_all=all_reviews,
                 states=states,
