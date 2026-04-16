@@ -218,6 +218,45 @@ The table shows:
 - **State**: `draft`, `ready`, `merged`, or `closed`
 - **💬**: Count of unresolved review threads
 
+### Review Queue
+
+View PRs needing your review attention. While `lxa pr list` answers "What's happening with my PRs?", `lxa review` answers "What PRs need my review action?"
+
+```bash
+# Show PRs needing your review action (default)
+lxa review
+
+# Include approved and hold PRs (full queue)
+lxa review --all       # or -A
+
+# Show another user's review queue
+lxa review --reviewer alice
+
+# Filter by PR author
+lxa review --author bob
+
+# Exclude bot PRs
+lxa review --exclude-author dependabot[bot],renovate[bot]
+
+# Filter by repo or board
+lxa review --repo owner/repo
+lxa review --board my-project
+
+# Show PR titles
+lxa review --title     # or -t
+
+# Show historical PRs you've reviewed
+lxa review --merged    # or -M
+lxa review --closed    # or -C
+```
+
+The table shows:
+- **History**: Compact codes (lowercase = your actions, UPPERCASE = others)
+- **Status**: `review` (needs initial review), `re-review` (new commits since your review), `hold` (waiting on author), `approved` (you approved)
+- **Wait**: Time waiting for action (red > 48h, yellow > 24h)
+- **CI**: Build status (green/red/pending/conflict)
+- **💬**: Count of unresolved review threads
+
 ### Repository Management
 
 Manage watched repositories across boards:
