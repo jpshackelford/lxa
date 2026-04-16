@@ -14,7 +14,7 @@ from src.pr.history import (
     _find_last_activity,
     _parse_datetime,
 )
-from src.review.models import ReviewInfo
+from src.review.models import ReviewInfo, ReviewStatus
 from src.review.status import compute_review_status
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ class ReviewClient:
         author: str | None = None,
         limit: int = 100,
         include_all: bool = False,
+        states: list[str] | None = None,
     ) -> ReviewListResult:
         """List PRs from reviewer's perspective.
 
@@ -70,6 +71,7 @@ class ReviewClient:
             author: Filter by PR author
             limit: Maximum number of PRs to fetch
             include_all: If True, include all PRs; if False, only actionable ones
+            states: List of states to include ("open", "merged", "closed")
 
         Returns:
             ReviewListResult with processed ReviewInfo objects
@@ -77,18 +79,44 @@ class ReviewClient:
         if reviewer is None:
             reviewer = self.get_current_user()
 
-        # Fetch PRs from both queries
-        requested_prs = self._fetch_requested_reviews(reviewer, repos, author, limit)
-        reviewed_prs = self._fetch_reviewed_prs(reviewer, repos, author, limit)
+        # Determine which states to fetch
+        states_set = {s.lower() for s in (states or ["open"])}
+        include_open = "open" in states_set
+        include_merged = "merged" in states_set
+        include_closed = "closed" in states_set
 
-        # Combine and deduplicate by PR identifier
         all_prs: dict[str, dict] = {}
-        for pr_data in requested_prs + reviewed_prs:
-            repo = pr_data["repository"]["nameWithOwner"]
-            number = pr_data["number"]
-            key = f"{repo}#{number}"
-            if key not in all_prs:
-                all_prs[key] = pr_data
+
+        # Fetch open PRs (both requested and reviewed)
+        if include_open:
+            requested_prs = self._fetch_requested_reviews(reviewer, repos, author, limit)
+            reviewed_prs = self._fetch_reviewed_prs(reviewer, repos, author, limit, state="open")
+            for pr_data in requested_prs + reviewed_prs:
+                repo = pr_data["repository"]["nameWithOwner"]
+                number = pr_data["number"]
+                key = f"{repo}#{number}"
+                if key not in all_prs:
+                    all_prs[key] = pr_data
+
+        # Fetch merged PRs
+        if include_merged:
+            merged_prs = self._fetch_reviewed_prs(reviewer, repos, author, limit, state="merged")
+            for pr_data in merged_prs:
+                repo = pr_data["repository"]["nameWithOwner"]
+                number = pr_data["number"]
+                key = f"{repo}#{number}"
+                if key not in all_prs:
+                    all_prs[key] = pr_data
+
+        # Fetch closed (unmerged) PRs
+        if include_closed:
+            closed_prs = self._fetch_reviewed_prs(reviewer, repos, author, limit, state="closed")
+            for pr_data in closed_prs:
+                repo = pr_data["repository"]["nameWithOwner"]
+                number = pr_data["number"]
+                key = f"{repo}#{number}"
+                if key not in all_prs:
+                    all_prs[key] = pr_data
 
         # Process each PR to compute review status
         reviews: list[ReviewInfo] = []
@@ -100,8 +128,8 @@ class ReviewClient:
         # Sort by most recently active first, then by status priority
         reviews.sort(key=lambda r: (-r.last_activity.timestamp(), r.status_priority))
 
-        # Filter to actionable if needed
-        if not include_all:
+        # Filter to actionable if needed (only for open PRs)
+        if not include_all and include_open and not include_merged and not include_closed:
             reviews = [r for r in reviews if r.needs_action]
 
         # Apply limit after filtering
@@ -144,9 +172,26 @@ class ReviewClient:
         repos: list[str] | None,
         author: str | None,
         limit: int,
+        state: str = "open",
     ) -> list[dict]:
-        """Fetch open PRs that reviewer has reviewed."""
-        query_parts = [f"is:pr is:open reviewed-by:{reviewer}"]
+        """Fetch PRs that reviewer has reviewed.
+
+        Args:
+            reviewer: GitHub username
+            repos: List of "owner/repo" strings to filter by
+            author: Filter by PR author
+            limit: Maximum number of PRs to fetch
+            state: PR state - "open", "merged", or "closed" (unmerged)
+        """
+        query_parts = [f"is:pr reviewed-by:{reviewer}"]
+
+        # Add state filter
+        if state == "open":
+            query_parts.append("is:open")
+        elif state == "merged":
+            query_parts.append("is:merged")
+        elif state == "closed":
+            query_parts.append("is:closed is:unmerged")
 
         if repos:
             repo_filter = " ".join(f"repo:{repo}" for repo in repos)
@@ -222,6 +267,7 @@ class ReviewClient:
         title = pr_data["title"]
         author = pr_data["author"]["login"] if pr_data["author"] else "ghost"
         created_at = _parse_datetime(pr_data["createdAt"])
+        pr_state = pr_data["state"]  # OPEN, MERGED, or CLOSED
 
         # Skip if reviewer is the author
         if author.lower() == reviewer.lower():
@@ -242,8 +288,17 @@ class ReviewClient:
         # Find last activity time
         last_activity = _find_last_activity(events, created_at)
 
-        # Compute review status
-        status, wait_start = compute_review_status(events, reviewer)
+        # For merged/closed PRs, use the PR state as status
+        # For open PRs, compute the review status
+        if pr_state == "MERGED":
+            status = ReviewStatus.MERGED
+            # Use closedAt for wait calculation
+            wait_start = _parse_datetime(pr_data.get("closedAt") or pr_data["createdAt"])
+        elif pr_state == "CLOSED":
+            status = ReviewStatus.CLOSED
+            wait_start = _parse_datetime(pr_data.get("closedAt") or pr_data["createdAt"])
+        else:
+            status, wait_start = compute_review_status(events, reviewer)
 
         # Calculate wait time in seconds
         now = datetime.now(wait_start.tzinfo)

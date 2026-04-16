@@ -27,6 +27,7 @@ def cmd_list(
     board_name: str | None = None,
     limit: int = 100,
     show_title: bool = False,
+    states: list[str] | None = None,
 ) -> int:
     """List PRs needing review with status visualization.
 
@@ -38,6 +39,7 @@ def cmd_list(
         board_name: Board to get repos from (default: default board)
         limit: Maximum number of PRs to show
         show_title: Include PR titles in output
+        states: List of states to include ("open", "merged", "closed")
 
     Returns:
         Exit code (0 for success)
@@ -56,13 +58,23 @@ def cmd_list(
                 author=author,
                 limit=limit,
                 include_all=all_reviews,
+                states=states,
             )
 
             # Determine whose queue we're showing for user-facing messages
             target_possessive = f"{reviewer}'s" if reviewer else "your"
 
+            # Determine if we're showing historical PRs
+            states_set = set(states or ["open"])
+            showing_historical = "merged" in states_set or "closed" in states_set
+            showing_open = "open" in states_set
+
             if not result.reviews:
-                if all_reviews:
+                if showing_historical and not showing_open:
+                    console.print(
+                        f"[dim]No historical PRs found that {resolved_reviewer} reviewed.[/]"
+                    )
+                elif all_reviews:
                     console.print(f"[dim]No PRs found in {target_possessive} review queue.[/]")
                 else:
                     console.print(f"[dim]No PRs needing {target_possessive} review.[/]")
@@ -71,7 +83,9 @@ def cmd_list(
             _print_review_table(result.reviews, reviewer=resolved_reviewer, show_title=show_title)
 
             # Print summary
-            if all_reviews:
+            if showing_historical and not showing_open:
+                console.print(f"\n[dim]Showing {len(result.reviews)} historical PRs[/]")
+            elif all_reviews:
                 console.print(
                     f"\n[dim]Showing {len(result.reviews)} PRs "
                     f"({result.action_count} need action)[/]"
@@ -163,6 +177,8 @@ def _format_status(status: ReviewStatus) -> str:
 
     - review, re-review: yellow (needs attention)
     - hold, approved: dim (info only)
+    - merged: magenta (historical)
+    - closed: dim (historical)
     """
     if status == ReviewStatus.REVIEW:
         return "[yellow]review[/]"
@@ -170,8 +186,12 @@ def _format_status(status: ReviewStatus) -> str:
         return "[yellow]re-review[/]"
     elif status == ReviewStatus.HOLD:
         return "[dim]hold[/]"
-    else:  # APPROVED
+    elif status == ReviewStatus.APPROVED:
         return "[dim]approved[/]"
+    elif status == ReviewStatus.MERGED:
+        return "[magenta]merged[/]"
+    else:  # CLOSED
+        return "[dim]closed[/]"
 
 
 def _format_wait_time(seconds: float, status: ReviewStatus) -> str:

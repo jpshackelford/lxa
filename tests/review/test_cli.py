@@ -62,6 +62,16 @@ class TestFormatStatus:
         assert "dim" in result
         assert "approved" in result
 
+    def test_merged_magenta(self):
+        result = _format_status(ReviewStatus.MERGED)
+        assert "magenta" in result
+        assert "merged" in result
+
+    def test_closed_dim(self):
+        result = _format_status(ReviewStatus.CLOSED)
+        assert "dim" in result
+        assert "closed" in result
+
 
 class TestFormatWaitTime:
     """Tests for _format_wait_time function."""

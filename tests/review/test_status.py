@@ -226,3 +226,56 @@ class TestReviewInfo:
         assert sorted_infos[1].status == ReviewStatus.RE_REVIEW
         assert sorted_infos[2].status == ReviewStatus.HOLD
         assert sorted_infos[3].status == ReviewStatus.APPROVED
+
+    def test_needs_action_merged_false(self):
+        """Test needs_action is False for MERGED status."""
+        info = ReviewInfo(
+            repo="owner/repo",
+            number=1,
+            title="Test PR",
+            history="OHaM",
+            status=ReviewStatus.MERGED,
+            wait_seconds=3600.0,
+            ci_status=None,  # type: ignore
+            unresolved_thread_count=0,
+            author="alice",
+            last_activity=datetime.now(UTC),
+        )
+        assert info.needs_action is False
+
+    def test_needs_action_closed_false(self):
+        """Test needs_action is False for CLOSED status."""
+        info = ReviewInfo(
+            repo="owner/repo",
+            number=1,
+            title="Test PR",
+            history="OHC",
+            status=ReviewStatus.CLOSED,
+            wait_seconds=3600.0,
+            ci_status=None,  # type: ignore
+            unresolved_thread_count=0,
+            author="alice",
+            last_activity=datetime.now(UTC),
+        )
+        assert info.needs_action is False
+
+    def test_status_priority_includes_merged_closed(self):
+        """Test that MERGED and CLOSED have lower priority than open statuses."""
+        from src.pr.models import CIStatus
+
+        now = datetime.now(UTC)
+        infos = [
+            ReviewInfo("r", 1, "t", "h", ReviewStatus.MERGED, 0, CIStatus.GREEN, 0, "a", now),
+            ReviewInfo("r", 2, "t", "h", ReviewStatus.REVIEW, 0, CIStatus.GREEN, 0, "a", now),
+            ReviewInfo("r", 3, "t", "h", ReviewStatus.CLOSED, 0, CIStatus.GREEN, 0, "a", now),
+            ReviewInfo("r", 4, "t", "h", ReviewStatus.APPROVED, 0, CIStatus.GREEN, 0, "a", now),
+        ]
+
+        # Sort by status_priority
+        sorted_infos = sorted(infos, key=lambda x: x.status_priority)
+
+        # MERGED and CLOSED should be at the end (lower priority = later)
+        assert sorted_infos[0].status == ReviewStatus.REVIEW
+        assert sorted_infos[1].status == ReviewStatus.APPROVED
+        assert sorted_infos[2].status == ReviewStatus.MERGED
+        assert sorted_infos[3].status == ReviewStatus.CLOSED

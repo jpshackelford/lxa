@@ -14,6 +14,8 @@ class ReviewStatus(Enum):
     RE_REVIEW = "re-review"  # Needs re-review after changes
     HOLD = "hold"  # Waiting on author
     APPROVED = "approved"  # Reviewer approved
+    MERGED = "merged"  # PR was merged (historical)
+    CLOSED = "closed"  # PR was closed without merge (historical)
 
 
 @dataclass
@@ -44,4 +46,6 @@ class ReviewInfo:
             ReviewStatus.RE_REVIEW: 1,
             ReviewStatus.HOLD: 2,
             ReviewStatus.APPROVED: 3,
+            ReviewStatus.MERGED: 4,
+            ReviewStatus.CLOSED: 5,
         }.get(self.status, 99)

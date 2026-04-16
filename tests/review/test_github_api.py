@@ -269,6 +269,72 @@ class TestProcessPrForReviewer:
         assert review_info is not None
         assert review_info.ci_status == CIStatus.CONFLICT
 
+    def test_merged_pr_status(self):
+        """Test that merged PRs get ReviewStatus.MERGED."""
+        pr_data = self._make_pr_data()
+        pr_data["state"] = "MERGED"
+        pr_data["closedAt"] = "2024-01-15T00:00:00Z"
+        pr_data["timelineItems"] = {
+            "nodes": [
+                {
+                    "__typename": "MergedEvent",
+                    "actor": {"login": "alice"},
+                    "createdAt": "2024-01-15T00:00:00Z",
+                },
+            ]
+        }
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob")
+
+        assert review_info is not None
+        assert review_info.status == ReviewStatus.MERGED
+
+    def test_closed_pr_status(self):
+        """Test that closed (unmerged) PRs get ReviewStatus.CLOSED."""
+        pr_data = self._make_pr_data()
+        pr_data["state"] = "CLOSED"
+        pr_data["closedAt"] = "2024-01-15T00:00:00Z"
+        pr_data["timelineItems"] = {
+            "nodes": [
+                {
+                    "__typename": "ClosedEvent",
+                    "actor": {"login": "alice"},
+                    "createdAt": "2024-01-15T00:00:00Z",
+                },
+            ]
+        }
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob")
+
+        assert review_info is not None
+        assert review_info.status == ReviewStatus.CLOSED
+
+    def test_merged_pr_not_marked_needs_action(self):
+        """Test that merged PRs don't need action."""
+        pr_data = self._make_pr_data()
+        pr_data["state"] = "MERGED"
+        pr_data["closedAt"] = "2024-01-15T00:00:00Z"
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob")
+
+        assert review_info is not None
+        assert review_info.needs_action is False
+
+    def test_closed_pr_not_marked_needs_action(self):
+        """Test that closed PRs don't need action."""
+        pr_data = self._make_pr_data()
+        pr_data["state"] = "CLOSED"
+        pr_data["closedAt"] = "2024-01-15T00:00:00Z"
+
+        client = ReviewClient.__new__(ReviewClient)
+        review_info = client._process_pr_for_reviewer(pr_data, "bob")
+
+        assert review_info is not None
+        assert review_info.needs_action is False
+
 
 class TestReviewListResult:
     """Tests for ReviewListResult dataclass."""

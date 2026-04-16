@@ -1598,6 +1598,20 @@ Configuration:
         action="store_true",
         help="Show PR titles",
     )
+    review_parser.add_argument(
+        "--merged",
+        "-M",
+        dest="include_merged",
+        action="store_true",
+        help="Show merged PRs you've reviewed",
+    )
+    review_parser.add_argument(
+        "--closed",
+        "-C",
+        dest="include_closed",
+        action="store_true",
+        help="Show closed (unmerged) PRs you've reviewed",
+    )
 
     # repo command
     repo_parser = subparsers.add_parser(
@@ -1820,6 +1834,17 @@ Configuration:
     if args.command == "review":
         from src.review.cli import cmd_list as review_cmd_list
 
+        # Build states list based on flags
+        # If --merged or --closed specified, use those; otherwise default to open
+        review_states: list[str] = []
+        if args.include_merged:
+            review_states.append("merged")
+        if args.include_closed:
+            review_states.append("closed")
+        # If no historical flags, default to open
+        if not review_states:
+            review_states.append("open")
+
         return review_cmd_list(
             all_reviews=args.all_reviews,
             reviewer=args.reviewer,
@@ -1828,6 +1853,7 @@ Configuration:
             board_name=args.board_name,
             limit=args.limit,
             show_title=args.show_title,
+            states=review_states,
         )
 
     # Handle repo command
