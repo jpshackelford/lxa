@@ -44,11 +44,14 @@ def cmd_list(
     """
     try:
         with ReviewClient() as client:
+            # Resolve reviewer to actual username (needed for legend)
+            resolved_reviewer = reviewer if reviewer else client.get_current_user()
+
             # Get repos from board if not specified explicitly
             target_repos = _get_repos(repos, board_name)
 
             result = client.list_reviews(
-                reviewer=reviewer,
+                reviewer=resolved_reviewer,
                 repos=target_repos,
                 author=author,
                 limit=limit,
@@ -65,7 +68,7 @@ def cmd_list(
                     console.print(f"[dim]No PRs needing {target_possessive} review.[/]")
                 return 0
 
-            _print_review_table(result.reviews, show_title=show_title)
+            _print_review_table(result.reviews, reviewer=resolved_reviewer, show_title=show_title)
 
             # Print summary
             if all_reviews:
@@ -108,7 +111,9 @@ def _get_repos(
     return board_repos if board_repos else None
 
 
-def _print_review_table(reviews: list[ReviewInfo], *, show_title: bool = False) -> None:
+def _print_review_table(
+    reviews: list[ReviewInfo], *, reviewer: str, show_title: bool = False
+) -> None:
     """Print reviews in a formatted table."""
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
 
@@ -145,6 +150,7 @@ def _print_review_table(reviews: list[ReviewInfo], *, show_title: bool = False) 
         table.add_row(*row)
 
     console.print(table)
+    console.print(f"\n[dim]History: lowercase={reviewer}, UPPERCASE=others[/]")
 
 
 def _format_history(history: str) -> str:
