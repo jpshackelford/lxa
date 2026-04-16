@@ -97,8 +97,8 @@ class ReviewClient:
             if review_info:
                 reviews.append(review_info)
 
-        # Sort by status priority, then by wait time (longest first)
-        reviews.sort(key=lambda r: (r.status_priority, -r.wait_seconds))
+        # Sort by most recently active first, then by status priority
+        reviews.sort(key=lambda r: (-r.last_activity.timestamp(), r.status_priority))
 
         # Filter to actionable if needed
         if not include_all:
