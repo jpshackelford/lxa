@@ -1,0 +1,1 @@
+"""Issue history visualization module."""

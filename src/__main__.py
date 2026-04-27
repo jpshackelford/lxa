@@ -1620,6 +1620,99 @@ Configuration:
         help="Show closed (unmerged) PRs you've reviewed",
     )
 
+    # issue command - issue history visualization
+    issue_parser = subparsers.add_parser(
+        "issue",
+        help="Issue history visualization",
+    )
+    issue_subparsers = issue_parser.add_subparsers(dest="issue_command", required=True)
+
+    # issue list
+    issue_list_parser = issue_subparsers.add_parser(
+        "list",
+        help="List issues with history visualization",
+        description="List issues with history visualization. "
+        "Default shows issues created by you. "
+        "Accepts issue references as arguments (owner/repo#number).",
+    )
+    issue_list_parser.add_argument(
+        "issue_refs",
+        nargs="*",
+        metavar="OWNER/REPO#NUM",
+        help="Specific issue references (owner/repo#number)",
+    )
+    issue_list_parser.add_argument(
+        "--author",
+        "-a",
+        metavar="USER",
+        help="Filter by issue author (default: current user)",
+    )
+    issue_list_parser.add_argument(
+        "--repo",
+        dest="repos",
+        action="append",
+        metavar="OWNER/REPO",
+        help="Filter by repo (can be specified multiple times)",
+    )
+    issue_list_parser.add_argument(
+        "--board",
+        "-b",
+        dest="board_name",
+        metavar="NAME",
+        help="Use repos from specified board",
+    )
+    issue_list_parser.add_argument(
+        "--label",
+        "-l",
+        dest="labels",
+        action="append",
+        metavar="LABEL",
+        help="Filter by label. Repeat for AND, use comma for OR: "
+        "-l bug -l urgent (AND), -l bug,stale (OR)",
+    )
+    issue_list_parser.add_argument(
+        "--open",
+        "-O",
+        dest="include_open",
+        action="store_true",
+        help="Show open issues (default if no state flags given)",
+    )
+    issue_list_parser.add_argument(
+        "--closed",
+        "-C",
+        dest="include_closed",
+        action="store_true",
+        help="Show closed issues",
+    )
+    issue_list_parser.add_argument(
+        "--all",
+        "-A",
+        dest="all_states",
+        action="store_true",
+        help="Show all states (open, closed)",
+    )
+    issue_list_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of issues to show (default: 100)",
+    )
+    issue_list_parser.add_argument(
+        "--title",
+        "-t",
+        dest="show_title",
+        action="store_true",
+        help="Show issue titles",
+    )
+    issue_list_parser.add_argument(
+        "--activity",
+        "-s",
+        dest="sort_by_activity",
+        action="store_true",
+        help="Sort by recent activity instead of creation date",
+    )
+
     # repo command
     repo_parser = subparsers.add_parser(
         "repo",
@@ -1868,6 +1961,40 @@ Configuration:
             show_title=args.show_title,
             states=review_states,
         )
+
+    # Handle issue command
+    if args.command == "issue":
+        from src.issue.cli import cmd_list as issue_cmd_list
+
+        if args.issue_command == "list":
+            # Build states list based on flags
+            issue_states: list[str] | None = None
+            if args.all_states:
+                issue_states = ["open", "closed"]
+            elif args.include_open or args.include_closed:
+                issue_states = []
+                if args.include_open:
+                    issue_states.append("open")
+                if args.include_closed:
+                    issue_states.append("closed")
+            # Default: open only (handled by None -> defaults in cmd_list)
+
+            # Read from stdin if no refs provided and stdin has data
+            issue_refs = args.issue_refs
+            if not issue_refs and not sys.stdin.isatty():
+                issue_refs = _read_issue_refs_from_stdin()
+
+            return issue_cmd_list(
+                author=args.author,
+                repos=args.repos,
+                issue_refs=issue_refs if issue_refs else None,
+                states=issue_states,
+                labels=args.labels,
+                board_name=args.board_name,
+                limit=args.limit,
+                show_title=args.show_title,
+                sort_by_activity=args.sort_by_activity,
+            )
 
     # Handle repo command
     if args.command == "repo":
@@ -2173,6 +2300,40 @@ def _read_pr_refs_from_stdin() -> list[str]:
                 repo_slug, pr_number = parse_pr_url(line)
                 refs.append(f"{repo_slug}#{pr_number}")
             except ValueError:
+                console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
+        else:
+            # Assume it's already in owner/repo#number format
+            refs.append(line)
+
+    return refs
+
+
+def _read_issue_refs_from_stdin() -> list[str]:
+    """Read issue references from stdin, converting URLs to owner/repo#number format.
+
+    Accepts both formats:
+    - GitHub issue URLs: https://github.com/owner/repo/issues/123
+    - Direct refs: owner/repo#123
+
+    Returns:
+        List of issue references in owner/repo#number format
+    """
+    import re
+
+    refs = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Check if it's a GitHub issue URL
+        if line.startswith("https://github.com/"):
+            match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", line)
+            if match:
+                repo_slug = match.group(1)
+                issue_number = match.group(2)
+                refs.append(f"{repo_slug}#{issue_number}")
+            else:
                 console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
         else:
             # Assume it's already in owner/repo#number format
