@@ -86,7 +86,7 @@ def _extract_timeline_events(
             continue
 
         typename = item.get("__typename")
-        event = _parse_timeline_item(typename, item, issue_author)
+        event = _parse_timeline_item(typename, item)
         if event:
             events.append(event)
 
@@ -108,7 +108,6 @@ def _extract_timeline_events(
 def _parse_timeline_item(
     typename: str,
     item: dict,
-    issue_author: str,  # noqa: ARG001
 ) -> TimelineEvent | None:
     """Parse a single timeline item into an event."""
     if typename == "IssueComment":
