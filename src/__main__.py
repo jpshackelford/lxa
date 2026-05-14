@@ -2278,61 +2278,36 @@ def find_git_root(start_path: Path) -> Path:
     return start_path
 
 
-def _read_pr_refs_from_stdin() -> list[str]:
-    """Read PR references from stdin, converting URLs to owner/repo#number format.
+def _read_refs_from_stdin(item_type: str) -> list[str]:
+    """Read GitHub refs from stdin, converting URLs to owner/repo#number format.
+
+    Args:
+        item_type: 'pull' for PRs or 'issues' for issues (used in URL pattern matching)
 
     Accepts both formats:
-    - GitHub PR URLs: https://github.com/owner/repo/pull/123
+    - GitHub URLs: https://github.com/owner/repo/{item_type}/123
     - Direct refs: owner/repo#123
 
     Returns:
-        List of PR references in owner/repo#number format
-    """
-    refs = []
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-
-        # Check if it's a GitHub PR URL
-        if line.startswith("https://github.com/"):
-            try:
-                repo_slug, pr_number = parse_pr_url(line)
-                refs.append(f"{repo_slug}#{pr_number}")
-            except ValueError:
-                console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
-        else:
-            # Assume it's already in owner/repo#number format
-            refs.append(line)
-
-    return refs
-
-
-def _read_issue_refs_from_stdin() -> list[str]:
-    """Read issue references from stdin, converting URLs to owner/repo#number format.
-
-    Accepts both formats:
-    - GitHub issue URLs: https://github.com/owner/repo/issues/123
-    - Direct refs: owner/repo#123
-
-    Returns:
-        List of issue references in owner/repo#number format
+        List of references in owner/repo#number format
     """
     import re
 
     refs = []
+    pattern = rf"https://github\.com/([^/]+/[^/]+)/{item_type}/(\d+)"
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
 
-        # Check if it's a GitHub issue URL
+        # Check if it's a GitHub URL
         if line.startswith("https://github.com/"):
-            match = re.match(r"https://github\.com/([^/]+/[^/]+)/issues/(\d+)", line)
+            match = re.match(pattern, line)
             if match:
                 repo_slug = match.group(1)
-                issue_number = match.group(2)
-                refs.append(f"{repo_slug}#{issue_number}")
+                number = match.group(2)
+                refs.append(f"{repo_slug}#{number}")
             else:
                 console.print(f"[yellow]Warning: Skipping invalid URL: {line}[/]")
         else:
@@ -2340,6 +2315,22 @@ def _read_issue_refs_from_stdin() -> list[str]:
             refs.append(line)
 
     return refs
+
+
+def _read_pr_refs_from_stdin() -> list[str]:
+    """Read PR references from stdin.
+
+    Wrapper for _read_refs_from_stdin('pull') for backward compatibility.
+    """
+    return _read_refs_from_stdin("pull")
+
+
+def _read_issue_refs_from_stdin() -> list[str]:
+    """Read issue references from stdin.
+
+    Wrapper for _read_refs_from_stdin('issues') for backward compatibility.
+    """
+    return _read_refs_from_stdin("issues")
 
 
 if __name__ == "__main__":

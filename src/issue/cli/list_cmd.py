@@ -104,7 +104,7 @@ def _get_repos(
         return repos
 
     # Try to use board repos by default
-    from src.pr.config import get_repos
+    from src.repo.config import get_repos
 
     board_repos = get_repos(board_name)
     return board_repos if board_repos else None
