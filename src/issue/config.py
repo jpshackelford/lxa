@@ -44,6 +44,10 @@ def get_bot_usernames() -> list[str]:
     return config.get("bot_usernames", DEFAULT_BOT_USERNAMES)
 
 
+# Cached lowercase bot usernames to avoid repeated list comprehensions
+_bot_usernames_lower: list[str] | None = None
+
+
 def is_bot_user(username: str) -> bool:
     """Check if a username belongs to a bot.
 
@@ -51,6 +55,10 @@ def is_bot_user(username: str) -> bool:
     1. Username ends with [bot]
     2. Username is in the configured bot_usernames list
     """
+    global _bot_usernames_lower
+    if _bot_usernames_lower is None:
+        _bot_usernames_lower = [b.lower() for b in get_bot_usernames()]
+
     username_lower = username.lower()
 
     # Rule 1: Ends with [bot]
@@ -58,5 +66,4 @@ def is_bot_user(username: str) -> bool:
         return True
 
     # Rule 2: In configured list
-    bot_usernames = get_bot_usernames()
-    return username_lower in [b.lower() for b in bot_usernames]
+    return username_lower in _bot_usernames_lower
