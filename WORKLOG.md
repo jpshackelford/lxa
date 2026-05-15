@@ -343,3 +343,37 @@ Automation has been disabled to prevent unnecessary runs.
 - PR slot: Blocked - PR #82 awaits human approval (no automated action possible)
 
 ---
+
+### 2026-05-15 09:27 UTC - Expansion Worker
+
+✅ **Expanded Issue #79**
+
+- Issue: [#79 - Enhancement: Resume failed background jobs with recoverable errors](https://github.com/jpshackelford/lxa/issues/79)
+- Type: Enhancement
+- Status: Ready for implementation
+- Approach: Add `lxa job resume` command leveraging OpenHands SDK's built-in conversation resumption
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added comprehensive technical comment with:
+  - Architecture: Leverages existing SDK persistence + job metadata
+  - Error classification (recoverable vs non-recoverable patterns)
+  - 4-phase implementation plan
+  - Full list of affected files (3 new, 7 modified)
+  - Complexity assessment (Medium)
+- Added `ready` label
+
+**Key insight:** SDK's `ConversationState.create()` automatically resumes from `persistence_dir` - no custom state restoration needed. Main work is classifying errors and building CLI.
+
+**New Files:**
+- `src/jobs/errors.py` - Error classification logic
+- `src/jobs/cli/resume.py` - Resume CLI command
+- `tests/jobs/test_errors.py` - Error classification tests
+
+**Job Model Extensions:**
+- `failure_reason: str | None` - Captured error message
+- `failure_category: str | None` - "recoverable" | "non_recoverable"
+- `resume_count: int` - Number of resume attempts
+- `parent_job_id: str | None` - Link to original job
+
+---
