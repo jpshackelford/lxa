@@ -346,3 +346,38 @@ Automation has been disabled to prevent unnecessary runs.
 - PR slot: Blocked - PR #82 awaits human approval (no automated action possible)
 
 ---
+
+### 2026-05-15 03:22 UTC - Expansion Worker (`e1485ad`)
+
+✅ **Expanded Issue #69**
+
+- Issue: [#69 - feat: Add job queue with concurrency limits and automatic scheduling](https://github.com/jpshackelford/lxa/issues/69)
+- Type: Enhancement
+- Status: Ready for implementation
+- Approach: Extend existing job management system with queue mechanism, event-driven scheduling, and fallback polling
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added comprehensive technical comment with:
+  - Architecture overview (queue system flow diagram)
+  - 5-phase implementation plan (Config, Models, Queue Storage, Scheduler Integration, CLI)
+  - Full list of affected files (14 files: 4 new, 10 modified)
+  - Key design decisions (event-driven + lazy evaluation, no separate daemon, atomic queue ops)
+  - Complexity assessment (Medium)
+  - Risk mitigations (race conditions, stale PIDs, queue gaps)
+- Added `ready` label
+
+**Key New Components:**
+- `src/jobs/queue.py` - Queue management logic
+- `src/jobs/cli/queue.py` - Queue view/move commands
+- `tests/jobs/test_queue.py` - Queue logic tests
+
+**Job Model Extensions:**
+- Add `WAITING` status to `JobStatus` enum
+- Add `queue_position: int | None` and `queued_at: datetime | None` fields
+
+**Scheduler Approach:**
+- Event-driven: wrapper.py triggers next job on completion
+- Fallback: Lazy evaluation on any `lxa job` command
+
+---
