@@ -2,6 +2,43 @@
 
 ---
 
+### 2026-05-15 09:56 UTC - Expansion Worker
+
+✅ **Expanded Issue #81**
+
+- Issue: [#81 - Support OpenHands Cloud execution via unified job driver interface](https://github.com/jpshackelford/lxa/issues/81)
+- Type: Enhancement
+- Status: Ready for implementation
+- Approach: Job Driver abstraction (Protocol) with LocalDriver and CloudDriver implementations
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added comprehensive technical comment with:
+  - Architecture diagram showing driver abstraction layer
+  - Job model extensions (driver, cloud_conversation_id, repository, branch fields)
+  - CloudDriver implementation using OpenHands Cloud REST API
+  - 4-phase implementation plan
+  - Full list of affected files (4 new, 8 modified)
+  - Status mapping, authentication, and start-task polling details
+  - Complexity assessment (Medium)
+  - Risk mitigations
+- Added `ready` label
+
+**New Files to Create:**
+- `src/jobs/driver.py` - Protocol + LocalDriver + CloudDriver
+- `src/jobs/cloud_api.py` - OpenHands Cloud REST API client
+- `tests/jobs/test_driver.py` - Driver tests
+- `tests/jobs/test_cloud_api.py` - API client tests
+
+**Files to Modify:**
+- `src/jobs/models.py` - Add driver-related fields
+- `src/jobs/executor.py` - Refactor to use LocalDriver
+- `src/jobs/manager.py` - Driver-aware status refresh
+- `src/jobs/cli/list_cmd.py`, `logs.py`, `status.py`, `stop.py` - Use drivers
+- `src/__main__.py` - Add `--cloud` flag
+
+---
+
 ### 2026-05-15 00:52 UTC - Orchestrator
 
 🔒 **Auto-disabled due to inactivity**
