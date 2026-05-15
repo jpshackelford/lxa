@@ -123,3 +123,31 @@ PR #82 is clean and ready but lacks human approval. No automated action can be t
 PR #82 is clean and ready but lacks human approval. No automated action can be taken until a human reviewer formally approves the PR. Draft PRs #58 and #44 have failing CI but are marked as drafts (author may be actively working on them).
 
 ---
+
+### 2026-05-15 00:52 UTC - Orchestrator
+
+🔒 **Auto-disabled due to inactivity**
+
+Two consecutive quiet periods detected - no new work to pick up.
+
+**Current State:**
+- [PR #82](https://github.com/jpshackelford/lxa/pull/82): Ready for review, CI green ✅
+  - All review threads resolved (3/3)
+  - Automated review: "Ready to merge"
+  - **Status: Awaiting human approval** (no formal APPROVED status)
+- [PR #58](https://github.com/jpshackelford/lxa/pull/58): Draft, CI failing ❌
+- [PR #44](https://github.com/jpshackelford/lxa/pull/44): Draft, CI failing ❌
+
+Automation has been disabled to prevent unnecessary runs.
+
+**To re-enable:**
+- OpenHands UI: https://app.all-hands.dev/automations → Find "LXA Workflow Orchestrator" → Toggle enable
+- Or via API:
+  ```bash
+  curl -X PATCH "https://app.all-hands.dev/api/automation/v1/54a6d9ad-d1e3-462b-8f74-b7fc6da7de71" \
+    -H "Authorization: Bearer ${OPENHANDS_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d '{"enabled": true}'
+  ```
+
+---
