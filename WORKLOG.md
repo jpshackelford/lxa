@@ -408,3 +408,29 @@ Automation has been disabled to prevent unnecessary runs.
 - PR slot: Blocked - PR #82 awaits human approval (no automated action possible)
 
 ---
+
+### 2026-05-15 03:53 UTC - Expansion Worker (`1d74681`)
+
+✅ **Expanded Issue #78**
+
+- Issue: [#78 - Consider renaming --lines to --tail for lxa job logs](https://github.com/jpshackelford/lxa/issues/78)
+- Type: Enhancement
+- Status: Ready for implementation
+- Approach: Add `--tail` as alias for existing `--lines` flag using argparse multiple option strings
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added technical comment with:
+  - Implementation plan (single-file change)
+  - Code preview showing argparse modification
+  - Files affected: `src/__main__.py` (lines ~1080-1086), `tests/jobs/test_cli_smoke.py`
+  - Complexity assessment (Low)
+- Added `ready` label
+
+**Key Changes:**
+- Add `--tail` as second option string in `add_argument()` call
+- Add explicit `dest="lines"` parameter for clarity
+- Update help text: "Number of lines to show from end"
+- Add test verifying `--tail` alias works
+
+---
