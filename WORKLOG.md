@@ -286,3 +286,35 @@ Automation has been disabled to prevent unnecessary runs.
 - Expansion slot: Spawned worker for oldest unexpanded issue (#62)
 
 ---
+
+### 2026-05-15 02:54 UTC - Expansion Worker (`590853f`)
+
+✅ **Expanded Issue #62**
+
+- Issue: [#62 - feat(board): Add intelligent scanning for project-scoped boards](https://github.com/jpshackelford/lxa/issues/62)
+- Type: Enhancement
+- Status: Ready for implementation
+- Prerequisites: ✅ #60 (closed), ✅ #61 (closed) - both complete
+- Approach: Add reference parsing, candidate discovery, and LLM-based scope evaluation to `lxa board scan` for project-scoped boards
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added comprehensive technical comment with:
+  - Architecture overview (4 components)
+  - 4-phase implementation plan
+  - Full list of new and modified files (6 new, 3 modified)
+  - Key implementation details (reference patterns, LLM prompt structure, rate limiting)
+  - Complexity assessment (High)
+  - Testing strategy
+- Added `ready` label
+
+**New files to create:**
+- `src/board/references.py` - Reference parsing utilities
+- `src/board/discovery.py` - Candidate discovery logic
+- `src/board/evaluator.py` - LLM-based scope evaluation
+- `tests/board/test_references.py`, `test_discovery.py`, `test_evaluator.py`
+
+**Files to modify:**
+- `src/board/cli/scan.py` - Replace `_scan_project_scoped()` placeholder
+
+---
