@@ -232,3 +232,30 @@ Automation has been disabled to prevent unnecessary runs.
 - PR slot blocked: PR #82 awaiting human approval before merge
 
 ---
+
+### 2026-05-15 02:26 UTC - Expansion Worker (`7355677`)
+
+✅ **Expanded Issue #51**
+
+- Issue: [#51 - make prompts user configurable](https://github.com/jpshackelford/lxa/issues/51)
+- Type: Enhancement
+- Status: Ready for implementation
+- Approach: Externalize prompts to markdown files with YAML frontmatter, support override hierarchy (repo > user > default)
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem Statement, Proposed Solution, Acceptance Criteria, Out of Scope)
+- Added comprehensive technical comment with:
+  - Architecture overview and prompt resolution order
+  - 4-phase implementation plan (Core Loader, Extract Prompts, CLI Commands, Documentation)
+  - Full list of new and modified files
+  - Complexity assessment (Medium)
+- Added `ready` and `enhancement` labels
+
+**Key Prompts to Extract:**
+- `orchestrator-system.md` - From `src/agents/orchestrator.py`
+- `task-agent-system.md` - From `src/agents/task_agent.py`
+- `self-review.md`, `respond.md` - From `src/ralph/refine.py`
+- `commit-message.md` - From `src/ralph/commit_message.py`
+- `code-review-principles.md`, `respond-principles.md`, etc. - From `src/ralph/refinement_config.py`
+
+---
