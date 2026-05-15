@@ -179,3 +179,25 @@ Automation has been disabled to prevent unnecessary runs.
 - PR slot blocked: PR #82 awaiting human approval before merge
 
 ---
+
+### 2026-05-15 02:00 UTC - Expansion Worker (`17eacc3`)
+
+✅ **Expanded Issue #7**
+
+- Issue: [#7 - When Agent exits, ansi codes are emitted to the terminal](https://github.com/jpshackelford/lxa/issues/7)
+- Type: Bug
+- Status: Ready for implementation
+- Root cause: Terminal query responses not filtered from PTY output in `openhands-sdk<1.17.0`
+- Fix: Update `openhands-sdk` and `openhands-tools` dependencies to `>=1.19.0`
+
+**Actions Taken:**
+- Rewrote issue body with structured format (Problem, Steps to Reproduce, Expected/Actual, Root Cause, Solution)
+- Added technical analysis comment with proposed fix
+- Added `ready` label (created label since it didn't exist)
+- Verified fix available in SDK version 1.17.0+ (PR OpenHands/software-agent-sdk#2334)
+
+**Files to modify:**
+- `pyproject.toml` - Update SDK/tools versions
+- `uv.lock` - Regenerate after pyproject.toml update
+
+---
