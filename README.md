@@ -257,6 +257,90 @@ The table shows:
 - **CI**: Build status (green/red/pending/conflict)
 - **💬**: Count of unresolved review threads
 
+### Issue History
+
+View your GitHub issues with compact history codes showing activity timeline. While `lxa pr list` answers "What's happening with my PRs?", `lxa issue list` answers "What's happening with my issues?"
+
+```bash
+# List issues I created (default)
+lxa issue list
+
+# Filter by state
+lxa issue list --open        # or -O (default)
+lxa issue list --closed      # or -C
+lxa issue list --all         # or -A
+
+# Filter by author
+lxa issue list --author me   # default
+lxa issue list --author octocat
+
+# Filter by repo or board
+lxa issue list --repo owner/repo
+lxa issue list --board my-project
+
+# Filter by label (supports AND/OR semantics)
+lxa issue list --label bug                    # has "bug" label
+lxa issue list --label bug --label urgent     # has BOTH (AND)
+lxa issue list --label bug,stale              # has EITHER (OR)
+lxa issue list --label bug,stale --label P1   # (bug OR stale) AND P1
+
+# Show issue titles
+lxa issue list --title       # or -t
+
+# Sort by recent activity instead of creation date
+lxa issue list --activity    # or -s
+
+# Limit results
+lxa issue list --limit 50    # or -n 50
+
+# View specific issues (by ref or URL)
+lxa issue list owner/repo#123 owner/repo#456
+lxa issue list https://github.com/owner/repo/issues/123
+
+# Pipe issue URLs from stdin
+cat issue-urls.txt | lxa issue list
+echo "https://github.com/owner/repo/issues/123" | lxa issue list --title
+```
+
+The table shows:
+- **Repo**: Repository name
+- **Issue**: Issue number
+- **History**: Compact activity timeline (see below)
+- **PR**: Linked implementing PR (if any)
+- **Labels**: Comma-separated list of labels
+- **State**: `open` or `closed`
+- **Age**: Time since issue was opened
+- **Last**: Time since last activity
+
+**History String Characters:**
+
+| Char | Meaning |
+|------|---------|
+| `o` | Issue opened |
+| `c/C` | Comment (lowercase=you, uppercase=others) |
+| `B` | Bot comment (always uppercase) |
+| `l/L` | Label added |
+| `a` | Assigned |
+| `x` | Closed |
+| `r` | Reopened |
+| `p` | PR linked |
+
+**Example output:**
+```
+Repo              Issue   History     PR       Labels              State    Age      Last
+owner/repo        #123    oCLxr       #456     bug,help wanted     open     15d      2d ago
+owner/repo        #124    olc         --       enhancement         open     3d       1h ago
+other/repo        #42     oClLCBx     #78      bug,stale           closed   45d      10d ago
+```
+
+**Bot Detection:**
+
+Bot comments are marked with `B` in the history string. Bots are detected by:
+1. Username ending with `[bot]` (e.g., `dependabot[bot]`)
+2. Configurable list in `~/.lxa/config.toml` under `[issue]` section
+
+Default recognized bots include: `github-actions[bot]`, `stale[bot]`, `dependabot[bot]`, `renovate[bot]`, and others.
+
 ### Repository Management
 
 Manage watched repositories across boards:
@@ -447,6 +531,7 @@ make test-cov
 | [Implementation Agent](doc/design/implementation-agent-design.md) | Orchestrator and Task Agent architecture |
 | [Design Composition Agent](doc/design/design-composition-agent.md) | Agent for composing design documents |
 | [Markdown Tool](doc/design/markdown-tool.md) | Structural editing tool for markdown |
+| [Issue Command](doc/design/issue-command-proposal.md) | Issue history visualization command |
 
 ### Reference
 
