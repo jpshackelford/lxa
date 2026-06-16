@@ -297,7 +297,6 @@ Automation has been disabled to prevent unnecessary runs.
 
 ---
 
-
 ### 2026-06-16 23:22 UTC - Orchestrator
 
 **Active Workers:**
@@ -332,3 +331,23 @@ Automation has been disabled to prevent unnecessary runs.
 - ✅ Filled PR slot with PR #58 CI/conflict fix worker
 
 ---
+
+### 2026-06-16 23:27 UTC - Expansion Worker (`2eb24bb`)
+
+✅ **Expanded Issue #83**
+
+- Issue: [#83 - lxa repo add followed by lxa board sync-config silently drops repos (data loss)](https://github.com/jpshackelford/lxa/issues/83)
+- Type: Bug
+- Status: Ready for implementation
+- Root cause: Repo mutation paths persist `board.repos` without touching `BoardConfig.updated_at`; `merge_configs()` then sees equal missing timestamps, prefers the remote board, reports `unchanged`, and overwrites local repos.
+- Approach: Timestamp repo/board mutation call sites with `board.touch()`, add regression tests for `add_repo()` and equal-timestamp sync merges, and harden the tie branch so differing board content is never silently classified as unchanged.
+
+**Actions Taken:**
+- Reproduced timestamp omission with `uv run lxa repo add` in an isolated `HOME`.
+- Reproduced the destructive merge path directly through `src.board.sync.merge_configs()`.
+- Rewrote issue body with verified Problem, Steps to Reproduce, Expected/Actual behavior, Environment, and Workaround.
+- Added technical root-cause comment with proposed fix, files to modify, tests to add, complexity, and risks.
+- Added `bug` and `ready` labels.
+
+---
+
