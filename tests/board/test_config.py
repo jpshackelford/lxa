@@ -5,6 +5,7 @@ import pytest
 from src.board.config import (
     BoardConfig,
     BoardsConfig,
+    BoardScope,
     add_watched_repo,
     list_boards,
     load_board_config,
@@ -57,6 +58,9 @@ class TestBoardConfig:
         assert config.repos == []
         assert config.scan_lookback_days == 90
         assert config.agent_username_pattern == "openhands"
+        assert config.scope == BoardScope.USER
+        assert config.overview_item is None
+        assert config.mission is None
 
     def test_watched_repos_alias(self):
         """Test that watched_repos is an alias for repos."""
@@ -70,11 +74,32 @@ class TestBoardConfig:
         config = BoardConfig()
         assert config.get_column_name("backlog") == "Backlog"
         assert config.get_column_name("done") == "Done"
+        assert config.get_column_name("triage") == "Triage"
 
     def test_get_column_name_custom(self):
         config = BoardConfig(column_names={"backlog": "Custom Backlog"})
         assert config.get_column_name("backlog") == "Custom Backlog"
         assert config.get_column_name("done") == "Done"  # Still uses default
+
+    def test_is_project_scoped(self):
+        """Test is_project_scoped property."""
+        user_board = BoardConfig(scope=BoardScope.USER)
+        assert user_board.is_project_scoped is False
+
+        project_board = BoardConfig(scope=BoardScope.PROJECT)
+        assert project_board.is_project_scoped is True
+
+    def test_project_scoped_board_fields(self):
+        """Test project-scoped board specific fields."""
+        config = BoardConfig(
+            name="project-board",
+            scope=BoardScope.PROJECT,
+            overview_item="https://github.com/owner/repo/issues/123",
+            mission="Build the best feature ever",
+        )
+        assert config.is_project_scoped is True
+        assert config.overview_item == "https://github.com/owner/repo/issues/123"
+        assert config.mission == "Build the best feature ever"
 
 
 class TestBoardsConfig:
@@ -414,3 +439,84 @@ class TestNonDefaultSettings:
         content = config_file.read_text()
         assert "scan_lookback_days" not in content
         assert "agent_username_pattern" not in content
+
+
+class TestProjectScopedBoards:
+    """Tests for project-scoped board configuration."""
+
+    def test_save_and_load_project_scoped_board(self, temp_config_dir):  # noqa: ARG002
+        """Save and load a project-scoped board configuration."""
+        board = BoardConfig(
+            name="plugin-directory",
+            project_id="PVT_123",
+            project_number=5,
+            username="testuser",
+            repos=["OpenHands/OpenHands"],
+            scope=BoardScope.PROJECT,
+            overview_item="https://github.com/OpenHands/OpenHands/issues/12085",
+            mission="Build the plugin directory feature",
+        )
+
+        save_board_config(board, "plugin-directory")
+
+        # Load it back
+        loaded = load_board_config("plugin-directory")
+        assert loaded.name == "plugin-directory"
+        assert loaded.scope == BoardScope.PROJECT
+        assert loaded.is_project_scoped is True
+        assert loaded.overview_item == "https://github.com/OpenHands/OpenHands/issues/12085"
+        assert loaded.mission == "Build the plugin directory feature"
+
+    def test_user_scope_not_saved(self, temp_config_dir):  # noqa: ARG002
+        """User scope (default) is not written to file."""
+        tmp_path, config_file = temp_config_dir
+
+        board = BoardConfig(
+            name="test",
+            project_id="PVT_123",
+            scope=BoardScope.USER,  # default
+        )
+        save_board_config(board, "test")
+
+        content = config_file.read_text()
+        assert "scope" not in content
+
+    def test_project_scope_is_saved(self, temp_config_dir):  # noqa: ARG002
+        """Project scope is written to file."""
+        tmp_path, config_file = temp_config_dir
+
+        board = BoardConfig(
+            name="test",
+            project_id="PVT_123",
+            scope=BoardScope.PROJECT,
+            overview_item="https://github.com/owner/repo/issues/1",
+        )
+        save_board_config(board, "test")
+
+        content = config_file.read_text()
+        assert "scope" in content
+        assert "project" in content
+        assert "overview_item" in content
+
+    def test_multiline_mission_saved(self, temp_config_dir):  # noqa: ARG002
+        """Multiline mission text is properly saved and loaded."""
+        mission = """This project delivers the ability for users to discover plugins.
+
+In scope:
+- Plugin manifest schema
+- Marketplace UI
+
+Out of scope:
+- General CI/CD infrastructure"""
+
+        board = BoardConfig(
+            name="test",
+            project_id="PVT_123",
+            scope=BoardScope.PROJECT,
+            overview_item="https://github.com/owner/repo/issues/1",
+            mission=mission,
+        )
+        save_board_config(board, "test")
+
+        loaded = load_board_config("test")
+        assert loaded.mission == mission

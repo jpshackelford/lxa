@@ -15,6 +15,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from openhands.sdk import LLM, Conversation
 from openhands.tools.delegate import DelegationVisualizer
@@ -118,9 +119,7 @@ def create_branch(workspace: Path, branch_name: str) -> bool:
     return result.returncode == 0
 
 
-def get_open_pr_for_branch(
-    workspace: Path, repo_slug: str, branch: str
-) -> tuple[int, str] | None:
+def get_open_pr_for_branch(workspace: Path, repo_slug: str, branch: str) -> tuple[int, str] | None:
     """Get the open PR number and URL for a branch, if any.
 
     Returns:
@@ -363,9 +362,7 @@ class MultiPRLoopRunner:
         # Run orchestrator iterations until milestone completes
         milestone_completed = False
         for iteration in range(1, self.max_iterations_per_milestone + 1):
-            console.print(
-                f"[cyan]  Iteration {iteration}/{self.max_iterations_per_milestone}[/]"
-            )
+            console.print(f"[cyan]  Iteration {iteration}/{self.max_iterations_per_milestone}[/]")
             result = self._run_orchestrator_iteration(iteration)
 
             if not result.success:
@@ -431,9 +428,7 @@ class MultiPRLoopRunner:
 
         # Generate squash commit message
         try:
-            prepare_squash_commit_message(
-                self.llm, owner, repo, pr_number, auto_merge=False
-            )
+            prepare_squash_commit_message(self.llm, owner, repo, pr_number, auto_merge=False)
         except Exception as e:
             logger.warning(f"Failed to generate commit message: {e}")
 
@@ -504,10 +499,7 @@ class MultiPRLoopRunner:
             conversation.run()
 
             output = self._get_conversation_output(conversation)
-            completion_detected = (
-                MILESTONE_COMPLETE_SIGNAL in output
-                or COMPLETION_SIGNAL in output
-            )
+            completion_detected = MILESTONE_COMPLETE_SIGNAL in output or COMPLETION_SIGNAL in output
 
             return IterationResult(
                 iteration=iteration,
@@ -622,7 +614,7 @@ Critical rules:
 
         return False
 
-    def _get_conversation_output(self, conversation) -> str:
+    def _get_conversation_output(self, conversation: Any) -> str:
         """Extract text content from conversation events."""
         from openhands.sdk.event import MessageEvent
 
@@ -641,8 +633,10 @@ Critical rules:
                     for block in content:
                         if isinstance(block, str):
                             text_parts.append(block)
-                        elif hasattr(block, "text"):
-                            text_parts.append(block.text)
+                        else:
+                            text = getattr(block, "text", None)
+                            if isinstance(text, str):
+                                text_parts.append(text)
         return "\n".join(text_parts)
 
     def _print_start_banner(self) -> None:

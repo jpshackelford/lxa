@@ -51,6 +51,12 @@ lxa implement
 
 # Start from a specific design document
 lxa implement doc/design/feature-name.md
+
+# Run in background (detached from terminal)
+lxa implement --background
+
+# Custom job name for background execution
+lxa implement --background --job-name my-feature
 ```
 
 ### Ralph Loop Mode (Continuous Execution)
@@ -91,6 +97,9 @@ lxa refine https://github.com/owner/repo/pull/42 --phase respond
 
 # Configure quality bar and iteration limits
 lxa refine URL --allow-merge good_taste --max-iterations 10
+
+# Run in background (detached from terminal)
+lxa refine URL --background --job-name pr-review
 ```
 
 The refinement loop has two phases:
@@ -113,6 +122,7 @@ lxa implement --loop --refine --auto-merge
 # Custom refinement settings
 lxa implement --loop --refine --allow-merge good_taste --max-refine-iterations 10
 ```
+
 
 ### Multi-PR Autonomous Mode
 
@@ -141,6 +151,51 @@ The Multi-PR mode:
 This enables overnight autonomous execution where multiple phases are implemented,
 reviewed, and merged serially, resulting in a clean commit history on the base branch.
 
+### Task Runner (Headless Mode)
+
+Run arbitrary tasks from a prompt or file (similar to OpenHands CLI headless mode):
+
+```bash
+# Run a task from inline prompt
+lxa run -t "Write a hello world script in Python"
+
+# Run a task from a file
+lxa run -f task.txt
+
+# Run in background (detached from terminal)
+lxa run -t "Refactor the auth module" --background
+
+# Custom job name for background execution
+lxa run -f requirements.txt --background --job-name feature-impl
+```
+
+The task runner provides a simple agent with:
+- File editing capabilities
+- Terminal access for running commands
+- Task tracking for structured work
+
+Background jobs can be managed with the `lxa job` command (see below).
+
+### Output Verbosity
+
+Control agent output detail with the `--verbosity` flag (available on `implement`, `refine`, and `run`):
+
+```bash
+# Quiet mode: show only action summaries (default for background jobs)
+lxa implement --verbosity quiet
+
+# Normal mode: show reasoning + summaries (default for foreground)
+lxa implement --verbosity normal
+
+# Verbose mode: show all details including file contents
+lxa implement --verbosity verbose
+# or shorthand (note: -v requires a value)
+lxa implement -v verbose
+
+# Include timestamps in output (useful for debugging)
+lxa implement --timestamps
+```
+
 ### Reconciliation (Post-merge)
 
 Update design documents to reference implemented code:
@@ -150,20 +205,228 @@ lxa reconcile .pr/design.md --dry-run  # Preview changes
 lxa reconcile .pr/design.md            # Apply changes
 ```
 
+### PR History
+
+View your PRs with compact history codes showing review/fix cycles:
+
+```bash
+# List open PRs (default)
+lxa pr list
+
+# Filter by state (each flag shows only that state)
+lxa pr list --merged      # or -M
+lxa pr list --closed      # or -C
+lxa pr list --open        # or -O (explicit, same as default)
+lxa pr list --all         # or -A (all states)
+
+# Combine state flags
+lxa pr list -O -C         # open + closed
+lxa pr list -M -C         # merged + closed
+
+# Show PR titles
+lxa pr list --title
+lxa pr list -t
+
+# Filter by author or reviewer
+lxa pr list --author octocat
+lxa pr list --reviewer me
+
+# View specific PRs (by ref or URL)
+lxa pr list owner/repo#123 owner/repo#456
+lxa pr list https://github.com/owner/repo/pull/123
+
+# Pipe PR URLs from stdin (one per line)
+cat pr-urls.txt | lxa pr list
+echo "https://github.com/owner/repo/pull/123" | lxa pr list --title
+```
+
+The table shows:
+- **History**: Compact codes showing PR lifecycle - `o` (opened), `C` (changes requested), `F` (fixes pushed), `c` (comment), `A` (approved), `m` (merged), `k` (killed/closed)
+- **CI**: Build status (green/red/pending/conflict)
+- **State**: `draft`, `ready`, `merged`, or `closed`
+- **💬**: Count of unresolved review threads
+
+### Review Queue
+
+View PRs needing your review attention. While `lxa pr list` answers "What's happening with my PRs?", `lxa review` answers "What PRs need my review action?"
+
+```bash
+# Show PRs needing your review action (default)
+lxa review
+
+# Include approved and hold PRs (full queue)
+lxa review --all       # or -A
+
+# Show another user's review queue
+lxa review --reviewer alice
+
+# Filter by PR author
+lxa review --author bob
+
+# Exclude bot PRs
+lxa review --exclude-author dependabot[bot],renovate[bot]
+
+# Filter by repo or board
+lxa review --repo owner/repo
+lxa review --board my-project
+
+# Show PR titles
+lxa review --title     # or -t
+
+# Show historical PRs you've reviewed
+lxa review --merged    # or -M
+lxa review --closed    # or -C
+```
+
+The table shows:
+- **History**: Compact codes (lowercase = your actions, UPPERCASE = others)
+- **Status**: `review` (needs initial review), `re-review` (new commits since your review), `hold` (waiting on author), `approved` (you approved)
+- **Wait**: Time waiting for action (red > 48h, yellow > 24h)
+- **CI**: Build status (green/red/pending/conflict)
+- **💬**: Count of unresolved review threads
+
+### Issue History
+
+View your GitHub issues with compact history codes showing activity timeline. While `lxa pr list` answers "What's happening with my PRs?", `lxa issue list` answers "What's happening with my issues?"
+
+```bash
+# List issues I created (default)
+lxa issue list
+
+# Filter by state
+lxa issue list --open        # or -O (default)
+lxa issue list --closed      # or -C
+lxa issue list --all         # or -A
+
+# Filter by author
+lxa issue list --author me   # default
+lxa issue list --author octocat
+
+# Filter by repo or board
+lxa issue list --repo owner/repo
+lxa issue list --board my-project
+
+# Filter by label (supports AND/OR semantics)
+lxa issue list --label bug                    # has "bug" label
+lxa issue list --label bug --label urgent     # has BOTH (AND)
+lxa issue list --label bug,stale              # has EITHER (OR)
+lxa issue list --label bug,stale --label P1   # (bug OR stale) AND P1
+
+# Show issue titles
+lxa issue list --title       # or -t
+
+# Sort by recent activity instead of creation date
+lxa issue list --activity    # or -s
+
+# Limit results
+lxa issue list --limit 50    # or -n 50
+
+# View specific issues (by ref or URL)
+lxa issue list owner/repo#123 owner/repo#456
+lxa issue list https://github.com/owner/repo/issues/123
+
+# Pipe issue URLs from stdin
+cat issue-urls.txt | lxa issue list
+echo "https://github.com/owner/repo/issues/123" | lxa issue list --title
+```
+
+The table shows:
+- **Repo**: Repository name
+- **Issue**: Issue number
+- **History**: Compact activity timeline (see below)
+- **PR**: Linked implementing PR (if any)
+- **Labels**: Comma-separated list of labels
+- **State**: `open` or `closed`
+- **Age**: Time since issue was opened
+- **Last**: Time since last activity
+
+**History String Characters:**
+
+| Char | Meaning |
+|------|---------|
+| `o` | Issue opened |
+| `c/C` | Comment (lowercase=you, uppercase=others) |
+| `B` | Bot comment (always uppercase) |
+| `l/L` | Label added |
+| `a` | Assigned |
+| `x` | Closed |
+| `r` | Reopened |
+| `p` | PR linked |
+
+**Example output:**
+```
+Repo              Issue   History     PR       Labels              State    Age      Last
+owner/repo        #123    oCLxr       #456     bug,help wanted     open     15d      2d ago
+owner/repo        #124    olc         --       enhancement         open     3d       1h ago
+other/repo        #42     oClLCBx     #78      bug,stale           closed   45d      10d ago
+```
+
+**Bot Detection:**
+
+Bot comments are marked with `B` in the history string. Bots are detected by:
+1. Username ending with `[bot]` (e.g., `dependabot[bot]`)
+2. Configurable list in `~/.lxa/config.toml` under `[issue]` section
+
+Default recognized bots include: `github-actions[bot]`, `stale[bot]`, `dependabot[bot]`, `renovate[bot]`, and others.
+
+### Repository Management
+
+Manage watched repositories across boards:
+
+```bash
+# Add repos to the default board
+lxa repo add owner/repo1 owner/repo2
+
+# Add repos to a specific board (creates if needed)
+lxa repo add owner/repo --board my-project
+
+# Add repos and set as default board
+lxa repo add owner/repo --board work --set-default
+
+# Remove repos
+lxa repo remove owner/repo
+
+# List repos
+lxa repo list              # Default board
+lxa repo list --all        # All boards
+```
+
 ### Board Management
+
+Manage boards and rename them:
+
+```bash
+# Rename a board
+lxa board rename "Unnamed Board 1" "My Project"
+
+# Delete a board
+lxa board rm "Old Board"
+```
 
 Track AI-assisted development across multiple repositories with GitHub Projects:
 
 ```bash
-# Create a new board
+# Create a new board (user-scoped, tracks your activity)
 lxa board init --create "My Agent Board"
 
-# Add repos to watch
+# Create a project-scoped board (tracks specific items for a project)
+lxa board init --create "Feature X" --scope project --overview https://github.com/owner/repo/issues/1
+
+# Option A: Add specific repos to watch
 lxa board config repos add owner/repo1
 lxa board config repos add owner/repo2
-
-# Scan for your issues/PRs and populate board
 lxa board scan
+
+# Option B: Auto-discover repos with recent activity
+lxa board scan --user myusername --since 21    # All your personal repos
+lxa board scan --org my-company --since 14     # All repos in an org
+
+# Manually add items to a board
+lxa board add-item https://github.com/owner/repo/pull/123
+lxa board add-item owner/repo#456 repo#789 --column "Backlog"
+
+# Sync config to/from GitHub Gist (for ephemeral environments)
+lxa board sync-config
 
 # Incremental sync using notifications
 lxa board sync
@@ -171,6 +434,10 @@ lxa board sync
 # Check what needs attention
 lxa board status --attention
 ```
+
+**Board Scopes:**
+- **User-scoped** (default): Automatically tracks all issues/PRs where you're involved
+- **Project-scoped**: Tracks a fixed set of items for a specific project; requires an `--overview` item as the anchor
 
 The board automatically organizes items into workflow columns based on their state:
 
@@ -201,6 +468,69 @@ lxa board scan --dry-run
 
 This is useful for debugging API issues and generating test fixture data.
 
+### Background Job Management
+
+Monitor and control long-running background tasks:
+
+```bash
+# List all jobs
+lxa job list
+
+# Show only running jobs
+lxa job list --running
+
+# Get detailed status for a job
+lxa job status implement-a3f2b1c
+
+# View job output
+lxa job logs implement-a3f2b1c
+
+# Follow logs in real-time
+lxa job logs implement-a3f2b1c --follow
+
+# Stop a running job
+lxa job stop implement-a3f2b1c
+
+# Clean up old job files (default: older than 7 days)
+lxa job clean
+
+# Clean jobs older than 30 days
+lxa job clean --older-than 30
+```
+
+Job metadata and logs are stored in `~/.lxa/jobs/`. Background jobs run in isolated workspace clones at `~/.lxa/workspaces/{job_id}/` to prevent interference with your working directory. Git repositories are cloned (preserving history), while non-git directories are copied.
+
+The `job status` command also shows the conversation trajectory path, allowing you to review the full agent conversation history:
+
+```bash
+lxa job status implement-a3f2b1c
+# Shows: Trajectory  ~/.lxa/conversations/abc123-def456
+```
+
+### Global Configuration
+
+Configure lxa-wide settings:
+
+```bash
+# View current configuration
+lxa config
+
+# Set custom conversations directory
+lxa config set conversations_dir /path/to/conversations
+
+# Reset to default
+lxa config reset conversations_dir
+```
+
+Configuration is stored in `~/.lxa/config.toml`. Available settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `conversations_dir` | `~/.lxa/conversations` | Directory for storing conversation histories |
+
+Environment variables override config file settings:
+- `LXA_CONVERSATIONS_DIR` - Override conversations directory
+
 ## Development
 
 ```bash
@@ -229,6 +559,7 @@ make test-cov
 | [Implementation Agent](doc/design/implementation-agent-design.md) | Orchestrator and Task Agent architecture |
 | [Design Composition Agent](doc/design/design-composition-agent.md) | Agent for composing design documents |
 | [Markdown Tool](doc/design/markdown-tool.md) | Structural editing tool for markdown |
+| [Issue Command](doc/design/issue-command-proposal.md) | Issue history visualization command |
 
 ### Reference
 

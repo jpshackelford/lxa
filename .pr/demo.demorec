@@ -1,0 +1,81 @@
+# PR #59 Demo: Auto-Discovery Scan Feature
+# Demonstrates the --user flag discovering repos and populating a board
+
+Output demo_video.mp4
+Set Width 1280
+Set Height 720
+
+# @voice edge:jenny
+
+@mode terminal
+@terminal:rows 30
+Set Theme "Dracula"
+
+# First show the help to highlight the new flags
+# @narrate:before "PR 59 adds auto-discovery flags to lxa board scan. Let's see them in action."
+Type "lxa board scan --help | grep -A2 'user\|org'"
+Enter
+Sleep 3s
+
+# @narrate:after "The --user and --org flags auto-discover repos without manual configuration."
+Sleep 2s
+
+# Create a fresh board for the demo
+Clear
+Sleep 0.5s
+# @narrate:before "Let's create a new project board."
+Type "lxa board init --create 'Video Demo Board'"
+Enter
+Sleep 6s
+
+# @narrate:after "The board is created with workflow columns ready."
+Sleep 2s
+
+# Now run the actual scan - without verbose since output is long
+Clear
+Sleep 0.5s
+# @narrate:before "Now the magic: scan with --user to auto-discover all repos with activity."
+Type "lxa board scan --user jpshackelford --since 7"
+Enter
+Sleep 10s
+
+# @narrate:after "Without specifying any repositories, it found and added items automatically."
+Sleep 3s
+
+# Show the sync-config feature
+Clear
+Sleep 0.5s
+# @narrate:before "PR 59 also adds Gist-based config sync for ephemeral environments."
+Type "lxa board sync-config --dry-run"
+Enter
+Sleep 4s
+
+# @narrate:after "Config persists across sessions via GitHub Gist."
+Sleep 2s
+
+# Browse to the board to see the results in kanban view
+@mode browser
+# @narrate:before "Let's view the board on GitHub to see our auto-discovered items."
+Navigate "https://github.com/users/jpshackelford/projects/12"
+Sleep 4s
+
+# @narrate:after "Here's our board in kanban view. On the left we see Icebox and Backlog columns with open issues."
+Sleep 3s
+
+# Scroll right to show more columns
+Scroll right 400
+Sleep 2s
+# @narrate:after "Scrolling right we see Agent Coding and Human Review columns for items needing attention."
+Sleep 3s
+
+# Scroll more to show the rest
+Scroll right 400
+Sleep 2s
+# @narrate:after "And here are Final Review, Approved, Done, and Closed columns tracking the full workflow."
+Sleep 3s
+
+# Scroll back to show the full picture
+Scroll left 300
+Sleep 2s
+# @narrate:after "Each item was auto-discovered and placed based on its GitHub state."
+Sleep 2s

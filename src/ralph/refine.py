@@ -8,7 +8,6 @@ Supports two phases:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -17,11 +16,12 @@ from pathlib import Path
 from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
 from openhands.sdk.context import Skill
 from openhands.sdk.conversation.base import BaseConversation
-from openhands.tools.delegate import DelegateTool, DelegationVisualizer
+from openhands.tools.delegate import DelegateTool
 from openhands.tools.terminal import TerminalTool
 from rich.console import Console
 from rich.panel import Panel
 
+from src.global_config import get_conversations_dir
 from src.ralph.commit_message import prepare_squash_commit_message
 from src.ralph.github_review import (
     CIStatus,
@@ -37,11 +37,14 @@ from src.ralph.refinement_config import (
     SELF_REVIEW_WORKFLOW,
 )
 from src.ralph.runner import RefinementConfig
+from src.visualizers import Verbosity, get_visualizer
 
 console = Console()
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONVERSATIONS_DIR = os.path.expanduser("~/.openhands/conversations")
+# Default persistence directory for conversation history
+# Now defaults to ~/.lxa/conversations via global config
+DEFAULT_CONVERSATIONS_DIR = str(get_conversations_dir())
 
 
 def detect_completion(output: str) -> bool:
@@ -250,6 +253,8 @@ class RefineRunner:
         refinement_config: RefinementConfig,
         phase: RefinePhase = RefinePhase.AUTO,
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
+        verbosity: Verbosity = Verbosity.NORMAL,
+        show_timestamps: bool = False,
     ):
         """Initialize the RefineRunner.
 
@@ -261,6 +266,8 @@ class RefineRunner:
             refinement_config: Configuration for refinement behavior
             phase: Which phase to run (auto, self-review, respond)
             conversations_dir: Directory for conversation persistence
+            verbosity: Output verbosity level (quiet, normal, verbose)
+            show_timestamps: If True, prefix output lines with timestamps
         """
         self.llm = llm
         self.workspace = workspace
@@ -270,6 +277,8 @@ class RefineRunner:
         self.refinement_config = refinement_config
         self.phase = phase
         self.conversations_dir = conversations_dir
+        self.verbosity = verbosity
+        self.show_timestamps = show_timestamps
 
     def run(self) -> RefineResult:
         """Run the appropriate refinement phase."""
@@ -416,15 +425,26 @@ Check CI status manually: `gh pr checks {pr_number} --repo {repo_slug}`
             self.refinement_config,
         )
 
+        # Create conversation with verbosity-appropriate visualizer
+        visualizer = get_visualizer(
+            self.verbosity,
+            name=f"SelfReview-PR{self.pr_number}",
+            show_timestamps=self.show_timestamps,
+        )
         conversation = Conversation(
             agent=agent,
             workspace=self.workspace,
-            visualizer=DelegationVisualizer(name=f"SelfReview-PR{self.pr_number}"),
+            visualizer=visualizer,
             persistence_dir=self.conversations_dir,
         )
 
         console.print(f"[dim]Conversation ID: {conversation.id}[/]")
         console.print()
+
+        # Register conversation with job if running as a background job
+        from src.jobs import register_conversation
+
+        register_conversation(str(conversation.id), self.conversations_dir)
 
         # Include CI context if there are issues
         ci_instruction = (
@@ -498,15 +518,26 @@ Output PHASE_COMPLETE when finished.
             thread_count,
         )
 
+        # Create conversation with verbosity-appropriate visualizer
+        visualizer = get_visualizer(
+            self.verbosity,
+            name=f"Respond-PR{self.pr_number}",
+            show_timestamps=self.show_timestamps,
+        )
         conversation = Conversation(
             agent=agent,
             workspace=self.workspace,
-            visualizer=DelegationVisualizer(name=f"Respond-PR{self.pr_number}"),
+            visualizer=visualizer,
             persistence_dir=self.conversations_dir,
         )
 
         console.print(f"[dim]Conversation ID: {conversation.id}[/]")
         console.print()
+
+        # Register conversation with job if running as a background job
+        from src.jobs import register_conversation
+
+        register_conversation(str(conversation.id), self.conversations_dir)
 
         # Include CI context if there are issues
         ci_instruction = (

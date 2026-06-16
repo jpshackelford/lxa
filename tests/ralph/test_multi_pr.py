@@ -353,12 +353,8 @@ class TestMilestoneExecution:
 
         with (
             patch.object(runner, "repo_slug", "owner/repo"),
-            patch(
-                "src.ralph.multi_pr.create_branch", return_value=False
-            ),
-            patch(
-                "src.ralph.multi_pr.checkout_branch", return_value=False
-            ),
+            patch("src.ralph.multi_pr.create_branch", return_value=False),
+            patch("src.ralph.multi_pr.checkout_branch", return_value=False),
         ):
             result = runner._execute_milestone(1, "First Feature")
 
