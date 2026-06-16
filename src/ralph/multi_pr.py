@@ -171,9 +171,9 @@ def get_repo_slug(workspace: Path) -> str:
     if url.startswith("git@"):
         url = url.replace(":", "/").replace("git@", "https://")
     # Extract owner/repo from https://github.com/owner/repo.git
-    if "github.com" in url:
-        parts = url.split("github.com/")[-1]
-        return parts.rstrip(".git")
+    if "github.com/" in url:
+        parts = url.split("github.com/", maxsplit=1)[-1]
+        return parts.removesuffix(".git")
     return ""
 
 
@@ -540,6 +540,7 @@ class MultiPRLoopRunner:
 ## Multi-PR Mode
 This is MULTI-PR MODE. Each milestone gets its own PR that will be auto-merged.
 - Complete the CURRENT milestone only
+- Create/update the PR against base branch: {self.multi_pr_config.base_branch}
 - When all tasks in this milestone are done, output: MILESTONE_COMPLETE
 - Do NOT continue to the next milestone (that will be a separate PR)
 
@@ -550,7 +551,7 @@ This is MULTI-PR MODE. Each milestone gets its own PR that will be auto-merged.
 1. Check implementation status using the checklist tool
 2. Delegate the next unchecked task to a task agent
 3. After task completion, mark it complete, commit, and push
-4. Create/update draft PR if needed
+4. Create/update draft PR targeting {self.multi_pr_config.base_branch} if needed
 5. Wait for CI to pass
 6. Repeat until all tasks in this milestone are complete
 7. When milestone complete, output: {MILESTONE_COMPLETE_SIGNAL}

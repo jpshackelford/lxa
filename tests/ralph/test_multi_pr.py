@@ -181,6 +181,15 @@ class TestGitHelpers:
             slug = get_repo_slug(temp_workspace)
             assert slug == "owner/repo"
 
+    def test_get_repo_slug_preserves_repo_name_ending_in_git(self, temp_workspace: Path) -> None:
+        """Test parsing repo names that end with .git characters."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="https://github.com/owner/digit.git\n"
+            )
+            slug = get_repo_slug(temp_workspace)
+            assert slug == "owner/digit"
+
     def test_get_current_branch(self, temp_workspace: Path) -> None:
         """Test getting current branch."""
         with patch("subprocess.run") as mock_run:
@@ -296,6 +305,21 @@ class TestMultiPRLoopRunner:
         assert "Multi-PR" in message or "MULTI-PR" in message
         assert MILESTONE_COMPLETE_SIGNAL in message
         assert "First Feature" in message
+
+    def test_build_context_message_includes_target_base_branch(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test context tells the agent which base branch to target."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            multi_pr_config=MultiPRConfig(enabled=True, base_branch="v2"),
+        )
+        message = runner._build_context_message(1)
+
+        assert "base branch: v2" in message
+        assert "targeting v2" in message
 
     def test_milestone_complete_signal_in_context(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
