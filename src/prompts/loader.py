@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import string
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -15,6 +14,7 @@ from src.board.config import LXA_HOME
 
 PromptSource = Literal["repo", "user", "default"]
 _PROMPT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class PromptNotFoundError(FileNotFoundError):
@@ -66,7 +66,7 @@ class Prompt:
             raise PromptVariableError(
                 f"Prompt '{self.name}' references undefined variable: {variable}"
             ) from e
-        except (IndexError, ValueError) as e:
+        except (AttributeError, IndexError, TypeError, ValueError) as e:
             raise PromptVariableError(f"Prompt '{self.name}' could not be formatted: {e}") from e
 
 
@@ -236,15 +236,7 @@ def _parse_variables(value: object, *, prompt_name: str, path: Path | None) -> t
     for item in value:
         if not isinstance(item, str) or not item:
             raise PromptFormatError(f"Prompt '{prompt_name}' variables must be non-empty strings")
-        if not _is_valid_format_field(item):
+        if not _VARIABLE_NAME_RE.fullmatch(item):
             raise PromptFormatError(f"Invalid variable name '{item}' in prompt '{prompt_name}'")
         variables.append(item)
     return tuple(variables)
-
-
-def _is_valid_format_field(value: str) -> bool:
-    try:
-        parsed = list(string.Formatter().parse("{" + value + "}"))
-    except ValueError:
-        return False
-    return len(parsed) == 1 and parsed[0][1] == value

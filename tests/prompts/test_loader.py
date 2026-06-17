@@ -133,3 +133,36 @@ def test_invalid_frontmatter_raises_clear_error(tmp_path: Path) -> None:
 
     with pytest.raises(PromptFormatError, match="variables must be a list"):
         PromptLoader(user_prompts_dir=user_dir).load("bad")
+
+
+def test_rejects_variable_names_with_attribute_access(tmp_path: Path) -> None:
+    user_dir = tmp_path / "home" / ".lxa" / "prompts"
+    path = user_dir / "bad.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("---\nvariables: [user.name]\n---\nBad\n", encoding="utf-8")
+
+    with pytest.raises(PromptFormatError, match="Invalid variable name 'user.name'"):
+        PromptLoader(user_prompts_dir=user_dir).load("bad")
+
+
+def test_prompt_format_wraps_invalid_placeholder_access() -> None:
+    prompt = Prompt(
+        name="test",
+        description="",
+        content="Hello {name.missing}",
+        variables=("name",),
+        source="default",
+    )
+
+    with pytest.raises(PromptVariableError, match="could not be formatted"):
+        prompt.format(name="LXA")
+
+
+def test_all_bundled_prompts_format_with_declared_variables(tmp_path: Path) -> None:
+    loader = PromptLoader(user_prompts_dir=tmp_path / "user-prompts")
+
+    for info in loader.list_prompts():
+        prompt = loader.load(info.name)
+        values = {variable: f"<{variable}>" for variable in prompt.variables}
+
+        assert prompt.format(**values)
