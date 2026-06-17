@@ -371,6 +371,13 @@ class GitHubClient:
         data = resp.json()
         return self._parse_issue(f"{owner}/{repo}", data)
 
+    def get_issue_body(self, owner: str, repo: str, number: int) -> str:
+        """Get body text for a GitHub issue or pull request by issue number."""
+        resp = self._client.get(f"{self.REST_BASE}/repos/{owner}/{repo}/issues/{number}")
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("body") or ""
+
     def get_pull_request(self, owner: str, repo: str, number: int) -> Item:
         """Get a single PR by number."""
         resp = self._client.get(f"{self.REST_BASE}/repos/{owner}/{repo}/pulls/{number}")

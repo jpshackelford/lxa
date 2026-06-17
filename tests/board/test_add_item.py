@@ -6,7 +6,7 @@ import pytest
 
 import src.board.cache as cache_module
 import src.board.config as config_module
-from src.board.cli.add_item import (
+from src.board.references import (
     ItemRef,
     ItemRefParseError,
     _resolve_number_ref,
