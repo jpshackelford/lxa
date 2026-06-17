@@ -596,8 +596,6 @@ Critical rules:
         """
         console.print(f"[dim]  Running refinement for PR #{pr_number}...[/]")
 
-        owner, repo = self.repo_slug.split("/")
-
         for round_num in range(1, self.max_refinement_rounds + 1):
             console.print(f"[dim]    Refinement round {round_num}/{self.max_refinement_rounds}[/]")
 
@@ -630,8 +628,26 @@ Critical rules:
             )
             result_respond = runner_respond.run()
 
-            if not result_respond.completed:
-                console.print(f"[yellow]    Refinement round {round_num} incomplete[/]")
+            if result_respond.completed:
+                console.print("[green]    ✓ Respond phase completed[/]")
+                if round_num == self.max_refinement_rounds:
+                    console.print("[dim]    Running final verification after respond phase[/]")
+                    verify_runner = RefineRunner(
+                        llm=self.llm,
+                        workspace=self.workspace,
+                        pr_number=pr_number,
+                        repo_slug=self.repo_slug,
+                        refinement_config=self.refinement_config,
+                        phase=RefinePhase.SELF_REVIEW,
+                        conversations_dir=self.conversations_dir,
+                    )
+                    verify_result = verify_runner.run()
+                    if verify_result.completed:
+                        console.print("[green]    ✓ Refinement passed[/]")
+                    return verify_result.completed
+                continue
+
+            console.print(f"[yellow]    Refinement round {round_num} incomplete[/]")
 
         return False
 

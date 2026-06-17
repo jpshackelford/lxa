@@ -18,6 +18,7 @@ from src.ralph.multi_pr import (
     get_repo_slug,
     pull_branch,
 )
+from src.ralph.refine import RefinePhase
 
 SAMPLE_DESIGN_DOC = """\
 # Sample Design Doc
@@ -360,6 +361,107 @@ class TestMultiPRLoopRunner:
 
         output = runner._get_conversation_output(mock_conversation)
         assert "Task completed" in output
+
+
+class TestRefinementLoop:
+    """Tests for PR refinement loop orchestration."""
+
+    def _runner_result(self, completed: bool) -> MagicMock:
+        runner = MagicMock()
+        runner.run.return_value = MagicMock(completed=completed)
+        return runner
+
+    def test_run_refinement_passes_on_first_self_review(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test refinement succeeds immediately when self-review passes."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner.repo_slug = "owner/repo"
+        self_review = self._runner_result(completed=True)
+
+        with patch("src.ralph.multi_pr.RefineRunner", return_value=self_review) as mock_refine:
+            assert runner._run_refinement(42) is True
+
+        assert mock_refine.call_count == 1
+        assert mock_refine.call_args.kwargs["phase"] == RefinePhase.SELF_REVIEW
+
+    def test_run_refinement_passes_after_respond_phase(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test respond success loops back to self-review verification."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner.repo_slug = "owner/repo"
+        refine_runners = [
+            self._runner_result(completed=False),
+            self._runner_result(completed=True),
+            self._runner_result(completed=True),
+        ]
+
+        with patch("src.ralph.multi_pr.RefineRunner", side_effect=refine_runners) as mock_refine:
+            assert runner._run_refinement(42) is True
+
+        phases = [call.kwargs["phase"] for call in mock_refine.call_args_list]
+        assert phases == [
+            RefinePhase.SELF_REVIEW,
+            RefinePhase.RESPOND,
+            RefinePhase.SELF_REVIEW,
+        ]
+
+    def test_run_refinement_verifies_success_after_final_respond_phase(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test final-round respond success gets one last verification pass."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_refinement_rounds=1,
+        )
+        runner.repo_slug = "owner/repo"
+        refine_runners = [
+            self._runner_result(completed=False),
+            self._runner_result(completed=True),
+            self._runner_result(completed=True),
+        ]
+
+        with patch("src.ralph.multi_pr.RefineRunner", side_effect=refine_runners) as mock_refine:
+            assert runner._run_refinement(42) is True
+
+        phases = [call.kwargs["phase"] for call in mock_refine.call_args_list]
+        assert phases == [
+            RefinePhase.SELF_REVIEW,
+            RefinePhase.RESPOND,
+            RefinePhase.SELF_REVIEW,
+        ]
+
+    def test_run_refinement_fails_after_max_rounds(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test refinement fails when max rounds are exhausted."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            max_refinement_rounds=2,
+        )
+        runner.repo_slug = "owner/repo"
+        refine_runners = [
+            self._runner_result(completed=False),
+            self._runner_result(completed=True),
+            self._runner_result(completed=False),
+            self._runner_result(completed=False),
+        ]
+
+        with patch("src.ralph.multi_pr.RefineRunner", side_effect=refine_runners):
+            assert runner._run_refinement(42) is False
 
 
 class TestMilestoneExecution:
