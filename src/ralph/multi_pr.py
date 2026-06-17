@@ -141,6 +141,67 @@ def create_branch(workspace: Path, branch_name: str) -> bool:
     return True
 
 
+def push_branch(workspace: Path, branch: str) -> bool:
+    """Push a branch to origin and set upstream tracking."""
+    result = subprocess.run(
+        ["git", "push", "-u", "origin", branch],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        _log_command_failure(f"Push branch {branch}", result)
+        return False
+    return True
+
+
+def create_pr_for_branch(
+    workspace: Path,
+    repo_slug: str,
+    branch: str,
+    base_branch: str,
+    title: str,
+) -> tuple[int, str] | None:
+    """Create a draft PR for a branch and return its number and URL."""
+    if not push_branch(workspace, branch):
+        return None
+
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--repo",
+            repo_slug,
+            "--head",
+            branch,
+            "--base",
+            base_branch,
+            "--title",
+            title,
+            "--body",
+            f"Implements {title}.\n\n---\n*PR created by LXA multi-PR fallback.*",
+            "--draft",
+        ],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        _log_command_failure(f"Create PR for branch {branch}", result)
+        return None
+
+    pr_info = get_open_pr_for_branch(workspace, repo_slug, branch)
+    if pr_info is not None:
+        return pr_info
+
+    pr_url = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+    pr_number = pr_url.rsplit("/", maxsplit=1)[-1]
+    if pr_url and pr_number.isdigit():
+        return int(pr_number), pr_url
+    return None
+
+
 def get_open_pr_for_branch(workspace: Path, repo_slug: str, branch: str) -> tuple[int, str] | None:
     """Get the open PR number and URL for a branch, if any.
 
@@ -422,6 +483,16 @@ class MultiPRLoopRunner:
         # Get or create PR for this milestone
         pr_info = get_open_pr_for_branch(self.workspace, self.repo_slug, branch_name)
         if pr_info is None:
+            console.print("[yellow]  No PR found, creating fallback PR...[/]")
+            pr_info = create_pr_for_branch(
+                self.workspace,
+                self.repo_slug,
+                branch_name,
+                self.multi_pr_config.base_branch,
+                f"Milestone {index}: {title}",
+            )
+
+        if pr_info is None:
             return MilestoneResult(
                 milestone_index=index,
                 milestone_title=title,
@@ -429,7 +500,7 @@ class MultiPRLoopRunner:
                 pr_url=None,
                 merged=False,
                 refinement_passed=False,
-                stop_reason="No PR found for milestone branch",
+                stop_reason="No PR found and failed to create one for milestone branch",
             )
 
         pr_number, pr_url = pr_info

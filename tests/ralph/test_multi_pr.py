@@ -13,10 +13,12 @@ from src.ralph.multi_pr import (
     MultiPRResult,
     checkout_branch,
     create_branch,
+    create_pr_for_branch,
     get_current_branch,
     get_open_pr_for_branch,
     get_repo_slug,
     pull_branch,
+    push_branch,
 )
 from src.ralph.refine import RefinePhase
 
@@ -226,6 +228,28 @@ class TestGitHelpers:
             result = create_branch(temp_workspace, "new-feature")
             assert result is True
 
+    def test_push_branch_success(self, temp_workspace: Path) -> None:
+        """Test successful branch push."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = push_branch(temp_workspace, "feature")
+
+        assert result is True
+        mock_run.assert_called_once_with(
+            ["git", "push", "-u", "origin", "feature"],
+            cwd=temp_workspace,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_push_branch_failure(self, temp_workspace: Path) -> None:
+        """Test failed branch push."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+            result = push_branch(temp_workspace, "feature")
+
+        assert result is False
+
     def test_get_open_pr_for_branch_found(self, temp_workspace: Path) -> None:
         """Test finding an open PR for a branch."""
         import json
@@ -244,6 +268,51 @@ class TestGitHelpers:
             mock_run.return_value = MagicMock(returncode=0, stdout="[]")
             result = get_open_pr_for_branch(temp_workspace, "owner/repo", "feature")
             assert result is None
+
+    def test_create_pr_for_branch_creates_draft_pr(self, temp_workspace: Path) -> None:
+        """Test fallback PR creation pushes and opens a draft PR."""
+        with (
+            patch("src.ralph.multi_pr.push_branch", return_value=True) as mock_push,
+            patch("subprocess.run") as mock_run,
+            patch(
+                "src.ralph.multi_pr.get_open_pr_for_branch",
+                return_value=(42, "https://github.com/owner/repo/pull/42"),
+            ) as mock_get_pr,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            result = create_pr_for_branch(
+                temp_workspace,
+                "owner/repo",
+                "feature",
+                "main",
+                "Milestone 1: Feature",
+            )
+
+        assert result == (42, "https://github.com/owner/repo/pull/42")
+        mock_push.assert_called_once_with(temp_workspace, "feature")
+        mock_get_pr.assert_called_once_with(temp_workspace, "owner/repo", "feature")
+        command = mock_run.call_args.args[0]
+        assert command[:3] == ["gh", "pr", "create"]
+        assert "--draft" in command
+        assert "--base" in command
+        assert "main" in command
+
+    def test_create_pr_for_branch_stops_when_push_fails(self, temp_workspace: Path) -> None:
+        """Test fallback PR creation stops if branch push fails."""
+        with (
+            patch("src.ralph.multi_pr.push_branch", return_value=False),
+            patch("subprocess.run") as mock_run,
+        ):
+            result = create_pr_for_branch(
+                temp_workspace,
+                "owner/repo",
+                "feature",
+                "main",
+                "Milestone 1: Feature",
+            )
+
+        assert result is None
+        mock_run.assert_not_called()
 
 
 class TestMultiPRLoopRunner:
@@ -531,4 +600,38 @@ class TestMilestoneExecution:
 
         mock_checkout.assert_called_once_with(temp_workspace, "milestone-1")
         assert result.merged is False
-        assert result.stop_reason == "No PR found for milestone branch"
+        assert result.stop_reason == "No PR found and failed to create one for milestone branch"
+
+    def test_execute_milestone_creates_missing_pr_fallback(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test milestone execution creates a PR when none exists."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        pr_url = "https://github.com/owner/repo/pull/42"
+
+        with (
+            patch.object(runner, "repo_slug", "owner/repo"),
+            patch("src.ralph.multi_pr.create_branch", return_value=True),
+            patch.object(
+                runner,
+                "_run_orchestrator_iteration",
+                return_value=MagicMock(success=True, output=MILESTONE_COMPLETE_SIGNAL),
+            ),
+            patch("src.ralph.multi_pr.get_open_pr_for_branch", return_value=None),
+            patch(
+                "src.ralph.multi_pr.create_pr_for_branch", return_value=(42, pr_url)
+            ) as mock_create_pr,
+            patch.object(runner, "_run_refinement", return_value=False),
+        ):
+            result = runner._execute_milestone(1, "First Feature")
+
+        mock_create_pr.assert_called_once_with(
+            temp_workspace, "owner/repo", "milestone-1", "main", "Milestone 1: First Feature"
+        )
+        assert result.pr_number == 42
+        assert result.pr_url == pr_url
+        assert result.stop_reason == "Refinement did not pass"
