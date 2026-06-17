@@ -293,7 +293,12 @@ class MultiPRLoopRunner:
             )
 
         if not pull_branch(self.workspace, base_branch):
-            console.print(f"[yellow]Warning:[/] Failed to pull {base_branch}")
+            return self._build_result(
+                completed=False,
+                stop_reason=f"Failed to pull base branch: {base_branch}",
+                started_at=started_at,
+                total=total_milestones,
+            )
 
         # Process each milestone
         while True:
@@ -366,9 +371,11 @@ class MultiPRLoopRunner:
         branch_name = f"milestone-{index}"
 
         # Create feature branch (or checkout if it already exists)
-        if not create_branch(self.workspace, branch_name) and not checkout_branch(
-            self.workspace, branch_name
-        ):
+        branch_ready = create_branch(self.workspace, branch_name)
+        if not branch_ready:
+            branch_ready = checkout_branch(self.workspace, branch_name)
+
+        if not branch_ready:
             return MilestoneResult(
                 milestone_index=index,
                 milestone_title=title,
@@ -376,7 +383,7 @@ class MultiPRLoopRunner:
                 pr_url=None,
                 merged=False,
                 refinement_passed=False,
-                stop_reason=f"Failed to create/checkout branch: {branch_name}",
+                stop_reason=f"Failed to create or checkout branch: {branch_name}",
             )
 
         # Run orchestrator iterations until milestone completes

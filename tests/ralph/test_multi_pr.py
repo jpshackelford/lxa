@@ -292,6 +292,25 @@ class TestMultiPRLoopRunner:
             assert result.milestones_completed == 0
             assert "Already complete" in result.stop_reason
 
+    def test_run_fails_when_initial_base_pull_fails(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test run() stops when the starting base branch cannot be pulled."""
+        with (
+            patch.object(MultiPRLoopRunner, "_print_start_banner"),
+            patch("src.ralph.multi_pr.checkout_branch", return_value=True),
+            patch("src.ralph.multi_pr.pull_branch", return_value=False),
+        ):
+            runner = MultiPRLoopRunner(
+                llm=mock_llm,
+                design_doc_path=design_doc,
+                workspace=temp_workspace,
+            )
+            result = runner.run()
+
+        assert result.completed is False
+        assert result.stop_reason == "Failed to pull base branch: main"
+
     def test_build_context_message_includes_multi_pr_mode(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
     ) -> None:
@@ -485,4 +504,31 @@ class TestMilestoneExecution:
             result = runner._execute_milestone(1, "First Feature")
 
             assert result.merged is False
-            assert "Failed to create/checkout branch" in result.stop_reason
+            assert "Failed to create or checkout branch" in result.stop_reason
+
+    def test_execute_milestone_checks_out_existing_branch(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test milestone execution checks out a branch when creation fails."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+
+        with (
+            patch.object(runner, "repo_slug", "owner/repo"),
+            patch("src.ralph.multi_pr.create_branch", return_value=False),
+            patch("src.ralph.multi_pr.checkout_branch", return_value=True) as mock_checkout,
+            patch.object(
+                runner,
+                "_run_orchestrator_iteration",
+                return_value=MagicMock(success=True, output=MILESTONE_COMPLETE_SIGNAL),
+            ),
+            patch("src.ralph.multi_pr.get_open_pr_for_branch", return_value=None),
+        ):
+            result = runner._execute_milestone(1, "First Feature")
+
+        mock_checkout.assert_called_once_with(temp_workspace, "milestone-1")
+        assert result.merged is False
+        assert result.stop_reason == "No PR found for milestone branch"
