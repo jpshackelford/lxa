@@ -10,6 +10,7 @@ Implements the --multi-pr mode which:
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 from dataclasses import dataclass
@@ -75,6 +76,15 @@ class MultiPRResult:
     ended_at: datetime
 
 
+def _log_command_failure(action: str, result: subprocess.CompletedProcess[str]) -> None:
+    """Log details for a failed subprocess command."""
+    stderr = result.stderr.strip() if result.stderr else ""
+    if stderr:
+        logger.warning("%s failed: %s", action, stderr)
+    else:
+        logger.warning("%s failed with exit code %s", action, result.returncode)
+
+
 def get_current_branch(workspace: Path) -> str:
     """Get the current git branch name."""
     result = subprocess.run(
@@ -83,7 +93,10 @@ def get_current_branch(workspace: Path) -> str:
         capture_output=True,
         text=True,
     )
-    return result.stdout.strip() if result.returncode == 0 else ""
+    if result.returncode != 0:
+        _log_command_failure("Get current branch", result)
+        return ""
+    return result.stdout.strip()
 
 
 def checkout_branch(workspace: Path, branch: str) -> bool:
@@ -94,7 +107,10 @@ def checkout_branch(workspace: Path, branch: str) -> bool:
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        _log_command_failure(f"Checkout branch {branch}", result)
+        return False
+    return True
 
 
 def pull_branch(workspace: Path, branch: str) -> bool:
@@ -105,7 +121,10 @@ def pull_branch(workspace: Path, branch: str) -> bool:
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        _log_command_failure(f"Pull branch {branch}", result)
+        return False
+    return True
 
 
 def create_branch(workspace: Path, branch_name: str) -> bool:
@@ -116,7 +135,10 @@ def create_branch(workspace: Path, branch_name: str) -> bool:
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        _log_command_failure(f"Create branch {branch_name}", result)
+        return False
+    return True
 
 
 def get_open_pr_for_branch(workspace: Path, repo_slug: str, branch: str) -> tuple[int, str] | None:
@@ -143,8 +165,6 @@ def get_open_pr_for_branch(workspace: Path, repo_slug: str, branch: str) -> tupl
     )
     if result.returncode != 0:
         return None
-
-    import json
 
     try:
         prs = json.loads(result.stdout)
