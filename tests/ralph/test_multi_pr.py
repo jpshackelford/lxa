@@ -1,5 +1,6 @@
 """Tests for the Multi-PR Loop Runner."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +9,7 @@ import pytest
 from src.ralph.github_review import CIStatus
 from src.ralph.multi_pr import (
     MILESTONE_COMPLETE_SIGNAL,
+    GitResult,
     MilestoneResult,
     MultiPRConfig,
     MultiPRLoopRunner,
@@ -22,6 +24,7 @@ from src.ralph.multi_pr import (
     push_branch,
 )
 from src.ralph.refine import RefinePhase
+from src.ralph.runner import IterationResult
 
 SAMPLE_DESIGN_DOC = """\
 # Sample Design Doc
@@ -206,28 +209,28 @@ class TestGitHelpers:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = checkout_branch(temp_workspace, "feature")
-            assert result is True
+            assert result.success is True
 
     def test_checkout_branch_failure(self, temp_workspace: Path) -> None:
         """Test failed branch checkout."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
             result = checkout_branch(temp_workspace, "nonexistent")
-            assert result is False
+            assert result.success is False
 
     def test_pull_branch_success(self, temp_workspace: Path) -> None:
         """Test successful branch pull."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = pull_branch(temp_workspace, "main")
-            assert result is True
+            assert result.success is True
 
     def test_create_branch_success(self, temp_workspace: Path) -> None:
         """Test successful branch creation."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = create_branch(temp_workspace, "new-feature")
-            assert result is True
+            assert result.success is True
 
     def test_push_branch_success(self, temp_workspace: Path) -> None:
         """Test successful branch push."""
@@ -235,7 +238,7 @@ class TestGitHelpers:
             mock_run.return_value = MagicMock(returncode=0)
             result = push_branch(temp_workspace, "feature")
 
-        assert result is True
+        assert result.success is True
         mock_run.assert_called_once_with(
             ["git", "push", "-u", "origin", "feature"],
             cwd=temp_workspace,
@@ -249,7 +252,40 @@ class TestGitHelpers:
             mock_run.return_value = MagicMock(returncode=1)
             result = push_branch(temp_workspace, "feature")
 
-        assert result is False
+        assert result.success is False
+
+    def test_git_branch_helpers_exercise_real_repository(self, temp_workspace: Path) -> None:
+        """Test git branch helpers against real git commands instead of mocks."""
+        subprocess.run(["git", "init"], cwd=temp_workspace, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=temp_workspace,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=temp_workspace,
+            check=True,
+            capture_output=True,
+        )
+        (temp_workspace / "README.md").write_text("# Test\n")
+        subprocess.run(["git", "add", "README.md"], cwd=temp_workspace, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "initial"],
+            cwd=temp_workspace,
+            check=True,
+            capture_output=True,
+        )
+        base_branch = get_current_branch(temp_workspace)
+
+        assert create_branch(temp_workspace, "feature").success is True
+        assert get_current_branch(temp_workspace) == "feature"
+        assert checkout_branch(temp_workspace, base_branch).success is True
+        assert get_current_branch(temp_workspace) == base_branch
+        missing_branch = checkout_branch(temp_workspace, "missing")
+        assert missing_branch.success is False
+        assert "Checkout branch missing failed" in missing_branch.error
 
     def test_get_open_pr_for_branch_found(self, temp_workspace: Path) -> None:
         """Test finding an open PR for a branch."""
@@ -273,7 +309,7 @@ class TestGitHelpers:
     def test_create_pr_for_branch_creates_draft_pr(self, temp_workspace: Path) -> None:
         """Test fallback PR creation pushes and opens a draft PR."""
         with (
-            patch("src.ralph.multi_pr.push_branch", return_value=True) as mock_push,
+            patch("src.ralph.multi_pr.push_branch", return_value=GitResult(True)) as mock_push,
             patch("subprocess.run") as mock_run,
             patch(
                 "src.ralph.multi_pr.get_open_pr_for_branch",
@@ -301,7 +337,7 @@ class TestGitHelpers:
     def test_create_pr_for_branch_stops_when_push_fails(self, temp_workspace: Path) -> None:
         """Test fallback PR creation stops if branch push fails."""
         with (
-            patch("src.ralph.multi_pr.push_branch", return_value=False),
+            patch("src.ralph.multi_pr.push_branch", return_value=GitResult(False, "push failed")),
             patch("subprocess.run") as mock_run,
         ):
             result = create_pr_for_branch(
@@ -368,8 +404,8 @@ class TestMultiPRLoopRunner:
         """Test run() stops when the starting base branch cannot be pulled."""
         with (
             patch.object(MultiPRLoopRunner, "_print_start_banner"),
-            patch("src.ralph.multi_pr.checkout_branch", return_value=True),
-            patch("src.ralph.multi_pr.pull_branch", return_value=False),
+            patch("src.ralph.multi_pr.checkout_branch", return_value=GitResult(True)),
+            patch("src.ralph.multi_pr.pull_branch", return_value=GitResult(False, "pull failed")),
         ):
             runner = MultiPRLoopRunner(
                 llm=mock_llm,
@@ -379,7 +415,7 @@ class TestMultiPRLoopRunner:
             result = runner.run()
 
         assert result.completed is False
-        assert result.stop_reason == "Failed to pull base branch: main"
+        assert result.stop_reason == "Failed to pull base branch: main (pull failed)"
 
     def test_build_context_message_includes_multi_pr_mode(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
@@ -410,6 +446,48 @@ class TestMultiPRLoopRunner:
 
         assert "base branch: v2" in message
         assert "targeting v2" in message
+
+    def test_milestone_is_complete_from_agent_signal(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test milestone completion detection from real iteration output."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        iteration_result = IterationResult(
+            iteration=1,
+            success=True,
+            output=f"done {MILESTONE_COMPLETE_SIGNAL}",
+            completion_detected=True,
+        )
+
+        assert runner._milestone_is_complete(1, iteration_result) is True
+
+    def test_milestone_is_complete_from_design_doc_checklist(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test milestone completion detection with real ChecklistParser logic."""
+        design_doc.write_text(
+            SAMPLE_DESIGN_DOC.replace("- [ ] src/feature.py", "- [x] src/feature.py").replace(
+                "- [ ] tests/test_feature.py", "- [x] tests/test_feature.py"
+            )
+        )
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        iteration_result = IterationResult(
+            iteration=1,
+            success=True,
+            output="no completion signal",
+            completion_detected=False,
+        )
+
+        assert runner._milestone_is_complete(1, iteration_result) is True
+        assert runner._milestone_is_complete(2, iteration_result) is False
 
     def test_milestone_complete_signal_in_context(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
@@ -568,8 +646,13 @@ class TestMilestoneExecution:
 
         with (
             patch.object(runner, "repo_slug", "owner/repo"),
-            patch("src.ralph.multi_pr.create_branch", return_value=False),
-            patch("src.ralph.multi_pr.checkout_branch", return_value=False),
+            patch(
+                "src.ralph.multi_pr.create_branch", return_value=GitResult(False, "create failed")
+            ),
+            patch(
+                "src.ralph.multi_pr.checkout_branch",
+                return_value=GitResult(False, "checkout failed"),
+            ),
         ):
             result = runner._execute_milestone(1, "First Feature")
 
@@ -588,8 +671,12 @@ class TestMilestoneExecution:
 
         with (
             patch.object(runner, "repo_slug", "owner/repo"),
-            patch("src.ralph.multi_pr.create_branch", return_value=False),
-            patch("src.ralph.multi_pr.checkout_branch", return_value=True) as mock_checkout,
+            patch(
+                "src.ralph.multi_pr.create_branch", return_value=GitResult(False, "create failed")
+            ),
+            patch(
+                "src.ralph.multi_pr.checkout_branch", return_value=GitResult(True)
+            ) as mock_checkout,
             patch.object(
                 runner,
                 "_run_orchestrator_iteration",
@@ -601,7 +688,9 @@ class TestMilestoneExecution:
 
         mock_checkout.assert_called_once_with(temp_workspace, "milestone-1")
         assert result.merged is False
-        assert result.stop_reason == "No PR found and failed to create one for milestone branch"
+        assert (
+            result.stop_reason == "No PR found and runner failed to create one for milestone branch"
+        )
 
     def test_execute_milestone_creates_missing_pr_fallback(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
@@ -616,7 +705,7 @@ class TestMilestoneExecution:
 
         with (
             patch.object(runner, "repo_slug", "owner/repo"),
-            patch("src.ralph.multi_pr.create_branch", return_value=True),
+            patch("src.ralph.multi_pr.create_branch", return_value=GitResult(True)),
             patch.object(
                 runner,
                 "_run_orchestrator_iteration",
@@ -637,6 +726,31 @@ class TestMilestoneExecution:
         assert result.pr_url == pr_url
         assert result.stop_reason == "Refinement did not pass"
 
+    def test_merge_milestone_pr_surfaces_commit_message_warning(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test commit message generation warnings are included in milestone results."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+        )
+        runner.repo_slug = "owner/repo"
+        pr_url = "https://github.com/owner/repo/pull/42"
+
+        with (
+            patch(
+                "src.ralph.multi_pr.prepare_squash_commit_message",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("src.ralph.multi_pr.wait_for_ci", return_value=CIStatus.PASSING),
+            patch("src.ralph.multi_pr.merge_pr", return_value=True),
+        ):
+            result = runner._merge_milestone_pr(1, "First Feature", 42, pr_url)
+
+        assert result.merged is True
+        assert result.warnings == ["Commit message generation failed: boom"]
+
     def test_execute_milestone_uses_configured_ci_timeout(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
     ) -> None:
@@ -651,7 +765,7 @@ class TestMilestoneExecution:
 
         with (
             patch.object(runner, "repo_slug", "owner/repo"),
-            patch("src.ralph.multi_pr.create_branch", return_value=True),
+            patch("src.ralph.multi_pr.create_branch", return_value=GitResult(True)),
             patch.object(
                 runner,
                 "_run_orchestrator_iteration",

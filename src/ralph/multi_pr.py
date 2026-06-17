@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +50,18 @@ class MultiPRConfig:
     base_branch: str = "main"  # Target branch for PRs
 
 
+@dataclass(frozen=True)
+class GitResult:
+    """Result of a git helper command."""
+
+    success: bool
+    error: str = ""
+
+    def __bool__(self) -> bool:
+        """Return success status for concise call sites."""
+        return self.success
+
+
 @dataclass
 class MilestoneResult:
     """Result of a single milestone execution."""
@@ -61,6 +73,7 @@ class MilestoneResult:
     merged: bool
     refinement_passed: bool
     stop_reason: str
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -76,13 +89,32 @@ class MultiPRResult:
     ended_at: datetime
 
 
-def _log_command_failure(action: str, result: subprocess.CompletedProcess[str]) -> None:
-    """Log details for a failed subprocess command."""
+def _command_error(action: str, result: subprocess.CompletedProcess[str]) -> str:
+    """Build a human-readable error message for a failed subprocess command."""
     stderr = result.stderr.strip() if result.stderr else ""
     if stderr:
-        logger.warning("%s failed: %s", action, stderr)
-    else:
-        logger.warning("%s failed with exit code %s", action, result.returncode)
+        return f"{action} failed: {stderr}"
+    return f"{action} failed with exit code {result.returncode}"
+
+
+def _log_command_failure(action: str, result: subprocess.CompletedProcess[str]) -> None:
+    """Log details for a failed subprocess command."""
+    logger.warning(_command_error(action, result))
+
+
+def _git_result(action: str, result: subprocess.CompletedProcess[str]) -> GitResult:
+    """Convert a subprocess result into a GitResult with error context."""
+    if result.returncode == 0:
+        return GitResult(success=True)
+
+    error = _command_error(action, result)
+    logger.warning(error)
+    return GitResult(success=False, error=error)
+
+
+def _format_failure(message: str, error: str) -> str:
+    """Append detailed error context to a stop reason when available."""
+    return f"{message} ({error})" if error else message
 
 
 def get_current_branch(workspace: Path) -> str:
@@ -99,7 +131,7 @@ def get_current_branch(workspace: Path) -> str:
     return result.stdout.strip()
 
 
-def checkout_branch(workspace: Path, branch: str) -> bool:
+def checkout_branch(workspace: Path, branch: str) -> GitResult:
     """Checkout a git branch."""
     result = subprocess.run(
         ["git", "checkout", branch],
@@ -107,13 +139,10 @@ def checkout_branch(workspace: Path, branch: str) -> bool:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        _log_command_failure(f"Checkout branch {branch}", result)
-        return False
-    return True
+    return _git_result(f"Checkout branch {branch}", result)
 
 
-def pull_branch(workspace: Path, branch: str) -> bool:
+def pull_branch(workspace: Path, branch: str) -> GitResult:
     """Pull latest from remote for a branch."""
     result = subprocess.run(
         ["git", "pull", "origin", branch],
@@ -121,13 +150,10 @@ def pull_branch(workspace: Path, branch: str) -> bool:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        _log_command_failure(f"Pull branch {branch}", result)
-        return False
-    return True
+    return _git_result(f"Pull branch {branch}", result)
 
 
-def create_branch(workspace: Path, branch_name: str) -> bool:
+def create_branch(workspace: Path, branch_name: str) -> GitResult:
     """Create and checkout a new branch."""
     result = subprocess.run(
         ["git", "checkout", "-b", branch_name],
@@ -135,13 +161,10 @@ def create_branch(workspace: Path, branch_name: str) -> bool:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        _log_command_failure(f"Create branch {branch_name}", result)
-        return False
-    return True
+    return _git_result(f"Create branch {branch_name}", result)
 
 
-def push_branch(workspace: Path, branch: str) -> bool:
+def push_branch(workspace: Path, branch: str) -> GitResult:
     """Push a branch to origin and set upstream tracking."""
     result = subprocess.run(
         ["git", "push", "-u", "origin", branch],
@@ -149,10 +172,7 @@ def push_branch(workspace: Path, branch: str) -> bool:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        _log_command_failure(f"Push branch {branch}", result)
-        return False
-    return True
+    return _git_result(f"Push branch {branch}", result)
 
 
 def create_pr_for_branch(
@@ -180,7 +200,12 @@ def create_pr_for_branch(
             "--title",
             title,
             "--body",
-            f"Implements {title}.\n\n---\n*PR created by LXA multi-PR fallback.*",
+            (
+                f"Implements {title}.\n\n---\n"
+                "*PR created by LXA multi-PR runner to ensure every milestone has "
+                "a reviewable PR.*\n"
+                "*Created by an AI agent on behalf of the user.*"
+            ),
             "--draft",
         ],
         cwd=workspace,
@@ -348,18 +373,24 @@ class MultiPRLoopRunner:
 
         # Ensure we're on base branch to start
         base_branch = self.multi_pr_config.base_branch
-        if not checkout_branch(self.workspace, base_branch):
+        checkout_result = checkout_branch(self.workspace, base_branch)
+        if not checkout_result:
             return self._build_result(
                 completed=False,
-                stop_reason=f"Failed to checkout base branch: {base_branch}",
+                stop_reason=_format_failure(
+                    f"Failed to checkout base branch: {base_branch}", checkout_result.error
+                ),
                 started_at=started_at,
                 total=total_milestones,
             )
 
-        if not pull_branch(self.workspace, base_branch):
+        pull_result = pull_branch(self.workspace, base_branch)
+        if not pull_result:
             return self._build_result(
                 completed=False,
-                stop_reason=f"Failed to pull base branch: {base_branch}",
+                stop_reason=_format_failure(
+                    f"Failed to pull base branch: {base_branch}", pull_result.error
+                ),
                 started_at=started_at,
                 total=total_milestones,
             )
@@ -398,18 +429,24 @@ class MultiPRLoopRunner:
 
             # After merge, sync with base branch
             console.print(f"[dim]Syncing with {base_branch}...[/]")
-            if not checkout_branch(self.workspace, base_branch):
+            checkout_result = checkout_branch(self.workspace, base_branch)
+            if not checkout_result:
                 return self._build_result(
                     completed=False,
-                    stop_reason="Failed to checkout base branch after merge",
+                    stop_reason=_format_failure(
+                        "Failed to checkout base branch after merge", checkout_result.error
+                    ),
                     started_at=started_at,
                     total=total_milestones,
                 )
 
-            if not pull_branch(self.workspace, base_branch):
+            pull_result = pull_branch(self.workspace, base_branch)
+            if not pull_result:
                 return self._build_result(
                     completed=False,
-                    stop_reason="Failed to pull base branch after merge",
+                    stop_reason=_format_failure(
+                        "Failed to pull base branch after merge", pull_result.error
+                    ),
                     started_at=started_at,
                     total=total_milestones,
                 )
@@ -423,35 +460,71 @@ class MultiPRLoopRunner:
         )
 
     def _execute_milestone(self, index: int, title: str) -> MilestoneResult:
-        """Execute a single milestone: implement, create PR, refine, merge.
-
-        Args:
-            index: Milestone index number
-            title: Milestone title
-
-        Returns:
-            MilestoneResult with execution details
-        """
-        branch_name = f"milestone-{index}"
-
-        # Create feature branch (or checkout if it already exists)
-        branch_ready = create_branch(self.workspace, branch_name)
-        if not branch_ready:
-            branch_ready = checkout_branch(self.workspace, branch_name)
-
-        if not branch_ready:
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=None,
-                pr_url=None,
+        """Execute a single milestone: implement, ensure PR, refine, merge."""
+        branch_name, branch_error = self._prepare_milestone_branch(index)
+        if branch_name is None:
+            return self._milestone_result(
+                index,
+                title,
                 merged=False,
                 refinement_passed=False,
-                stop_reason=f"Failed to create or checkout branch: {branch_name}",
+                stop_reason=branch_error,
             )
 
-        # Run orchestrator iterations until milestone completes
-        milestone_completed = False
+        if not self._run_milestone_iterations(index):
+            return self._milestone_result(
+                index,
+                title,
+                merged=False,
+                refinement_passed=False,
+                stop_reason="Milestone did not complete within iteration limit",
+            )
+
+        pr_info = self._ensure_milestone_pr(index, title, branch_name)
+        if pr_info is None:
+            return self._milestone_result(
+                index,
+                title,
+                merged=False,
+                refinement_passed=False,
+                stop_reason="No PR found and runner failed to create one for milestone branch",
+            )
+
+        pr_number, pr_url = pr_info
+        console.print(f"[dim]  PR #{pr_number}: {pr_url}[/]")
+
+        refinement_passed = self._run_refinement(pr_number)
+        if not refinement_passed:
+            return self._milestone_result(
+                index,
+                title,
+                pr_info=pr_info,
+                merged=False,
+                refinement_passed=False,
+                stop_reason="Refinement did not pass",
+            )
+
+        return self._merge_milestone_pr(index, title, pr_number, pr_url)
+
+    def _prepare_milestone_branch(self, index: int) -> tuple[str | None, str]:
+        """Create or check out the milestone branch."""
+        branch_name = f"milestone-{index}"
+
+        create_result = create_branch(self.workspace, branch_name)
+        if create_result:
+            return branch_name, ""
+
+        checkout_result = checkout_branch(self.workspace, branch_name)
+        if checkout_result:
+            return branch_name, ""
+
+        details = "; ".join(
+            detail for detail in (create_result.error, checkout_result.error) if detail
+        )
+        return None, _format_failure(f"Failed to create or checkout branch: {branch_name}", details)
+
+    def _run_milestone_iterations(self, index: int) -> bool:
+        """Run orchestrator iterations until the milestone is complete."""
         for iteration in range(1, self.max_iterations_per_milestone + 1):
             console.print(f"[cyan]  Iteration {iteration}/{self.max_iterations_per_milestone}[/]")
             result = self._run_orchestrator_iteration(iteration)
@@ -460,114 +533,109 @@ class MultiPRLoopRunner:
                 console.print(f"[red]  Iteration failed: {result.error}[/]")
                 continue
 
-            # Check if milestone completed (look for the signal or check checklist)
-            if MILESTONE_COMPLETE_SIGNAL in result.output:
-                milestone_completed = True
-                break
+            if self._milestone_is_complete(index, result):
+                return True
 
-            # Also check design doc directly
-            parser = ChecklistParser(self.design_doc_path)
-            milestone = parser.get_milestone_by_index(index)
-            if milestone and milestone.tasks_remaining == 0:
-                milestone_completed = True
-                break
+        return False
 
-        if not milestone_completed:
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=None,
-                pr_url=None,
-                merged=False,
-                refinement_passed=False,
-                stop_reason="Milestone did not complete within iteration limit",
-            )
+    def _milestone_is_complete(self, index: int, result: IterationResult) -> bool:
+        """Check the agent output and design doc for milestone completion."""
+        if MILESTONE_COMPLETE_SIGNAL in result.output:
+            return True
 
-        # Get or create PR for this milestone
+        parser = ChecklistParser(self.design_doc_path)
+        milestone = parser.get_milestone_by_index(index)
+        return milestone is not None and milestone.tasks_remaining == 0
+
+    def _ensure_milestone_pr(
+        self, index: int, title: str, branch_name: str
+    ) -> tuple[int, str] | None:
+        """Ensure the milestone branch has an open PR before refinement."""
         pr_info = get_open_pr_for_branch(self.workspace, self.repo_slug, branch_name)
-        if pr_info is None:
-            console.print("[yellow]  No PR found, creating fallback PR...[/]")
-            pr_info = create_pr_for_branch(
-                self.workspace,
-                self.repo_slug,
-                branch_name,
-                self.multi_pr_config.base_branch,
-                f"Milestone {index}: {title}",
-            )
+        if pr_info is not None:
+            return pr_info
 
-        if pr_info is None:
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=None,
-                pr_url=None,
-                merged=False,
-                refinement_passed=False,
-                stop_reason="No PR found and failed to create one for milestone branch",
-            )
+        console.print("[yellow]  No PR found; runner is creating milestone PR...[/]")
+        return create_pr_for_branch(
+            self.workspace,
+            self.repo_slug,
+            branch_name,
+            self.multi_pr_config.base_branch,
+            f"Milestone {index}: {title}",
+        )
 
-        pr_number, pr_url = pr_info
-        console.print(f"[dim]  PR #{pr_number}: {pr_url}[/]")
-
-        # Run refinement loop
-        refinement_passed = self._run_refinement(pr_number)
-
-        if not refinement_passed:
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=pr_number,
-                pr_url=pr_url,
-                merged=False,
-                refinement_passed=False,
-                stop_reason="Refinement did not pass",
-            )
-
-        # Merge the PR
+    def _merge_milestone_pr(
+        self, index: int, title: str, pr_number: int, pr_url: str
+    ) -> MilestoneResult:
+        """Wait for CI and merge a refined milestone PR."""
         console.print(f"[dim]  Merging PR #{pr_number}...[/]")
         owner, repo = self.repo_slug.split("/")
+        warnings: list[str] = []
 
-        # Generate squash commit message
         try:
             prepare_squash_commit_message(self.llm, owner, repo, pr_number, auto_merge=False)
         except Exception as e:
-            logger.warning(f"Failed to generate commit message: {e}")
+            warning = f"Commit message generation failed: {e}"
+            logger.warning(warning)
+            console.print(f"[yellow]  {warning}[/]")
+            warnings.append(warning)
 
-        # Wait for CI before merge
         ci_status = wait_for_ci(owner, repo, pr_number, timeout=self.ci_timeout)
         if ci_status != CIStatus.PASSING:
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=pr_number,
-                pr_url=pr_url,
+            return self._milestone_result(
+                index,
+                title,
+                pr_info=(pr_number, pr_url),
                 merged=False,
                 refinement_passed=True,
                 stop_reason=f"CI not passing before merge: {ci_status.value}",
+                warnings=warnings,
             )
 
-        # Merge
         if not merge_pr(owner, repo, pr_number, method="squash"):
-            return MilestoneResult(
-                milestone_index=index,
-                milestone_title=title,
-                pr_number=pr_number,
-                pr_url=pr_url,
+            return self._milestone_result(
+                index,
+                title,
+                pr_info=(pr_number, pr_url),
                 merged=False,
                 refinement_passed=True,
                 stop_reason="Failed to merge PR",
+                warnings=warnings,
             )
 
         console.print(f"[green]  ✓ PR #{pr_number} merged[/]")
+        return self._milestone_result(
+            index,
+            title,
+            pr_info=(pr_number, pr_url),
+            merged=True,
+            refinement_passed=True,
+            stop_reason="Success",
+            warnings=warnings,
+        )
 
+    def _milestone_result(
+        self,
+        index: int,
+        title: str,
+        *,
+        merged: bool,
+        refinement_passed: bool,
+        stop_reason: str,
+        pr_info: tuple[int, str] | None = None,
+        warnings: list[str] | None = None,
+    ) -> MilestoneResult:
+        """Build a milestone result with consistent PR and warning fields."""
+        pr_number, pr_url = pr_info if pr_info is not None else (None, None)
         return MilestoneResult(
             milestone_index=index,
             milestone_title=title,
             pr_number=pr_number,
             pr_url=pr_url,
-            merged=True,
-            refinement_passed=True,
-            stop_reason="Success",
+            merged=merged,
+            refinement_passed=refinement_passed,
+            stop_reason=stop_reason,
+            warnings=warnings or [],
         )
 
     def _run_orchestrator_iteration(self, iteration: int) -> IterationResult:
@@ -781,7 +849,10 @@ Critical rules:
         for m in self._milestone_results:
             status = "[green]✓[/]" if m.merged else "[red]✗[/]"
             pr_info = f"PR #{m.pr_number}" if m.pr_number else "no PR"
-            milestone_lines.append(f"  {status} M{m.milestone_index}: {pr_info}")
+            warning_info = f" ({len(m.warnings)} warnings)" if m.warnings else ""
+            milestone_lines.append(f"  {status} M{m.milestone_index}: {pr_info}{warning_info}")
+            for warning in m.warnings:
+                milestone_lines.append(f"    [yellow]![/] {warning}")
 
         milestones_summary = "\n".join(milestone_lines) if milestone_lines else "  (none)"
 
