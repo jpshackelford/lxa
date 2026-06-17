@@ -301,6 +301,20 @@ class TestRepoManagement:
         config = load_board_config("test")
         assert "owner/repo" in config.repos
 
+    def test_add_watched_repo_updates_timestamp(self, temp_config_dir):  # noqa: ARG002
+        """Adding a watched repo marks the board as locally modified."""
+        board = BoardConfig(name="test", project_id="PVT_123")
+        save_board_config(board, "test")
+        before_update = load_board_config("test").updated_at
+
+        result = add_watched_repo("owner/repo")
+
+        config = load_board_config("test")
+        assert result is True
+        assert before_update is not None
+        assert config.updated_at is not None
+        assert config.updated_at >= before_update
+
     def test_add_duplicate_repo(self, temp_config_dir):  # noqa: ARG002
         """Adding duplicate repo returns False."""
         board = BoardConfig(name="test", project_id="PVT_123", repos=["owner/repo"])
@@ -334,6 +348,20 @@ class TestRepoManagement:
 
         config = load_board_config("test")
         assert "owner/repo" not in config.repos
+
+    def test_remove_watched_repo_updates_timestamp(self, temp_config_dir):  # noqa: ARG002
+        """Removing a watched repo marks the board as locally modified."""
+        board = BoardConfig(name="test", project_id="PVT_123", repos=["owner/repo"])
+        save_board_config(board, "test")
+        before_update = load_board_config("test").updated_at
+
+        result = remove_watched_repo("owner/repo")
+
+        config = load_board_config("test")
+        assert result is True
+        assert before_update is not None
+        assert config.updated_at is not None
+        assert config.updated_at >= before_update
 
     def test_remove_nonexistent_repo(self, temp_config_dir):  # noqa: ARG002
         """Removing nonexistent repo returns False."""

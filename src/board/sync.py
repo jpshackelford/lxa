@@ -117,9 +117,14 @@ def merge_configs(
                 merged.boards[name] = remote_board
                 actions.append(SyncAction(name, "updated", "download", "remote is newer"))
             else:
-                # Same timestamp - prefer remote (it's the "server")
-                merged.boards[name] = remote_board
-                actions.append(SyncAction(name, "unchanged", "both"))
+                if local_board == remote_board:
+                    merged.boards[name] = remote_board
+                    actions.append(SyncAction(name, "unchanged", "both"))
+                else:
+                    merged.boards[name] = local_board
+                    actions.append(
+                        SyncAction(name, "updated", "upload", "local differs at same timestamp")
+                    )
 
         elif local_board and not remote_board:
             # Only in local

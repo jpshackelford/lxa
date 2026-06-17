@@ -108,6 +108,7 @@ def add_repo(
         return AddRepoResult(added=False, board_name=target_name, created_board=created_board)
 
     board.repos.append(repo)
+    board.touch()
     save_boards_config(boards)
     return AddRepoResult(added=True, board_name=target_name, created_board=created_board)
 
