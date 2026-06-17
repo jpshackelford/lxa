@@ -9,7 +9,8 @@
 Human direction for the next orchestrator run:
 - Ignore PR #82 while it remains awaiting human approval; it should not block the PR/implementation slot.
 - Proceed with new PRs for high-priority bugs and ready backlog issues instead of idling on the approval wait.
-- Prioritize ready high-priority work first, especially #7 (`priority:high`, bug) and #79 (`priority:high`), then continue through the remaining ready backlog by priority.
+- **Do not pick up issues with the `hold` label**, even if they are otherwise `ready` and `priority:high`.
+- Prioritize ready, non-held high-priority work first. Current label check: #7 is eligible (`bug`, `ready`, `priority:high`); #79 is **not eligible** because it has `hold`.
 - Do not auto-disable solely because PR #82 is still waiting for approval.
 
 **Automation action requested:** Re-enable `LXA Workflow Orchestrator` and dispatch a run so it wakes up immediately.
