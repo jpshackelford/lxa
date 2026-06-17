@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.ralph.github_review import CIStatus
 from src.ralph.multi_pr import (
     MILESTONE_COMPLETE_SIGNAL,
     MilestoneResult,
@@ -635,3 +636,34 @@ class TestMilestoneExecution:
         assert result.pr_number == 42
         assert result.pr_url == pr_url
         assert result.stop_reason == "Refinement did not pass"
+
+    def test_execute_milestone_uses_configured_ci_timeout(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test milestone merge waits for CI using configured timeout."""
+        runner = MultiPRLoopRunner(
+            llm=mock_llm,
+            design_doc_path=design_doc,
+            workspace=temp_workspace,
+            ci_timeout=123,
+        )
+        pr_url = "https://github.com/owner/repo/pull/42"
+
+        with (
+            patch.object(runner, "repo_slug", "owner/repo"),
+            patch("src.ralph.multi_pr.create_branch", return_value=True),
+            patch.object(
+                runner,
+                "_run_orchestrator_iteration",
+                return_value=MagicMock(success=True, output=MILESTONE_COMPLETE_SIGNAL),
+            ),
+            patch("src.ralph.multi_pr.get_open_pr_for_branch", return_value=(42, pr_url)),
+            patch.object(runner, "_run_refinement", return_value=True),
+            patch("src.ralph.multi_pr.prepare_squash_commit_message"),
+            patch("src.ralph.multi_pr.wait_for_ci", return_value=CIStatus.FAILING) as mock_wait,
+        ):
+            result = runner._execute_milestone(1, "First Feature")
+
+        mock_wait.assert_called_once_with("owner", "repo", 42, timeout=123)
+        assert result.merged is False
+        assert result.stop_reason == "CI not passing before merge: failing"

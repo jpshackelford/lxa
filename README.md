@@ -135,6 +135,9 @@ lxa implement --loop --multi-pr
 # Target a specific base branch (e.g., a release branch)
 lxa implement --loop --multi-pr --base-branch v2
 
+# Allow slower CI systems more time before failing a milestone
+lxa implement --loop --multi-pr --ci-timeout 1800
+
 # Full autonomous overnight execution
 lxa implement --loop --refine --auto-merge --multi-pr --base-branch main
 ```

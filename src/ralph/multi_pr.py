@@ -280,6 +280,7 @@ class MultiPRLoopRunner:
         refinement_config: RefinementConfig | None = None,
         max_iterations_per_milestone: int = 10,
         max_refinement_rounds: int = 3,
+        ci_timeout: int = 600,
         conversations_dir: str = DEFAULT_CONVERSATIONS_DIR,
     ):
         """Initialize the multi-PR loop runner.
@@ -293,6 +294,7 @@ class MultiPRLoopRunner:
             refinement_config: Configuration for PR refinement
             max_iterations_per_milestone: Max iterations before giving up on a milestone
             max_refinement_rounds: Max refinement attempts per milestone
+            ci_timeout: Seconds to wait for CI before failing a milestone
             conversations_dir: Directory for conversation persistence
         """
         self.llm = llm
@@ -305,6 +307,7 @@ class MultiPRLoopRunner:
         )
         self.max_iterations_per_milestone = max_iterations_per_milestone
         self.max_refinement_rounds = max_refinement_rounds
+        self.ci_timeout = ci_timeout
         self.conversations_dir = conversations_dir
 
         self.repo_slug = get_repo_slug(workspace)
@@ -531,7 +534,7 @@ class MultiPRLoopRunner:
             logger.warning(f"Failed to generate commit message: {e}")
 
         # Wait for CI before merge
-        ci_status = wait_for_ci(owner, repo, pr_number, timeout=600)
+        ci_status = wait_for_ci(owner, repo, pr_number, timeout=self.ci_timeout)
         if ci_status != CIStatus.PASSING:
             return MilestoneResult(
                 milestone_index=index,

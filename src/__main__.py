@@ -475,6 +475,7 @@ def run_multi_pr_loop(
     refinement_config: RefinementConfig | None = None,
     max_iterations_per_milestone: int = 10,
     max_refinement_rounds: int = 3,
+    ci_timeout: int = 600,
 ) -> int:
     """Run Multi-PR autonomous execution mode.
 
@@ -488,6 +489,7 @@ def run_multi_pr_loop(
         refinement_config: Configuration for code review refinement loop
         max_iterations_per_milestone: Max iterations per milestone
         max_refinement_rounds: Max refinement attempts per milestone
+        ci_timeout: Seconds to wait for CI before failing a milestone
 
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -509,6 +511,7 @@ def run_multi_pr_loop(
         refinement_config=refinement_config,
         max_iterations_per_milestone=max_iterations_per_milestone,
         max_refinement_rounds=max_refinement_rounds,
+        ci_timeout=ci_timeout,
         conversations_dir=CONVERSATIONS_DIR,
     )
 
@@ -947,6 +950,13 @@ Configuration:
         default="main",
         help="Target branch for PRs in multi-PR mode (default: main)",
     )
+    implement_parser.add_argument(
+        "--ci-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for CI in multi-PR mode before failing a milestone (default: 600)",
+    )
+
     _add_verbosity_arguments(implement_parser)
     implement_parser.add_argument(
         "--background",
@@ -2313,6 +2323,7 @@ Configuration:
                 ),
                 max_iterations_per_milestone=args.max_iterations,
                 max_refinement_rounds=args.max_refine_iterations,
+                ci_timeout=args.ci_timeout,
             )
 
         return run_ralph_loop(
