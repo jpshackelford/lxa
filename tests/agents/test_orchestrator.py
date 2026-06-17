@@ -170,7 +170,7 @@ class TestCreateOrchestratorAgent:
 
         tool_names = [t.name for t in agent.tools]
         assert "implementation_checklist" in tool_names
-        assert "delegate" in tool_names
+        assert "task_tool_set" in tool_names
         assert "terminal" in tool_names
 
     def test_creates_agent_with_skills(self, mock_llm: LLM):
