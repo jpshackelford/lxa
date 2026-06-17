@@ -82,6 +82,16 @@ class TestParseGithubRefs:
 
         assert [ref.short_ref for ref in refs] == ["owner/repo#42"]
 
+    def test_skips_partial_numeric_references(self):
+        refs = parse_github_refs(
+            "Ignore #12abc, sdk#34def, owner/repo#56ghi, "
+            "and https://github.com/owner/repo/issues/78abc. Keep #90.",
+            default_repo="owner/repo",
+            board_repos=["owner/repo", "owner/sdk"],
+        )
+
+        assert [ref.short_ref for ref in refs] == ["owner/repo#90"]
+
     def test_reference_context_includes_source_and_surrounding_text(self):
         source = GitHubRef("owner", "repo", 1)
         contexts = parse_reference_contexts(

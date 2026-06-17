@@ -203,7 +203,8 @@ def _iter_github_ref_matches(
         occupied_spans.append(span)
 
     for match in re.finditer(
-        r"https?://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)(?:[/?#][^\s)]*)?",
+        r"https?://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)"
+        r"(?![A-Za-z0-9_])(?:[/?#][^\s)]*)?",
         text,
     ):
         ref_type = "pull" if match.group(3) == "pull" else "issue"
@@ -212,10 +213,20 @@ def _iter_github_ref_matches(
             match.span(),
         )
 
-    for match in re.finditer(r"(?<![\w/.-])([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#(\d+)", text):
-        add_match(GitHubRef(match.group(1), match.group(2), int(match.group(3))), match.span())
+    for match in re.finditer(
+        r"(?<![\w/.-])([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#"
+        r"(\d+)(?![A-Za-z0-9_])",
+        text,
+    ):
+        add_match(
+            GitHubRef(match.group(1), match.group(2), int(match.group(3))),
+            match.span(),
+        )
 
-    for match in re.finditer(r"(?<![/\w.-])([A-Za-z0-9_.-]+)#(\d+)", text):
+    for match in re.finditer(
+        r"(?<![/\w.-])([A-Za-z0-9_.-]+)#(\d+)(?![A-Za-z0-9_])",
+        text,
+    ):
         resolved = _resolve_free_text_repo_ref(
             match.group(1), int(match.group(2)), board_repos, default_repo
         )
@@ -225,7 +236,7 @@ def _iter_github_ref_matches(
     if default_repo:
         owner, repo = _split_repo(default_repo)
         if owner and repo:
-            for match in re.finditer(r"(?<![/\w.-])#(\d+)", text):
+            for match in re.finditer(r"(?<![/\w.-])#(\d+)(?![A-Za-z0-9_])", text):
                 add_match(GitHubRef(owner, repo, int(match.group(1))), match.span())
 
     matches.sort(key=lambda match: match.span[0])
