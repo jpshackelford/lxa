@@ -58,6 +58,7 @@ from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
     register_builtins_agents,
 )
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from src.agents.orchestrator import (
@@ -69,7 +70,7 @@ from src.agents.orchestrator import (
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.global_config import get_conversations_dir
-from src.ralph.multi_pr import MultiPRConfig, MultiPRLoopRunner
+from src.ralph.multi_pr import MultiPRConfig, MultiPRLoopRunner, MultiPRResult
 from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
@@ -467,6 +468,18 @@ def run_ralph_loop(
     return 0 if loop_result.completed else 1
 
 
+def print_multi_pr_failure(result: MultiPRResult) -> None:
+    """Print the actionable failure reason for a failed multi-PR run."""
+    reason = result.stop_reason.strip() or "Unknown failure"
+    console.print()
+    console.print(
+        Panel(
+            f"[bold red]Multi-PR failed[/]\n\n[bold]Reason:[/] {escape(reason)}",
+            expand=False,
+        )
+    )
+
+
 def run_multi_pr_loop(
     design_doc: Path,
     workspace: Path,
@@ -516,7 +529,11 @@ def run_multi_pr_loop(
     )
 
     result = runner.run()
-    return 0 if result.completed else 1
+    if result.completed:
+        return 0
+
+    print_multi_pr_failure(result)
+    return 1
 
 
 def run_task(

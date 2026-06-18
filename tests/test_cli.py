@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +15,9 @@ from src.__main__ import (
     _rewrite_paths_for_background,
     find_git_root,
     main,
+    run_multi_pr_loop,
 )
+from src.ralph.multi_pr import MultiPRResult
 
 
 class TestFindGitRoot:
@@ -228,6 +233,57 @@ class TestMainWorkspaceOption:
         # Will fail at later stage but should pass git root check
         # (fails on remote check since no origin configured)
         assert result == 1
+
+
+class TestMultiPRCLI:
+    """Tests for multi-PR CLI result reporting."""
+
+    @pytest.mark.parametrize(
+        "stop_reason",
+        [
+            "Failed to checkout base branch: missing-base (missing branch)",
+            "Milestone did not complete within iteration limit",
+        ],
+    )
+    def test_run_multi_pr_loop_prints_failure_stop_reason(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], stop_reason: str
+    ) -> None:
+        """Failed multi-PR runs should print the returned stop reason."""
+        design_doc = tmp_path / "design.md"
+        design_doc.write_text("# Design Doc")
+        result = MultiPRResult(
+            completed=False,
+            milestones_completed=0,
+            milestones_total=1,
+            milestones=[],
+            stop_reason=stop_reason,
+            started_at=datetime(2026, 1, 1),
+            ended_at=datetime(2026, 1, 1),
+        )
+        ctx = SimpleNamespace(
+            llm=object(),
+            design_doc=design_doc,
+            workspace=tmp_path,
+            platform=object(),
+        )
+
+        with (
+            patch("src.__main__.prepare_execution", return_value=ctx),
+            patch("src.__main__.MultiPRLoopRunner") as runner_cls,
+        ):
+            runner_cls.return_value.run.return_value = result
+            exit_code = run_multi_pr_loop(
+                design_doc,
+                tmp_path,
+                base_branch="missing-base",
+                max_iterations_per_milestone=0,
+            )
+
+        output = capsys.readouterr().out
+        assert exit_code == 1
+        assert "Multi-PR failed" in output
+        assert "Reason:" in output
+        assert stop_reason in output
 
 
 class TestCLIIntegration:

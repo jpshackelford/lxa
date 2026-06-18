@@ -398,6 +398,30 @@ class TestMultiPRLoopRunner:
             assert result.milestones_completed == 0
             assert "Already complete" in result.stop_reason
 
+    def test_run_fails_when_initial_base_checkout_fails(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test run() stops when the starting base branch cannot be checked out."""
+        with (
+            patch.object(MultiPRLoopRunner, "_print_start_banner"),
+            patch(
+                "src.ralph.multi_pr.checkout_branch",
+                return_value=GitResult(False, "missing branch"),
+            ),
+            patch("src.ralph.multi_pr.pull_branch") as mock_pull,
+        ):
+            runner = MultiPRLoopRunner(
+                llm=mock_llm,
+                design_doc_path=design_doc,
+                workspace=temp_workspace,
+                multi_pr_config=MultiPRConfig(enabled=True, base_branch="missing-base"),
+            )
+            result = runner.run()
+
+        assert result.completed is False
+        assert result.stop_reason == "Failed to checkout base branch: missing-base (missing branch)"
+        mock_pull.assert_not_called()
+
     def test_run_fails_when_initial_base_pull_fails(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
     ) -> None:
@@ -416,6 +440,30 @@ class TestMultiPRLoopRunner:
 
         assert result.completed is False
         assert result.stop_reason == "Failed to pull base branch: main (pull failed)"
+
+    def test_run_fails_when_max_iterations_is_zero(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test run() stops with an actionable reason when no iterations are allowed."""
+        with (
+            patch.object(MultiPRLoopRunner, "_print_start_banner"),
+            patch("src.ralph.multi_pr.checkout_branch", return_value=GitResult(True)),
+            patch("src.ralph.multi_pr.pull_branch", return_value=GitResult(True)),
+            patch("src.ralph.multi_pr.create_branch", return_value=GitResult(True)),
+            patch.object(MultiPRLoopRunner, "_run_orchestrator_iteration") as mock_iteration,
+        ):
+            runner = MultiPRLoopRunner(
+                llm=mock_llm,
+                design_doc_path=design_doc,
+                workspace=temp_workspace,
+                max_iterations_per_milestone=0,
+            )
+            result = runner.run()
+
+        assert result.completed is False
+        assert result.stop_reason == "Milestone did not complete within iteration limit"
+        assert result.milestones[0].stop_reason == result.stop_reason
+        mock_iteration.assert_not_called()
 
     def test_build_context_message_includes_multi_pr_mode(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
