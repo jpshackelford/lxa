@@ -398,6 +398,23 @@ class TestMultiPRLoopRunner:
             assert result.milestones_completed == 0
             assert "Already complete" in result.stop_reason
 
+    def test_run_fails_when_repo_slug_invalid(
+        self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
+    ) -> None:
+        """Test run() stops early when the GitHub repository slug cannot be determined."""
+        with patch("src.ralph.multi_pr.checkout_branch") as mock_checkout:
+            runner = MultiPRLoopRunner(
+                llm=mock_llm,
+                design_doc_path=design_doc,
+                workspace=temp_workspace,
+            )
+            result = runner.run()
+
+        assert result.completed is False
+        assert "Could not determine repository slug" in result.stop_reason
+        assert "GitHub remote" in result.stop_reason
+        mock_checkout.assert_not_called()
+
     def test_run_fails_when_initial_base_checkout_fails(
         self, mock_llm: MagicMock, design_doc: Path, temp_workspace: Path
     ) -> None:
@@ -416,6 +433,7 @@ class TestMultiPRLoopRunner:
                 workspace=temp_workspace,
                 multi_pr_config=MultiPRConfig(enabled=True, base_branch="missing-base"),
             )
+            runner.repo_slug = "owner/repo"
             result = runner.run()
 
         assert result.completed is False
@@ -436,6 +454,7 @@ class TestMultiPRLoopRunner:
                 design_doc_path=design_doc,
                 workspace=temp_workspace,
             )
+            runner.repo_slug = "owner/repo"
             result = runner.run()
 
         assert result.completed is False
@@ -458,6 +477,7 @@ class TestMultiPRLoopRunner:
                 workspace=temp_workspace,
                 max_iterations_per_milestone=0,
             )
+            runner.repo_slug = "owner/repo"
             result = runner.run()
 
         assert result.completed is False

@@ -338,6 +338,16 @@ class MultiPRLoopRunner:
         self.repo_slug = get_repo_slug(workspace)
         self._milestone_results: list[MilestoneResult] = []
 
+    def _repo_slug_error(self) -> str | None:
+        """Return an actionable error if the repository slug is unusable."""
+        if self.repo_slug and "/" in self.repo_slug:
+            return None
+
+        return (
+            f"Could not determine repository slug from workspace {self.workspace}. "
+            "Ensure the workspace is a git repository with a GitHub remote."
+        )
+
     def run(self) -> MultiPRResult:
         """Run the multi-PR loop until all milestones complete.
 
@@ -346,7 +356,6 @@ class MultiPRLoopRunner:
         """
         started_at = datetime.now()
         self._milestone_results = []
-        self._print_start_banner()
 
         # Get initial milestone info
         parser = ChecklistParser(self.design_doc_path)
@@ -370,6 +379,17 @@ class MultiPRLoopRunner:
                 started_at=started_at,
                 total=total_milestones,
             )
+
+        repo_slug_error = self._repo_slug_error()
+        if repo_slug_error:
+            return self._build_result(
+                completed=False,
+                stop_reason=repo_slug_error,
+                started_at=started_at,
+                total=total_milestones,
+            )
+
+        self._print_start_banner()
 
         # Ensure we're on base branch to start
         base_branch = self.multi_pr_config.base_branch
