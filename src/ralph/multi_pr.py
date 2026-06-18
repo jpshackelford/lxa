@@ -806,24 +806,36 @@ Critical rules:
 
         text_parts = []
         for event in conversation.state.events:
-            if (
+            if not (
                 isinstance(event, MessageEvent)
                 and event.source == "agent"
                 and event.llm_message
                 and event.llm_message.content
             ):
-                content = event.llm_message.content
-                if isinstance(content, str):
-                    text_parts.append(content)
-                elif isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, str):
-                            text_parts.append(block)
-                        else:
-                            text = getattr(block, "text", None)
-                            if isinstance(text, str):
-                                text_parts.append(text)
+                continue
+
+            text_parts.extend(self._extract_text_from_content(event.llm_message.content))
+
         return "\n".join(text_parts)
+
+    def _extract_text_from_content(self, content: Any) -> list[str]:
+        """Extract text strings from an LLM message content value."""
+        if isinstance(content, str):
+            return [content]
+        if not isinstance(content, list):
+            return []
+
+        text_parts = []
+        for block in content:
+            if isinstance(block, str):
+                text_parts.append(block)
+                continue
+
+            text = getattr(block, "text", None)
+            if isinstance(text, str):
+                text_parts.append(text)
+
+        return text_parts
 
     def _print_start_banner(self) -> None:
         """Print the multi-PR loop start banner."""
