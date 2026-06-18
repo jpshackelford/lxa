@@ -19,7 +19,7 @@ from pathlib import Path
 from openhands.sdk import LLM, Agent, AgentContext, Tool
 from openhands.sdk.context import Skill
 from openhands.sdk.tool import register_tool
-from openhands.tools.delegate import DelegateTool
+from openhands.tools.task import TaskToolSet
 from openhands.tools.terminal import TerminalTool
 
 from src.tools.checklist import ImplementationChecklistTool
@@ -203,7 +203,7 @@ NOT via chat prompts.
 WORKFLOW:
 1. Use implementation_checklist tool to check status and find the next task
 2. If on main/master branch, create a feature branch for this milestone
-3. Spawn a task agent to complete the task (use delegate tool)
+3. Launch a task agent to complete the task (use the task tool)
 4. After task completion, mark it complete in the design doc
 5. Commit the checklist update
 6. Push to remote
@@ -315,7 +315,7 @@ def create_orchestrator_agent(
 
     The Orchestrator has:
     - ImplementationChecklistTool: Track progress in design doc
-    - DelegateTool: Spawn task agents
+    - TaskToolSet: Launch task agents
     - TerminalTool: Git operations, CI checks
 
     Args:
@@ -338,7 +338,7 @@ def create_orchestrator_agent(
             name=ImplementationChecklistTool.name,
             params={"design_doc_path": design_doc_path},
         ),
-        Tool(name=DelegateTool.name),
+        Tool(name=TaskToolSet.name),
         Tool(name=TerminalTool.name),
     ]
 
