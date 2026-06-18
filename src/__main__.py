@@ -58,6 +58,7 @@ from openhands.tools import (  # pyright: ignore[reportAttributeAccessIssue]
     register_builtins_agents,
 )
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from src.agents.orchestrator import (
@@ -69,6 +70,7 @@ from src.agents.orchestrator import (
 from src.agents.task_agent import create_task_agent
 from src.config import DEFAULT_DESIGN_PATH, load_config
 from src.global_config import get_conversations_dir
+from src.ralph.multi_pr import MultiPRConfig, MultiPRLoopRunner, MultiPRResult
 from src.ralph.runner import RefinementConfig
 from src.skills.reconcile import reconcile_design_doc
 from src.utils.github import parse_pr_url
@@ -464,6 +466,74 @@ def run_ralph_loop(
 
     loop_result = runner.run()
     return 0 if loop_result.completed else 1
+
+
+def print_multi_pr_failure(result: MultiPRResult) -> None:
+    """Print the actionable failure reason for a failed multi-PR run."""
+    reason = result.stop_reason.strip() or "Unknown failure"
+    console.print()
+    console.print(
+        Panel(
+            f"[bold red]Multi-PR failed[/]\n\n[bold]Reason:[/] {escape(reason)}",
+            expand=False,
+        )
+    )
+
+
+def run_multi_pr_loop(
+    design_doc: Path,
+    workspace: Path,
+    *,
+    base_branch: str = "main",
+    refinement_config: RefinementConfig | None = None,
+    max_iterations_per_milestone: int = 10,
+    max_refinement_rounds: int = 3,
+    ci_timeout: int = 600,
+) -> int:
+    """Run Multi-PR autonomous execution mode.
+
+    Creates a separate PR per milestone, auto-merges after refinement passes,
+    syncs with base branch, and continues to the next milestone.
+
+    Args:
+        design_doc: Path to the design document
+        workspace: Path to the workspace (git repository root)
+        base_branch: Target branch for PRs
+        refinement_config: Configuration for code review refinement loop
+        max_iterations_per_milestone: Max iterations per milestone
+        max_refinement_rounds: Max refinement attempts per milestone
+        ci_timeout: Seconds to wait for CI before failing a milestone
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        ctx = prepare_execution(design_doc, workspace, mode_name="Multi-PR Autonomous Mode")
+    except ExecutionSetupError:
+        return 1
+
+    multi_pr_config = MultiPRConfig(enabled=True, base_branch=base_branch)
+    refinement_config = refinement_config or RefinementConfig(enabled=True, auto_merge=True)
+
+    runner = MultiPRLoopRunner(
+        llm=ctx.llm,
+        design_doc_path=ctx.design_doc,
+        workspace=ctx.workspace,
+        platform=ctx.platform,
+        multi_pr_config=multi_pr_config,
+        refinement_config=refinement_config,
+        max_iterations_per_milestone=max_iterations_per_milestone,
+        max_refinement_rounds=max_refinement_rounds,
+        ci_timeout=ci_timeout,
+        conversations_dir=CONVERSATIONS_DIR,
+    )
+
+    result = runner.run()
+    if result.completed:
+        return 0
+
+    print_multi_pr_failure(result)
+    return 1
 
 
 def run_task(
@@ -886,6 +956,24 @@ Configuration:
         default=5,
         help="Maximum refinement iterations (default: 5)",
     )
+    implement_parser.add_argument(
+        "--multi-pr",
+        action="store_true",
+        help="Create separate PR per milestone; always refines and auto-merges passing PRs",
+    )
+    implement_parser.add_argument(
+        "--base-branch",
+        type=str,
+        default="main",
+        help="Target branch for PRs in multi-PR mode (default: main)",
+    )
+    implement_parser.add_argument(
+        "--ci-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for CI in multi-PR mode before failing a milestone (default: 600)",
+    )
+
     _add_verbosity_arguments(implement_parser)
     implement_parser.add_argument(
         "--background",
@@ -2238,6 +2326,29 @@ Configuration:
 
     # Run in loop mode or single execution
     if args.loop:
+        if args.multi_pr:
+            if args.refine or args.auto_merge:
+                console.print(
+                    "[yellow]Note:[/] --multi-pr always enables refinement and auto-merge; "
+                    "--refine/--auto-merge are redundant."
+                )
+
+            return run_multi_pr_loop(
+                design_doc,
+                workspace,
+                base_branch=args.base_branch,
+                refinement_config=RefinementConfig(
+                    enabled=True,
+                    auto_merge=True,
+                    allow_merge=args.allow_merge,
+                    min_iterations=args.min_iterations,
+                    max_iterations=args.max_refine_iterations,
+                ),
+                max_iterations_per_milestone=args.max_iterations,
+                max_refinement_rounds=args.max_refine_iterations,
+                ci_timeout=args.ci_timeout,
+            )
+
         return run_ralph_loop(
             design_doc,
             workspace,
@@ -2252,13 +2363,17 @@ Configuration:
             verbosity=verbosity,
             show_timestamps=args.timestamps,
         )
-    else:
-        return run_orchestrator(
-            design_doc,
-            workspace,
-            verbosity=verbosity,
-            show_timestamps=args.timestamps,
-        )
+
+    if args.multi_pr:
+        console.print("[red]Error:[/] --multi-pr requires --loop")
+        return 1
+
+    return run_orchestrator(
+        design_doc,
+        workspace,
+        verbosity=verbosity,
+        show_timestamps=args.timestamps,
+    )
 
 
 def find_git_root(start_path: Path) -> Path:

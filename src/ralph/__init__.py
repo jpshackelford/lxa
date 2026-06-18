@@ -8,9 +8,21 @@ Also includes RefineRunner for standalone PR refinement without a design documen
 Supports two phases:
 1. Self-Review: Agent reviews its own code, fixes issues, marks PR ready
 2. Respond: Agent reads external review comments, addresses them, resolves threads
+
+Multi-PR mode (--multi-pr) creates a separate PR per milestone, auto-merges after
+refinement passes, and continues to the next milestone autonomously.
 """
 
+from src.ralph.multi_pr import MultiPRConfig, MultiPRLoopRunner, MultiPRResult
 from src.ralph.refine import RefinePhase, RefineRunner
 from src.ralph.runner import RalphLoopRunner, RefinementConfig
 
-__all__ = ["RalphLoopRunner", "RefineRunner", "RefinePhase", "RefinementConfig"]
+__all__ = [
+    "RalphLoopRunner",
+    "RefineRunner",
+    "RefinePhase",
+    "RefinementConfig",
+    "MultiPRLoopRunner",
+    "MultiPRConfig",
+    "MultiPRResult",
+]
