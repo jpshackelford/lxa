@@ -285,6 +285,34 @@ class TestMultiPRCLI:
         assert "Reason:" in output
         assert stop_reason in output
 
+    def test_main_multi_pr_warns_redundant_refinement_flags(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--multi-pr should explain that --refine and --auto-merge are redundant."""
+        design_doc = tmp_path / "design.md"
+        design_doc.write_text("# Design Doc")
+
+        with patch("src.__main__.run_multi_pr_loop", return_value=0) as mock_run:
+            exit_code = main(
+                [
+                    "implement",
+                    str(design_doc),
+                    "--workspace",
+                    str(tmp_path),
+                    "--loop",
+                    "--multi-pr",
+                    "--refine",
+                    "--auto-merge",
+                ]
+            )
+
+        output = capsys.readouterr().out
+        assert exit_code == 0
+        assert "always enables refinement and auto-merge" in output
+        refinement_config = mock_run.call_args.kwargs["refinement_config"]
+        assert refinement_config.enabled is True
+        assert refinement_config.auto_merge is True
+
 
 class TestCLIIntegration:
     """Integration tests for CLI."""

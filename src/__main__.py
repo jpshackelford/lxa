@@ -959,7 +959,7 @@ Configuration:
     implement_parser.add_argument(
         "--multi-pr",
         action="store_true",
-        help="Create separate PR per milestone, auto-merge after refinement",
+        help="Create separate PR per milestone; always refines and auto-merges passing PRs",
     )
     implement_parser.add_argument(
         "--base-branch",
@@ -2327,6 +2327,12 @@ Configuration:
     # Run in loop mode or single execution
     if args.loop:
         if args.multi_pr:
+            if args.refine or args.auto_merge:
+                console.print(
+                    "[yellow]Note:[/] --multi-pr always enables refinement and auto-merge; "
+                    "--refine/--auto-merge are redundant."
+                )
+
             return run_multi_pr_loop(
                 design_doc,
                 workspace,
