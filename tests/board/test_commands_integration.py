@@ -14,7 +14,7 @@ import pytest
 import src.board.cache as cache_module
 import src.board.config as config_module
 from src.board.cache import BoardCache
-from src.board.config import BoardConfig, save_board_config
+from src.board.config import BoardConfig, BoardScope, save_board_config
 from src.board.models import COLUMN_BACKLOG, COLUMN_HUMAN_REVIEW, ProjectInfo
 
 from .fixtures import load_fixture
@@ -275,6 +275,112 @@ class TestCmdScanIntegration:
         assert result == 0
         # No mutations should have been called
         assert len(mutation_calls) == 0
+
+    def test_project_scoped_scan_discovers_outbound_reference_candidates(
+        self, configured_board, monkeypatch, capsys
+    ):
+        """Test project-scoped scan discovers candidates from current board item bodies."""
+        config, _cache = configured_board
+        config.scope = BoardScope.PROJECT
+        config.overview_item = "owner/repo#1"
+        config.mission = "Ship the project feature"
+        config.repos = ["owner/repo", "owner/sdk"]
+        save_board_config(config, "test-board")
+
+        project_items_response = {
+            "data": {
+                "node": {
+                    "items": {
+                        "nodes": [
+                            {
+                                "id": "PVTI_overview",
+                                "content": {
+                                    "number": 1,
+                                    "title": "Overview",
+                                    "state": "OPEN",
+                                    "repository": {"nameWithOwner": "owner/repo"},
+                                },
+                                "fieldValueByName": {"name": "Backlog"},
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+        search_calls = []
+
+        def get_handler(url, **_kwargs):
+            if url.endswith("/repos/owner/repo/issues/1"):
+                return MockResponse(
+                    {
+                        "body": "Implementation checklist references #2 and owner/sdk#3.",
+                    }
+                )
+            return MockResponse({})
+
+        def post_handler(_url, **kwargs):
+            body = kwargs.get("json", {})
+            query = body.get("query", "")
+            if "search(" in query:
+                search_calls.append(body)
+            if "items" in query:
+                return MockResponse(project_items_response)
+            return MockResponse({"data": {}})
+
+        mock_client = MockHttpxClient(get_handler, post_handler)
+
+        monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
+        monkeypatch.setattr(
+            "src.board.cli._helpers.get_github_username",
+            lambda: "testuser",
+        )
+
+        from src.board.cli import cmd_scan
+
+        result = cmd_scan(dry_run=True, verbose=True)
+
+        assert result == 0
+        assert search_calls == []
+        captured = capsys.readouterr()
+        assert "Overview item is on the board: owner/repo#1" in captured.out
+        assert "CANDIDATES discovered" in captured.out
+        assert "owner/repo#2" in captured.out
+        assert "owner/sdk#3" in captured.out
+
+    def test_project_scoped_scan_warns_when_overview_missing(
+        self, configured_board, monkeypatch, capsys
+    ):
+        """Test project-scoped scan warns when the configured overview is absent."""
+        config, _cache = configured_board
+        config.scope = BoardScope.PROJECT
+        config.overview_item = "owner/repo#1"
+        config.repos = ["owner/repo"]
+        save_board_config(config, "test-board")
+
+        project_items_response = {"data": {"node": {"items": {"nodes": []}}}}
+
+        def post_handler(_url, **kwargs):
+            query = kwargs.get("json", {}).get("query", "")
+            if "items" in query:
+                return MockResponse(project_items_response)
+            return MockResponse({"data": {}})
+
+        mock_client = MockHttpxClient(post_handler=post_handler)
+
+        monkeypatch.setattr(httpx, "Client", lambda **_kw: mock_client)
+        monkeypatch.setattr(
+            "src.board.cli._helpers.get_github_username",
+            lambda: "testuser",
+        )
+
+        from src.board.cli import cmd_scan
+
+        result = cmd_scan(dry_run=False, verbose=False)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Overview item is not on the board: owner/repo#1" in captured.out
+        assert "lxa board add-item owner/repo#1" in captured.out
 
 
 class TestCmdStatusIntegration:

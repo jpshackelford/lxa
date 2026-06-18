@@ -16,7 +16,7 @@ from pathlib import Path
 from openhands.sdk import LLM, Agent, AgentContext, Conversation, Tool
 from openhands.sdk.context import Skill
 from openhands.sdk.conversation.base import BaseConversation
-from openhands.tools.delegate import DelegateTool
+from openhands.tools.task import TaskToolSet
 from openhands.tools.terminal import TerminalTool
 from rich.console import Console
 from rich.panel import Panel
@@ -173,7 +173,7 @@ def create_self_review_agent(
 ) -> Agent:
     """Create an agent for Phase 1: Self-Review."""
     tools = [
-        Tool(name=DelegateTool.name),
+        Tool(name=TaskToolSet.name),
         Tool(name=TerminalTool.name),
     ]
 
@@ -215,7 +215,7 @@ def create_respond_agent(
 ) -> Agent:
     """Create an agent for Phase 2: Review Response."""
     tools = [
-        Tool(name=DelegateTool.name),
+        Tool(name=TaskToolSet.name),
         Tool(name=TerminalTool.name),
     ]
 

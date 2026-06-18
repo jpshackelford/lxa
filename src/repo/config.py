@@ -97,17 +97,21 @@ def add_repo(
         created_board = True
 
     # Set as default if requested or if it's the first board
-    if set_default or not boards.default:
+    default_changed = False
+    if (set_default or not boards.default) and boards.default != target_name:
         boards.default = target_name
+        default_changed = True
 
     # Check if already present
     if repo in board.repos:
         # Still save if we created board or changed default
-        if created_board or set_default:
+        if created_board or default_changed:
+            board.touch()
             save_boards_config(boards)
         return AddRepoResult(added=False, board_name=target_name, created_board=created_board)
 
     board.repos.append(repo)
+    board.touch()
     save_boards_config(boards)
     return AddRepoResult(added=True, board_name=target_name, created_board=created_board)
 

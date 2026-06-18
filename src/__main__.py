@@ -84,10 +84,10 @@ def _register_agents() -> None:
     """Register agent types for delegation.
 
     This must be called before creating any orchestrator agent that uses
-    the DelegateTool, as the tool looks up agent factories from the registry.
+    sub-agent delegation, as the tool looks up agent factories from the registry.
     """
-    # Register builtin agents (includes "default" agent)
-    register_builtins_agents(cli_mode=True)
+    # Register builtin agents without browser-only agents for CLI runs.
+    register_builtins_agents(enable_browser=False)
 
     # Register task_agent for orchestrator delegation
     register_agent_if_absent(
