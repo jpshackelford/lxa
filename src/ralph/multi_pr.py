@@ -777,28 +777,32 @@ Critical rules:
             )
             result_respond = runner_respond.run()
 
-            if result_respond.completed:
-                console.print("[green]    ✓ Respond phase completed[/]")
-                if round_num == self.max_refinement_rounds:
-                    console.print("[dim]    Running final verification after respond phase[/]")
-                    verify_runner = RefineRunner(
-                        llm=self.llm,
-                        workspace=self.workspace,
-                        pr_number=pr_number,
-                        repo_slug=self.repo_slug,
-                        refinement_config=self.refinement_config,
-                        phase=RefinePhase.SELF_REVIEW,
-                        conversations_dir=self.conversations_dir,
-                    )
-                    verify_result = verify_runner.run()
-                    if verify_result.completed:
-                        console.print("[green]    ✓ Refinement passed[/]")
-                    return verify_result.completed
+            if not result_respond.completed:
+                console.print(f"[yellow]    Refinement round {round_num} incomplete[/]")
                 continue
 
-            console.print(f"[yellow]    Refinement round {round_num} incomplete[/]")
+            console.print("[green]    ✓ Respond phase completed[/]")
+            if round_num == self.max_refinement_rounds:
+                return self._verify_final_refinement_round(pr_number)
 
         return False
+
+    def _verify_final_refinement_round(self, pr_number: int) -> bool:
+        """Run final verification after respond phase on the last refinement round."""
+        console.print("[dim]    Running final verification after respond phase[/]")
+        verify_runner = RefineRunner(
+            llm=self.llm,
+            workspace=self.workspace,
+            pr_number=pr_number,
+            repo_slug=self.repo_slug,
+            refinement_config=self.refinement_config,
+            phase=RefinePhase.SELF_REVIEW,
+            conversations_dir=self.conversations_dir,
+        )
+        verify_result = verify_runner.run()
+        if verify_result.completed:
+            console.print("[green]    ✓ Refinement passed[/]")
+        return verify_result.completed
 
     def _get_conversation_output(self, conversation: Any) -> str:
         """Extract text content from conversation events."""
