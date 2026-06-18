@@ -6,7 +6,7 @@
 - Description: LXA (Linear eXternal Agent) - CLI tool for managing GitHub workflows and Linear integration
 
 ## Automation
-- ID: [TO_BE_CREATED]
+- ID: 62a0c23a-1ea9-4309-8143-ffcaa91602d7
 - Quiet threshold: 2
 - Schedule: Every 20 minutes (on :05, :25, :45 of each hour)
 
