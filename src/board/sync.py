@@ -5,6 +5,8 @@ enabling persistence across ephemeral environments.
 
 Merge algorithm:
 - For boards in both local and gist: newer updated_at wins
+- If timestamps are equal and content differs, a deterministic
+  lexicographic tie-breaker chooses one copy so all clients converge
 - For boards only in local: add to gist (unless gist has newer tombstone)
 - For boards only in gist: add locally (unless local has newer tombstone)
 - Tombstones propagate deletions across sync
@@ -14,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from src.board.config import (
+    BoardConfig,
     BoardsConfig,
     load_boards_config,
     save_boards_config,
@@ -58,6 +61,36 @@ class SyncResult:
         return [a for a in self.actions if a.action == "unchanged"]
 
 
+type BoardTieBreakKey = tuple[
+    str,
+    int,
+    str,
+    tuple[str, ...],
+    int,
+    str,
+    tuple[tuple[str, str], ...],
+    str,
+    str,
+    str,
+]
+
+
+def _board_tiebreak_key(board: BoardConfig) -> BoardTieBreakKey:
+    """Return a deterministic ordering key for same-timestamp conflicts."""
+    return (
+        board.project_id or "",
+        board.project_number if board.project_number is not None else -1,
+        board.username or "",
+        tuple(board.repos),
+        board.scan_lookback_days,
+        board.agent_username_pattern,
+        tuple(sorted(board.column_names.items())),
+        board.scope,
+        board.overview_item or "",
+        board.mission or "",
+    )
+
+
 def merge_configs(
     local: BoardsConfig, remote: BoardsConfig
 ) -> tuple[BoardsConfig, list[SyncAction]]:
@@ -65,6 +98,8 @@ def merge_configs(
 
     Implements the merge algorithm:
     - Boards in both: newer updated_at wins
+    - Boards with equal timestamps: identical boards are unchanged;
+      differing boards use a deterministic tie-breaker so clients converge
     - Boards only in local: keep (unless remote tombstone is newer)
     - Boards only in remote: add (unless local tombstone is newer)
     - Merge tombstones from both
@@ -117,9 +152,29 @@ def merge_configs(
                 merged.boards[name] = remote_board
                 actions.append(SyncAction(name, "updated", "download", "remote is newer"))
             else:
-                # Same timestamp - prefer remote (it's the "server")
-                merged.boards[name] = remote_board
-                actions.append(SyncAction(name, "unchanged", "both"))
+                if local_board == remote_board:
+                    merged.boards[name] = remote_board
+                    actions.append(SyncAction(name, "unchanged", "both"))
+                elif _board_tiebreak_key(local_board) > _board_tiebreak_key(remote_board):
+                    merged.boards[name] = local_board
+                    actions.append(
+                        SyncAction(
+                            name,
+                            "updated",
+                            "upload",
+                            "local wins deterministic same-timestamp tie",
+                        )
+                    )
+                else:
+                    merged.boards[name] = remote_board
+                    actions.append(
+                        SyncAction(
+                            name,
+                            "updated",
+                            "download",
+                            "remote wins deterministic same-timestamp tie",
+                        )
+                    )
 
         elif local_board and not remote_board:
             # Only in local

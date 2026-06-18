@@ -573,6 +573,7 @@ def add_watched_repo(repo: str, board_name: str | None = None) -> bool:
         return False
 
     board.repos.append(repo)
+    board.touch()
     save_boards_config(boards)
     return True
 
@@ -597,6 +598,7 @@ def remove_watched_repo(repo: str, board_name: str | None = None) -> bool:
         return False
 
     board.repos.remove(repo)
+    board.touch()
     save_boards_config(boards)
     return True
 
