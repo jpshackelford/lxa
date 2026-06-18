@@ -16,8 +16,10 @@ from src.board.cli._helpers import (
     print_sync_summary,
     print_warning,
 )
+from src.board.discovery import discover_outbound_refs
 from src.board.github_api import GitHubClient
 from src.board.models import Item, SyncResult
+from src.board.references import GitHubRef, ItemRefParseError, parse_item_ref
 from src.board.service import (
     add_item_to_board,
     fetch_existing_board_items,
@@ -99,7 +101,7 @@ def cmd_scan(
 
     # Handle project-scoped boards differently
     if config.is_project_scoped:
-        return _scan_project_scoped(config, cache)
+        return _scan_project_scoped(config, cache, dry_run=dry_run, verbose=verbose)
 
     # Continue with user-scoped board scan
 
@@ -203,24 +205,111 @@ def cmd_scan(
     return 0 if result.success else 1
 
 
-def _scan_project_scoped(config, cache) -> int:  # noqa: ARG001
+def _scan_project_scoped(
+    config,
+    cache,
+    *,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> int:
     """Handle scan for project-scoped boards.
 
-    Project-scoped boards do NOT auto-add items based on user involvement.
-    This function just verifies the overview item is on the board.
+    This first intelligent-scan milestone verifies the overview item and
+    mechanically discovers outbound GitHub references from items already on the
+    board. Later milestones will evaluate candidate fit and add in-scope items.
     """
-    console.print(f'\nBoard [cyan]"{config.name}"[/] is project-scoped.')
-    console.print("Scan does not auto-add items to project-scoped boards.\n")
+    console.print(f'\nScanning project-scoped board [cyan]"{config.name}"[/]...')
+    console.print("Project-scoped scan does not add items automatically yet.\n")
 
-    # Display overview item status
+    if dry_run:
+        console.print("[yellow]Dry run mode[/]")
+
+    if config.mission:
+        print_info(f"Mission: {config.mission}", dim=True)
+    if config.repos:
+        print_info(f"Repos: {', '.join(config.repos)}", dim=True)
+
+    overview_ref: GitHubRef | None = None
     if config.overview_item:
-        # For now, we just display the configured overview item
-        # In the future, we could verify it's on the board
-        print_success(f"Overview item: {config.overview_item}")
+        try:
+            overview_ref = parse_item_ref(config.overview_item, config.repos)
+        except ItemRefParseError as exc:
+            print_error(f"Invalid overview item: {exc}")
+            return 1
     else:
         print_warning("No overview item configured")
 
-    console.print("\nTo add items manually: [dim]lxa board add-item <url>[/]")
-    console.print("[dim]Smart scanning will be available in a future release.[/]")
+    with GitHubClient() as client:
+        project = get_project_with_cache(config, cache, client)
+        if not project or not project.status_field_id:
+            raise CommandError("Project not properly configured")
 
+        console.print("\nFetching existing board items...")
+        project_items = client.get_project_items(project.id)
+        existing_refs, board_refs = _project_item_refs(project_items)
+        print_info(f"Current items on board: {len(existing_refs)}", dim=True)
+
+        if overview_ref:
+            if overview_ref.short_ref in existing_refs:
+                print_success(f"Overview item is on the board: {overview_ref.short_ref}")
+            else:
+                print_warning(f"Overview item is not on the board: {overview_ref.short_ref}")
+                console.print(f"Add it with: [dim]lxa board add-item {overview_ref.short_ref}[/]")
+
+        console.print("\nChecking references from board items...")
+        discovery = discover_outbound_refs(client, board_refs, config.repos)
+        for warning in discovery.warnings:
+            print_warning(warning)
+
+        candidate_contexts = []
+        candidate_refs: list[str] = []
+        seen_candidates: set[str] = set()
+        for context in discovery.references:
+            ref_key = context.ref.short_ref
+            if ref_key in existing_refs or ref_key in seen_candidates:
+                continue
+            candidate_contexts.append(context)
+            candidate_refs.append(ref_key)
+            seen_candidates.add(ref_key)
+
+        if not candidate_contexts:
+            print_success("No new outbound reference candidates found")
+        else:
+            console.print("\nCANDIDATES discovered (not added yet):")
+            for context in candidate_contexts:
+                console.print(f"  • {context.ref.short_ref}")
+                console.print(
+                    f"    Context: {context.source_item.short_ref} {context.ref_location}"
+                )
+                if verbose:
+                    print_info(f'    "{context.surrounding_text}"', dim=True)
+
+            console.print("\nTo add a candidate manually:")
+            console.print("  [dim]lxa board add-item " + " ".join(candidate_refs) + "[/]")
+
+    console.print(
+        "\n[dim]Next milestone: evaluate candidates against the mission and add "
+        "in-scope items to Triage.[/]"
+    )
     return 0
+
+
+def _project_item_refs(project_items: list[dict]) -> tuple[set[str], list[GitHubRef]]:
+    """Return project item short refs and parsed refs from raw ProjectV2 items."""
+    existing_refs: set[str] = set()
+    board_refs: list[GitHubRef] = []
+
+    for item in project_items:
+        content = item.get("content")
+        if not content:
+            continue
+        repo = content.get("repository", {}).get("nameWithOwner", "")
+        number = content.get("number")
+        if not repo or not number or "/" not in repo:
+            continue
+        owner, repo_name = repo.split("/", maxsplit=1)
+        ref = GitHubRef(owner=owner, repo=repo_name, number=int(number))
+        existing_refs.add(ref.short_ref)
+        board_refs.append(ref)
+
+    return existing_refs, board_refs

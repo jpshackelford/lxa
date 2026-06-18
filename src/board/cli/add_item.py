@@ -1,7 +1,5 @@
 """Board add-item command - manually add issues/PRs to a board."""
 
-import re
-
 from rich.console import Console
 
 from src.board.cache import BoardCache
@@ -15,6 +13,7 @@ from src.board.cli._helpers import (
     print_success,
 )
 from src.board.github_api import GitHubClient
+from src.board.references import ItemRef, ItemRefParseError, parse_item_ref
 from src.board.service import (
     add_item_to_board,
     fetch_existing_board_items,
@@ -23,165 +22,6 @@ from src.board.service import (
 from src.board.state import determine_column
 
 console = Console()
-
-
-class ItemRef:
-    """Parsed reference to a GitHub issue or PR."""
-
-    def __init__(self, owner: str, repo: str, number: int):
-        self.owner = owner
-        self.repo = repo
-        self.number = number
-
-    @property
-    def full_repo(self) -> str:
-        """Return owner/repo format."""
-        return f"{self.owner}/{self.repo}"
-
-    @property
-    def short_ref(self) -> str:
-        """Return owner/repo#number format."""
-        return f"{self.full_repo}#{self.number}"
-
-
-class ItemRefParseError(Exception):
-    """Raised when an item reference cannot be parsed or resolved."""
-
-    pass
-
-
-def parse_item_ref(ref: str, board_repos: list[str]) -> ItemRef:
-    """Parse an item reference string into an ItemRef.
-
-    Supports multiple formats:
-    - Full URL: https://github.com/owner/repo/pull/123 or /issues/123
-    - org/repo#number: OpenHands/OpenHands#123
-    - repo#number: OpenHands#123 (when repo matches exactly one board repo)
-    - #number or number: 123 (when board has exactly one repo)
-
-    Args:
-        ref: The reference string to parse
-        board_repos: List of repos configured for the board (in owner/repo format)
-
-    Returns:
-        ItemRef with resolved owner, repo, and number
-
-    Raises:
-        ItemRefParseError: If the reference cannot be parsed or resolved
-    """
-    ref = ref.strip()
-
-    # Format: Full URL
-    # https://github.com/owner/repo/pull/123 or /issues/123
-    url_match = re.match(
-        r"https?://github\.com/([^/]+)/([^/]+)/(?:pull|issues)/(\d+)",
-        ref,
-    )
-    if url_match:
-        return ItemRef(
-            owner=url_match.group(1),
-            repo=url_match.group(2),
-            number=int(url_match.group(3)),
-        )
-
-    # Format: org/repo#number
-    full_match = re.match(r"([^/]+)/([^#]+)#(\d+)", ref)
-    if full_match:
-        return ItemRef(
-            owner=full_match.group(1),
-            repo=full_match.group(2),
-            number=int(full_match.group(3)),
-        )
-
-    # Format: repo#number (need to resolve repo from board repos)
-    repo_match = re.match(r"([^#]+)#(\d+)", ref)
-    if repo_match:
-        repo_name = repo_match.group(1)
-        number = int(repo_match.group(2))
-        return _resolve_repo_ref(repo_name, number, board_repos)
-
-    # Format: #number or just number
-    number_match = re.match(r"#?(\d+)$", ref)
-    if number_match:
-        number = int(number_match.group(1))
-        return _resolve_number_ref(number, board_repos)
-
-    raise ItemRefParseError(
-        f"Invalid item reference: '{ref}'. Use formats: #123, repo#123, owner/repo#123, or full URL"
-    )
-
-
-def _resolve_repo_ref(repo_name: str, number: int, board_repos: list[str]) -> ItemRef:
-    """Resolve a repo name (without owner) to a full repo from board repos.
-
-    Args:
-        repo_name: Repository name (without owner)
-        number: Issue/PR number
-        board_repos: List of repos configured for the board
-
-    Returns:
-        ItemRef with resolved owner and repo
-
-    Raises:
-        ItemRefParseError: If repo cannot be resolved uniquely
-    """
-    if not board_repos:
-        raise ItemRefParseError(
-            f"Cannot resolve '{repo_name}#{number}': no repos configured on board. "
-            "Use full format: owner/repo#123"
-        )
-
-    # Find repos matching the name (case-insensitive)
-    matches = []
-    for full_repo in board_repos:
-        parts = full_repo.split("/")
-        if len(parts) == 2 and parts[1].lower() == repo_name.lower():
-            matches.append(full_repo)
-
-    if len(matches) == 0:
-        repo_list = ", ".join(board_repos)
-        raise ItemRefParseError(
-            f"'{repo_name}' does not match any board repo. Board repos: {repo_list}"
-        )
-
-    if len(matches) > 1:
-        match_list = ", ".join(matches)
-        raise ItemRefParseError(
-            f"'{repo_name}' matches multiple repos: {match_list}. Use full format: owner/repo#123"
-        )
-
-    owner, repo = matches[0].split("/")
-    return ItemRef(owner=owner, repo=repo, number=number)
-
-
-def _resolve_number_ref(number: int, board_repos: list[str]) -> ItemRef:
-    """Resolve a number-only reference using the board's single repo.
-
-    Args:
-        number: Issue/PR number
-        board_repos: List of repos configured for the board
-
-    Returns:
-        ItemRef with resolved owner and repo
-
-    Raises:
-        ItemRefParseError: If board doesn't have exactly one repo
-    """
-    if not board_repos:
-        raise ItemRefParseError(
-            f"Cannot resolve '#{number}': no repos configured on board. "
-            "Use full format: owner/repo#123"
-        )
-
-    if len(board_repos) > 1:
-        example = board_repos[0].split("/")[1]
-        raise ItemRefParseError(
-            f"Board has multiple repos. Specify repo: {example}#{number} or "
-            f"{board_repos[0]}#{number}"
-        )
-
-    owner, repo = board_repos[0].split("/")
-    return ItemRef(owner=owner, repo=repo, number=number)
 
 
 @handle_command_error
